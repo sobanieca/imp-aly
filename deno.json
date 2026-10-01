@@ -1,0 +1,20 @@
+{
+  "version": "0.1.0",
+  "license": "MIT",
+  "tasks": {
+    "start": "deno run -A main.js --foreground",
+    "test": "deno test -A test/",
+    "compile": "deno compile -A --include src/storage-worker.js --include src/query-worker.js -o imp-analytics-server main.js",
+    "check": "deno fmt && deno lint && deno task test"
+  },
+  "fmt": {
+    "semiColons": false,
+    "singleQuote": true,
+    "lineWidth": 100
+  },
+  "lint": {
+    "rules": {
+      "tags": ["recommended"]
+    }
+  }
+}

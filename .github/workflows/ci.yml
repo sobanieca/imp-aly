@@ -1,0 +1,140 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: deno fmt --check
+      - run: deno lint
+      - run: deno task test
+
+  version:
+    needs: check
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.read.outputs.version }}
+      exists: ${{ steps.tag.outputs.exists }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - id: read
+        run: echo "version=$(deno eval "console.log(JSON.parse(Deno.readTextFileSync('deno.json')).version)")" >> "$GITHUB_OUTPUT"
+      - id: tag
+        run: |
+          if git rev-parse "v${{ steps.read.outputs.version }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    needs: version
+    if: needs.version.outputs.exists == 'false'
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            asset: imp-analytics-server-linux-x64
+          - runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            asset: imp-analytics-server-linux-arm64
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+            asset: imp-analytics-server-macos-x64
+          - runner: macos-latest
+            target: aarch64-apple-darwin
+            asset: imp-analytics-server-macos-arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Compile
+        run: >
+          deno compile -A --target ${{ matrix.target }}
+          --include src/storage-worker.js --include src/query-worker.js
+          -o ${{ matrix.asset }} main.js
+      - name: Smoke test
+        run: |
+          test "$(./${{ matrix.asset }} --version)" = "${{ needs.version.outputs.version }}"
+          ./${{ matrix.asset }} --foreground -p 2980 -d "$RUNNER_TEMP/data" -a "$RUNNER_TEMP/key" &
+          sleep 3
+          printf '/\n/invoices\n' > "$RUNNER_TEMP/app-map.txt"
+          ./${{ matrix.asset }} app add smoke "$RUNNER_TEMP/app-map.txt" -a "$RUNNER_TEMP/key"
+          curl -fsS -X POST http://127.0.0.1:2980/collect/smoke \
+            -d '{"type":"error","visit":"v1","at":1,"page":"/invoices"}'
+          sleep 4
+          ./${{ matrix.asset }} query '{"app":"smoke"}' --json -a "$RUNNER_TEMP/key" | grep '"matched": 1'
+          kill %1
+      - name: Checksum
+        run: |
+          if command -v sha256sum >/dev/null; then
+            sha256sum ${{ matrix.asset }} > ${{ matrix.asset }}.sha256
+          else
+            shasum -a 256 ${{ matrix.asset }} > ${{ matrix.asset }}.sha256
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: |
+            ${{ matrix.asset }}
+            ${{ matrix.asset }}.sha256
+
+  release:
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    concurrency:
+      group: release
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+      - name: Verify checksums
+        working-directory: assets
+        run: sha256sum -c *.sha256
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.version.outputs.version }}
+          name: v${{ needs.version.outputs.version }}
+          files: assets/*
+
+  pages:
+    needs: check
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+    steps:
+      - uses: actions/checkout@v4
+      - run: mkdir -p _site && cp install.sh _site/
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - uses: actions/deploy-pages@v4
