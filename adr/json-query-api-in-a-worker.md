@@ -2,9 +2,9 @@
 
 ## Context
 
-The report of imp needs counts of records, counts of distinct visits and percentiles of `readyMs`,
-grouped by a few fields and filtered by others. A SQL parser is a large piece of code. A long scan
-on the main thread delays the answers of the collect endpoint.
+The report of imp needs counts of records, counts of visits and percentiles of `readyMs`, grouped by
+a few fields and filtered by others. A SQL parser is a large piece of code. A long scan on the main
+thread delays the answers of the collect endpoint.
 
 ## Decision
 
@@ -18,7 +18,10 @@ on the main thread delays the answers of the collect endpoint.
 - The worker reads only the columns that the query names, builds a selection vector per day, and
   groups with a map.
 - Up to 16 queries wait. A query stops after 120 seconds, and the server ends the worker and starts
-  a new one. A query that collects more than 10,000,000 distinct visits stops.
+  a new one.
+- A query reads a sealed day from its summary when the query allows it, and scans its columns
+  otherwise, see `daily-summaries.md`.
+- `visits` is the number of distinct visit ids of each day, added up over the days of the range.
 - A reader lists the generations of a day before and after it reads the day. When they differ, or a
   file is gone because a seal or the retention removed it, it reads the day again, up to 5 times.
 

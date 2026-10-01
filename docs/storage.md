@@ -20,6 +20,9 @@ The server keeps everything in one data folder. The default is `~/.imp-analytics
           type.rle             <- runs: a count and a value per line
           page.rle
           at.txt               <- plain lines, for a field whose values seldom repeat
+          summary-counts.tsv   <- the daily summary that most queries read
+          summary-tuples.tsv
+          summary-visits.tsv
           ...
       2026-10-01/
         raw-1/                 <- a recent day: one line per record in each file
@@ -112,15 +115,26 @@ the storage worker seals it:
    The number and the value are separated by a tab. An empty value is null. A field whose values
    seldom repeat, such as `at`, gets a plain file with one line per row, because runs of one row
    make the file larger. `meta.json` lists these fields under `plain`.
-4. It renames the folder to `sealed-<n>/`, and deletes the raw files of the day.
+4. It writes the daily summary into the same folder:
+   - `summary-counts.tsv`: one line per combination of `type`, `page`, `zone`, `name`, `country` and
+     the segments, with the number of records and the `readyMs` values as `value:count` pairs.
+   - `summary-tuples.tsv`: each combination of `type`, `page`, `country` and the segments that a
+     visit had.
+   - `summary-visits.tsv`: the visits, as a count and a list of tuple numbers. Visits with the same
+     list share one line.
+
+   Most queries read only these files. See [Queries](query.md).
+5. It renames the folder to `sealed-<n>/`, and deletes the raw files of the day.
 
 The sort puts equal values next to each other, so most files shrink to a few lines. A record that
 arrives for a sealed day goes to a new `raw-<n+1>/` folder. Queries read it with the sealed data,
 and the worker seals the day again later.
 
-Sealing reads the whole day into memory. A day of 1,000,000 records takes about 10 seconds and about
-500 MB of memory. During that time, new records wait in the write-ahead log, and the answers to the
-apps do not wait.
+Sealing reads the whole day into memory. It turns each field into a list of numbers once, and sorts,
+writes and summarizes from those lists. A day of 1,000,000 records takes about 15 seconds and less
+than 200 MB of live memory. On a machine with much free memory, the process can grow larger before
+it frees the memory that it no longer uses. During that time, new records wait in the write-ahead
+log, and the answers to the apps do not wait.
 
 ## Retention
 

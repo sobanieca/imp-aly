@@ -53,7 +53,7 @@ Deno.test('visits per day where country is PL and plan is pro', async () => {
   await Deno.remove(dataDir, { recursive: true })
 })
 
-Deno.test('distinct visits, ready time percentiles and limits', async () => {
+Deno.test('visits per day, ready time percentiles and limits', async () => {
   const dataDir = await fill()
   const query = parseQuery({
     app: 'myapp',
@@ -67,7 +67,7 @@ Deno.test('distinct visits, ready time percentiles and limits', async () => {
     {
       page: '/invoice',
       records: 6,
-      visits: 3,
+      visits: 4,
       'readyMs.p50': 450,
       'readyMs.max': 800,
       'readyMs.avg': 466.7,

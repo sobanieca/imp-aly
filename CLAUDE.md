@@ -33,6 +33,7 @@ See `adr/plain-javascript-no-dependencies.md`.
 | `src/wal.js`                          | the write-ahead log with group commit and parts                  |
 | `src/storage.js`, `storage-worker.js` | the single writer: log parts to columns, seal, retention         |
 | `src/column-store.js`, `src/rle.js`   | the column files, the append transaction, sealing, reading       |
+| `src/summary.js`                      | the daily summary of a sealed day: build and parse               |
 | `src/query.js`, `query-worker.js`     | the query parser and engine, run in a worker                     |
 | `src/retention.js`                    | `df`, the free space rule, the removal of old days               |
 | `src/auth.js`                         | the key and the one-time tokens (same scheme as `../tunnelr`)    |
@@ -46,6 +47,8 @@ Rules that keep the data correct:
   which commits with `commit.json` and reverts on error. A reader reads up to the committed sizes.
 - **No stored value may hold a control character.** `src/records.js` enforces it. Keep it so when
   you add a field.
+- **The summary path and the scan path of a query must give the same result.**
+  `test/summary.test.js` compares them. Add a case there when you add a query feature.
 - **A new worker module must be in the `--include` list** of `deno task compile` and of the build in
   `.github/workflows/ci.yml`. `deno compile` does not find a module that only a `Worker` URL names.
 

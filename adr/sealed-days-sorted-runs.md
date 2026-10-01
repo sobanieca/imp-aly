@@ -20,8 +20,9 @@ rows and writes each field as a run file.**
   runs of one row only add the counts.
 - `meta.json` holds the number of rows, the fields, the plain fields, and the largest log part id of
   the day.
-- The worker writes each file in chunks of about 1 MiB, so it never holds a whole encoded file in
-  memory.
+- The worker reads each column once and turns it into a dictionary and a list of ids. The sort, the
+  files and the daily summary come from these lists, see `daily-summaries.md`. The worker writes
+  each file in chunks of about 1 MiB, so it never holds a whole encoded file in memory.
 - The worker writes `sealed-<n>.tmp/`, syncs it, renames it to `sealed-<n>/`, and then deletes the
   older sealed folder and the raw folders up to `n`. `n` is the highest raw generation that the seal
   took in.
@@ -35,7 +36,8 @@ rows and writes each field as a run file.**
 - The low-cardinality fields of a past day shrink to a few lines, and queries of past days parse
   much less text.
 - `visit` and `at` do not shrink. They stay plain lines, see `plain-text-column-files.md`.
-- A seal holds the whole day in memory: about 500 MB and 10 seconds for 1,000,000 records.
+- A seal holds the whole day in memory: less than 200 MB of live memory and about 15 seconds for
+  1,000,000 records.
 - The server accepts an `at` of up to 24 hours ago, see `utc-day-from-record-time.md`. The delay
   waits for those records, and 10 minutes more for the log, so a sealed day gets no new record.
 - A day stays raw for about two days, so queries of the last two days parse plain lines.

@@ -33,6 +33,7 @@ status field. When a decision changes, replace its ADR. When a decision is dropp
 | [plain-text-column-files](plain-text-column-files.md)               | Plain text column files, one folder per app and day    |
 | [append-transaction-with-revert](append-transaction-with-revert.md) | An append to the columns is a transaction that reverts |
 | [sealed-days-sorted-runs](sealed-days-sorted-runs.md)               | A finished day is sorted and stored as runs            |
+| [daily-summaries](daily-summaries.md)                               | A sealed day carries a summary that queries read       |
 | [disk-space-retention](disk-space-retention.md)                     | Retention follows free disk space, not age             |
 
 ## Access

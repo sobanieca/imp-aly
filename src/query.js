@@ -1,4 +1,6 @@
-import { dayDir, listDays, readDay } from './column-store.js'
+import { dayDir, listDays, readDay, readDaySummary } from './column-store.js'
+import { forEachVisitLine, parseReady, tableLines } from './summary.js'
+import { decodeValue } from './rle.js'
 import { dayOf, isDay } from './days.js'
 import { BASE_COLUMNS, isAppName, SEGMENT_NAME_PATTERN } from './names.js'
 
@@ -12,8 +14,6 @@ export class QueryError extends Error {
 export const DEFAULT_LIMIT = 1_000
 
 export const MAX_LIMIT = 100_000
-
-const MAX_DISTINCT_VISITS = 10_000_000
 
 const MAX_WHERE_VALUES = 1_000
 
@@ -103,100 +103,205 @@ export const parseQuery = (input, now = Date.now()) => {
   return { app: input.app, from, to, where, groupBy, measures, limit }
 }
 
-const percentile = (sorted, fraction) => {
-  if (!sorted.length) return null
-  const position = (sorted.length - 1) * fraction
-  const lower = Math.floor(position)
-  const upper = Math.ceil(position)
-  const value = sorted[lower] + (sorted[upper] - sorted[lower]) * (position - lower)
-  return Math.round(value * 10) / 10
+const round = (value) => Math.round(value * 10) / 10
+
+const valueAtRank = (entries, rank) => {
+  let seen = 0
+  for (const [value, count] of entries) {
+    seen += count
+    if (rank < seen) return value
+  }
+  return entries.at(-1)[0]
 }
 
-const readyValue = (measure, values) => {
+const readyValue = (measure, ready) => {
   const [, kind, percent] = READY_MEASURE.exec(measure)
-  if (!values.length) return null
-  if (kind === 'min') return values[0]
-  if (kind === 'max') return values.at(-1)
-  if (kind === 'avg') {
-    return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length * 10) / 10
+  if (ready.size === 0) return null
+  const entries = [...ready].sort((a, b) => a[0] - b[0])
+  if (kind === 'min') return entries[0][0]
+  if (kind === 'max') return entries.at(-1)[0]
+  let total = 0
+  let sum = 0
+  for (const [value, count] of entries) {
+    total += count
+    sum += value * count
   }
-  return percentile(values, Number(percent) / 100)
+  if (kind === 'avg') return round(sum / total)
+  const position = (total - 1) * (Number(percent) / 100)
+  const lower = valueAtRank(entries, Math.floor(position))
+  const upper = valueAtRank(entries, Math.ceil(position))
+  return round(lower + (upper - lower) * (position - Math.floor(position)))
 }
 
 const KEY_SEPARATOR = '\u0000'
 
 const NULL_KEY = '\u0001'
 
-export const runQuery = async ({ dataDir, query }) => {
-  const { app, from, to, where, groupBy, measures, limit } = query
-  const wantsVisits = measures.includes('visits')
-  const wantsReady = measures.some((measure) => measure.startsWith('readyMs.'))
+const keyOf = (parts) => parts.map((part) => part ?? NULL_KEY).join(KEY_SEPARATOR)
+
+const VISIT_BLIND_DIMENSIONS = ['zone', 'name']
+
+export const canUseSummary = ({ where, groupBy, measures }) => {
+  const fields = [...where.map((filter) => filter.field), ...groupBy]
+  if (fields.includes('visit')) return false
+  if (!measures.includes('visits')) return true
+  return !fields.some((field) => VISIT_BLIND_DIMENSIONS.includes(field))
+}
+
+const createAggregate = ({ groupBy, wantsReady }) => {
+  const groups = new Map()
+
+  const group = (parts) => {
+    const key = keyOf(parts)
+    let found = groups.get(key)
+    if (!found) {
+      found = { key, parts, records: 0, visits: 0, ready: new Map(), stamp: 0 }
+      groups.set(key, found)
+    }
+    return found
+  }
+
+  return {
+    groups,
+    group,
+    stamp: 0,
+    addReady: (target, value, count) => {
+      if (!wantsReady) return
+      target.ready.set(value, (target.ready.get(value) ?? 0) + count)
+    },
+    ensureTotal: () => {
+      if (!groupBy.length && !groups.size) group([])
+    },
+  }
+}
+
+const scanDay = async ({ path, day, query, aggregate, wantsVisits, wantsReady }) => {
+  const { where, groupBy } = query
   const columns = new Set([
     ...where.map((filter) => filter.field),
     ...groupBy.filter((field) => field !== 'day'),
   ])
   if (wantsVisits) columns.add('visit')
   if (wantsReady) columns.add('readyMs')
+  const { rows, columns: values } = await readDay(path, [...columns])
+  const selected = new Uint8Array(rows).fill(1)
+  for (const filter of where) {
+    const column = values[filter.field]
+    for (let row = 0; row < rows; row++) {
+      if (selected[row] && !filter.values.has(column[row])) selected[row] = 0
+    }
+  }
+  const groupColumns = groupBy.map((field) => (field === 'day' ? null : values[field]))
+  const dayVisits = new Map()
+  let matched = 0
+  for (let row = 0; row < rows; row++) {
+    if (!selected[row]) continue
+    matched++
+    const target = aggregate.group(
+      groupColumns.map((column) => (column === null ? day : column[row])),
+    )
+    target.records++
+    if (wantsVisits && values.visit[row] !== null) {
+      let visits = dayVisits.get(target)
+      if (!visits) {
+        visits = new Set()
+        dayVisits.set(target, visits)
+      }
+      visits.add(values.visit[row])
+    }
+    if (wantsReady && values.readyMs[row] !== null) {
+      aggregate.addReady(target, Number(values.readyMs[row]), 1)
+    }
+  }
+  for (const [target, visits] of dayVisits) target.visits += visits.size
+  return { scanned: rows, matched }
+}
+
+const cellsOf = (header, needed) => {
+  const positions = needed.map((field) => header.indexOf(field))
+  return (cells) =>
+    positions.map((position) => (position === -1 ? null : decodeValue(cells[position])))
+}
+
+const summaryDay = ({ summary, day, query, aggregate, wantsVisits, wantsReady }) => {
+  const { where, groupBy } = query
+  const groupFields = groupBy.filter((field) => field !== 'day')
+  const needed = [...where.map((filter) => filter.field), ...groupFields]
+  const select = (cells, read) => {
+    const values = read(cells)
+    for (let index = 0; index < where.length; index++) {
+      if (!where[index].values.has(values[index])) return null
+    }
+    let next = where.length
+    return aggregate.group(groupBy.map((field) => (field === 'day' ? day : values[next++])))
+  }
+
+  const counts = tableLines(summary.counts)
+  const readCounts = cellsOf(counts.header, needed)
+  const recordsAt = counts.header.length - 2
+  let matched = 0
+  for (const line of counts.lines) {
+    const cells = wantsReady ? line.split('\t') : line.split('\t', recordsAt + 1)
+    const target = select(cells, readCounts)
+    if (!target) continue
+    const records = Number(cells[recordsAt])
+    matched += records
+    target.records += records
+    if (wantsReady) {
+      for (const [value, count] of parseReady(cells[recordsAt + 1])) {
+        aggregate.addReady(target, value, count)
+      }
+    }
+  }
+
+  if (wantsVisits) {
+    const tuples = tableLines(summary.tuples)
+    const readTuples = cellsOf(tuples.header, needed)
+    const targets = tuples.lines.map((line) => select(line.split('\t'), readTuples))
+    forEachVisitLine(summary.visits, (visits, indexes) => {
+      const stamp = ++aggregate.stamp
+      for (const index of indexes) {
+        const target = targets[index]
+        if (!target || target.stamp === stamp) continue
+        target.stamp = stamp
+        target.visits += visits
+      }
+    })
+  }
+  return { scanned: summary.rows, matched }
+}
+
+export const runQuery = async ({ dataDir, query }) => {
+  const { app, from, to, groupBy, measures, limit } = query
+  const wantsVisits = measures.includes('visits')
+  const wantsReady = measures.some((measure) => measure.startsWith('readyMs.'))
+  const useSummary = canUseSummary(query)
+  const aggregate = createAggregate({ groupBy, wantsReady })
 
   const days = (await listDays(dataDir, app)).filter((day) => day >= from && day <= to)
-  const groups = new Map()
   let scanned = 0
   let matched = 0
-  let distinctVisits = 0
-
+  let summaryDays = 0
   for (const day of days) {
-    const { rows, columns: values } = await readDay(dayDir(dataDir, app, day), [...columns])
-    scanned += rows
-    const selected = new Uint8Array(rows).fill(1)
-    for (const filter of where) {
-      const column = values[filter.field]
-      for (let row = 0; row < rows; row++) {
-        if (selected[row] && !filter.values.has(column[row])) selected[row] = 0
-      }
-    }
-    const groupColumns = groupBy.map((field) => (field === 'day' ? null : values[field]))
-    for (let row = 0; row < rows; row++) {
-      if (!selected[row]) continue
-      matched++
-      const parts = groupColumns.map((column) => (column === null ? day : column[row]))
-      const key = parts.map((part) => part ?? NULL_KEY).join(KEY_SEPARATOR)
-      let group = groups.get(key)
-      if (!group) {
-        group = { key, parts, records: 0, visits: wantsVisits ? new Set() : null, ready: [] }
-        groups.set(key, group)
-      }
-      group.records++
-      if (wantsVisits) {
-        const visit = values.visit[row]
-        if (visit !== null && !group.visits.has(visit)) {
-          group.visits.add(visit)
-          distinctVisits++
-          if (distinctVisits > MAX_DISTINCT_VISITS) {
-            throw new QueryError(
-              'the query counts more than 10000000 distinct visits - use a shorter range or fewer groups',
-            )
-          }
-        }
-      }
-      if (wantsReady) {
-        const ready = values.readyMs[row]
-        if (ready !== null) group.ready.push(Number(ready))
-      }
-    }
+    const path = dayDir(dataDir, app, day)
+    const summary = useSummary ? await readDaySummary(path, { withVisits: wantsVisits }) : null
+    const result = summary
+      ? summaryDay({ summary, day, query, aggregate, wantsVisits, wantsReady })
+      : await scanDay({ path, day, query, aggregate, wantsVisits, wantsReady })
+    if (summary) summaryDays++
+    scanned += result.scanned
+    matched += result.matched
   }
+  aggregate.ensureTotal()
 
-  if (!groupBy.length && !groups.size) {
-    groups.set('', { key: '', parts: [], records: 0, visits: new Set(), ready: [] })
-  }
-  const rows = [...groups.values()].map((group) => {
+  const rows = [...aggregate.groups.values()].map((group) => {
     const row = {}
     groupBy.forEach((field, index) => {
       row[field] = group.parts[index]
     })
-    if (wantsReady) group.ready.sort((a, b) => a - b)
     for (const measure of measures) {
       if (measure === 'records') row.records = group.records
-      else if (measure === 'visits') row.visits = group.visits.size
+      else if (measure === 'visits') row.visits = group.visits
       else row[measure] = readyValue(measure, group.ready)
     }
     return { row, key: group.key }
@@ -212,6 +317,7 @@ export const runQuery = async ({ dataDir, query }) => {
     from,
     to,
     days: days.length,
+    summaryDays,
     scanned,
     matched,
     rows: rows.slice(0, limit).map((entry) => entry.row),
