@@ -1,4 +1,4 @@
-# imp-analytics-server - Apps
+# imp-aly - Apps
 
 The server accepts records only for a registered app. An app has a name, an app map and an optional
 list of segments.
@@ -6,8 +6,8 @@ list of segments.
 ## Register an app
 
 ```sh
-imp-analytics-server app add myapp https://myapp.example/app-map.txt
-imp-analytics-server app add myapp dist/app-map.txt --segments plan,role
+imp-aly app add myapp https://myapp.example/app-map.txt
+imp-aly app add myapp dist/app-map.txt --segments plan,role
 ```
 
 - **The name** is 1 to 63 lowercase letters, digits and `-`, and starts with a letter or a digit.
@@ -22,6 +22,17 @@ imp-analytics-server app add myapp dist/app-map.txt --segments plan,role
 
 `app add` replaces an app of the same name. The counts of accepted and rejected records stay.
 
+With several servers, give all of them to each `app` command, so that each server has the same map
+and the same segments:
+
+```sh
+imp-aly app add myapp https://myapp.example/app-map.txt -s eu-1,eu-2,eu-3
+imp-aly app refresh myapp -s eu-1,eu-2,eu-3
+imp-aly app ls -s eu-1,eu-2,eu-3
+```
+
+See [Several servers](query.md#several-servers).
+
 When the map cannot be read, or a line of it does not start with `/`, the command fails and the
 server keeps the previous state.
 
@@ -31,7 +42,7 @@ A new screen in your app is a new line in its map. Until the server knows the ne
 the records of that screen. So update the map in the same pipeline that deploys the app:
 
 ```sh
-imp-analytics-server app refresh myapp
+imp-aly app refresh myapp
 ```
 
 `refresh` reads the URL of the map again. For an uploaded map, run `app add` with the new file.
@@ -39,9 +50,9 @@ imp-analytics-server app refresh myapp
 ## Other commands
 
 ```sh
-imp-analytics-server app ls             # every app, with its counts
-imp-analytics-server app show myapp     # one app, with its rejections by reason
-imp-analytics-server app rm myapp       # stop accepting records of the app
+imp-aly app ls             # every app, with its counts
+imp-aly app show myapp     # one app, with its rejections by reason
+imp-aly app rm myapp       # stop accepting records of the app
 ```
 
 `app rm` keeps the stored records. A query of the app name still reads them, and the retention
@@ -78,7 +89,8 @@ the app does not declare. This keeps a typo or a forged field out of the data.
 - Two segment names of one app must differ in more than the case, such as `plan` and `Plan`. Some
   file systems do not tell them apart.
 - An app has at most 16 segments.
-- A segment value is null, or a text of up to 64 characters, a number or a boolean.
+- A segment value is null, a number, a boolean, or a text of 1 to 64 ASCII letters, digits, `.`, `-`
+  or `_`. Use values such as `pro`, `en-US` or `1.2.3`. See [Collecting records](collect.md).
 
 **Do not put personal data in a segment.** A user id, an email address or an organization id is
 personal data, also when you hash it. Add groups, not ids.

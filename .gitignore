@@ -142,7 +142,7 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
 
-# imp-analytics-server
-/imp-analytics-server
-/imp-analytics-server-*
+# imp-aly
+/imp-aly
+/imp-aly-*
 .test-data/

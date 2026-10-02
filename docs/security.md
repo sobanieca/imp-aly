@@ -1,36 +1,65 @@
-# imp-analytics-server - Security
+# imp-aly - Security
 
-The server has a public part and a private part.
+The server has a public part and a private part. Each part has its own port.
 
-| Part    | Endpoints                      | Protection                         |
-| ------- | ------------------------------ | ---------------------------------- |
-| public  | `POST /collect/<app>`, `GET /` | app map, record checks, rate limit |
-| private | `/apps`, `/query`, `/status`   | a one-time token signed with a key |
+| Part    | Port   | Endpoints                                           | Protection                         |
+| ------- | ------ | --------------------------------------------------- | ---------------------------------- |
+| public  | `2980` | `POST /collect/<app>`, `GET /`                      | app map, record checks, rate limit |
+| private | `2981` | `/apps`, `/query`, `/status`, `/backup`, `/restore` | a one-time token signed with a key |
+
+`--port` and `--admin-port` change the ports. A port answers `404` to the endpoints of the other
+part.
+
+## Close the admin port
+
+**An open admin port lets anybody on the internet try tokens against the server.** The tokens are
+strong, and the rate limit counts each try. But it is safer when a stranger cannot reach the port:
+
+- Let the firewall accept the admin port only from your machines.
+- Or give `--admin-bind 127.0.0.1`, and call the commands on the VPS or through an SSH tunnel.
+
+A flood on the public port does not block the admin port. Each port has its own limit of requests in
+progress.
 
 ## The key
 
 The server creates a random key of 32 letters and digits when it starts for the first time. It saves
-the key to `~/.secret/imp-analytics-server-key`, with access for the owner only, and prints it.
-`-a <key or file>` gives another key or another key file.
+the key to `~/.secret/imp-aly-key`, with access for the owner only, and prints it.
+`-a <key or file>` gives another key or another key file. A key as text goes into the key file when
+the file is empty. When the file holds a different key, the server does not start, and the file does
+not change. When the key file cannot be read or written, the command stops and shows the reason.
 
 The commands `app`, `query`, `status` and `token` read the same file by default. On another machine,
-save the key in that file, or pass `-a <file>`.
+save the key in that file, pass `-a <file>`, or save the server with its key file:
+`imp-aly add <name> <url> -a <file>`. The list of saved servers holds the path of the key file. It
+holds the key only when you give the key as text. The list has access for the owner only.
 
-**The key never goes over the network.** For each call, the command makes a token of three parts:
-the time, a random value and an HMAC-SHA256 signature of the two with the key. The server checks the
-signature, accepts a token that is at most 60 seconds old, and accepts each token once. A token that
-somebody captures is of no use to them.
+**The key never goes over the network.** For each call, the command makes a token of four parts: the
+time, a random value, the SHA-256 hash of the body, and an HMAC-SHA256 signature. The signature
+covers the time, the random value, the method, the path with its query string, and the hash of the
+body. The server checks the signature before it reads the body. It then checks that the body has the
+signed hash. It accepts a token that is at most 60 seconds old, and accepts each token once.
+
+So a token works for one request only. Somebody who captures a token cannot use it for another
+endpoint, another method, another query string or another body. A request without a body signs the
+hash of an empty body.
 
 The clocks of both machines must agree to within 60 seconds.
 
-To call the API with another tool, get a token from the command:
+To call the API with another tool, get a token for the method and the path. For a request with a
+body, give the file of the body too, and send the file exactly as it is:
 
 ```sh
-curl -H "Authorization: Bearer $(imp-analytics-server token)" http://127.0.0.1:2980/status
+curl -H "Authorization: Bearer $(imp-aly token GET /status)" http://127.0.0.1:2981/status
+curl -H "Authorization: Bearer $(imp-aly token POST /query query.json)" \
+  --data-binary @query.json http://127.0.0.1:2981/query
 ```
 
+Use `--data-binary`. `curl -d` removes the line breaks, so the body no longer has the signed hash.
+
 To change the key, delete the key file and start the server again. With the systemd service, run
-`sudo imp-analytics-server --port 2980` again, then `sudo systemctl restart imp-analytics-server`.
+`sudo imp-aly server --port 2980` again, then `sudo systemctl restart imp-aly`. The service reads
+the key at its start.
 
 ## Use HTTPS
 
@@ -46,15 +75,50 @@ Anybody can send records to `/collect/<app>`. The server limits what a sender ca
   sender cannot fill the data with invented paths.
 - **The record checks.** Each field has a type, a size and a set of allowed characters. A record
   with an unknown field fails. See [Collecting records](collect.md).
-- **The size limits.** A request has at most 64 KiB and 100 records. The server reads a body for at
-  most 10 seconds.
+- **Plain characters only.** A zone, an outcome name and a segment value hold only ASCII letters,
+  digits and a few signs. HTML, a script, a shell command or a Unicode trick fails the checks.
+- **The size limits.** A request has at most 64 KiB. The server reads a body for at most 10 seconds.
 - **The rate limit.** Each address can send a limited number of records in 5 seconds, 1 minute, 1
-  hour and 24 hours. Over a limit, the server answers `429` without reading the body.
+  hour and 24 hours. Over a limit, the server answers `429` without reading the body. An IPv6 `/48`
+  network has a limit too.
+- **The requests in progress.** The server works on at most 1,024 requests at one time on each port.
+  Above this number, it answers `503` at once.
+- **The allowed origins.** With `--allow-origin`, the server refuses records from a browser page of
+  another site. So a script on another site cannot use the browsers of its visitors to send records.
+  See [Collecting records](collect.md#cors-and-allowed-origins).
+- **The proxy header.** With `--ip-header`, the server reads the header only from a trusted proxy. A
+  client that connects directly cannot give a false address.
 - **The disk.** Retention keeps a minimum of free space. See [Storage](storage.md).
+
+The server never runs or reads a stored value as code. It has no shell step, no SQL and no HTML
+page. The checks also protect the tools that you use to read the data.
+
+Each answer, on both ports, has these headers:
+
+- `x-content-type-options: nosniff`. A browser does not read a JSON answer as HTML or a script.
+- `content-security-policy: default-src 'none'; frame-ancestors 'none'`. When a browser opens an
+  answer as a page, the page cannot load anything, and another site cannot show it in a frame.
 
 A sender can still send valid records with invented counts, up to the rate limit. No public endpoint
 can prevent that. Read the numbers as estimates, and watch for a sudden rise from one address or one
 country.
+
+## Large attacks
+
+The limits stop one sender, or a small group of senders. They do not stop a large distributed attack
+(DDoS). The memory of the limits stays the same in an attack. But:
+
+- A sender with more than 400,000 addresses gets past the rate limit, because the server forgets the
+  oldest addresses.
+- The server must accept each connection and read each request before it can refuse it. A flood of
+  connections or of bytes can use all the network or processor of the VPS.
+- Valid records from many addresses fill the disk. Retention then removes the oldest days to keep
+  the free space.
+
+**A large attack can stop the server or remove old data.** For a public site, put a service that
+filters attacks in front of the server. Use the DDoS protection of your provider, or a CDN such as
+Cloudflare. Then set `--ip-header` and `--trusted-proxy` for that service, and let the firewall
+accept connections from that service only. Make backups. See [Backup](backup.md).
 
 ## What the server stores
 
@@ -65,7 +129,9 @@ limit keeps the recent addresses in memory only.
 imp sends no personal data in a record. Keep it that way in your sink, and do not add a user id or
 an organization id as a segment.
 
-## Run as root
+## The service user
 
-The systemd service runs as root, like the command that installs it. To run the server as another
-user, install the service yourself with `--foreground` and a `User=` line. See [CLI](cli.md).
+The systemd service runs as the system user `imp-aly`, not as root. It can write only its data
+folder, it cannot read `/home` or `/root`, and it has no capabilities. systemd gives it a copy of
+the key and of the TLS files at each start. So a fault in the server cannot change the system or
+read the key file of root. See [CLI](cli.md#the-service-user).

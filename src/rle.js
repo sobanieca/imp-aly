@@ -10,60 +10,6 @@ export const splitLines = (text) => {
   return lines.map(decodeValue)
 }
 
-const compareText = (a, b) => {
-  if (a === b) return 0
-  if (a === null) return -1
-  if (b === null) return 1
-  return a < b ? -1 : 1
-}
-
-export const compareNumeric = (a, b) => {
-  if (a === b) return 0
-  if (a === null) return -1
-  if (b === null) return 1
-  return Number(a) - Number(b)
-}
-
-export const dictionaryEncode = (values, compare = compareText) => {
-  const dictionary = [...new Set(values)].sort(compare)
-  const idOf = new Map(dictionary.map((value, index) => [value, index]))
-  const ids = new Uint32Array(values.length)
-  for (let row = 0; row < values.length; row++) ids[row] = idOf.get(values[row])
-  return { ids, values: dictionary }
-}
-
-export const countRuns = ({ ids }, order) => {
-  let runs = 0
-  for (let position = 0; position < order.length; position++) {
-    if (position === 0 || ids[order[position]] !== ids[order[position - 1]]) runs++
-  }
-  return runs
-}
-
-export function* runLines({ ids, values }, order) {
-  let current = 0
-  let count = 0
-  for (let position = 0; position < order.length; position++) {
-    const id = ids[order[position]]
-    if (count > 0 && id === current) {
-      count++
-      continue
-    }
-    if (count > 0) yield `${count}\t${encodeValue(values[current])}\n`
-    current = id
-    count = 1
-  }
-  if (count > 0) yield `${count}\t${encodeValue(values[current])}\n`
-}
-
-export function* plainLines({ ids, values }, order) {
-  for (let position = 0; position < order.length; position++) {
-    yield `${encodeValue(values[ids[order[position]]])}\n`
-  }
-}
-
-export const encodeRuns = (values, order) => [...runLines(dictionaryEncode(values), order)].join('')
-
 export const decodeRuns = (text, rows) => {
   const values = new Array(rows)
   let filled = 0

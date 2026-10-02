@@ -1,5 +1,6 @@
 import { absolutePath, dirname, getHome, join } from './paths.js'
 import { logger } from './logger.js'
+import { sha256Hex } from './sha256.js'
 
 const KEY_LENGTH = 32
 
@@ -20,16 +21,27 @@ export const generateKey = () => {
   return usable.slice(0, KEY_LENGTH).map((byte) => ALPHABET[byte % ALPHABET.length]).join('')
 }
 
-export const defaultKeyPath = () => join(getHome(), '.secret', 'imp-analytics-server-key')
+export const defaultKeyPath = () => join(getHome(), '.secret', 'imp-aly-key')
 
 const looksLikePath = (value) =>
   value.includes('/') || value.startsWith('~') || value.startsWith('.')
 
+const osReason = (error) => error.message.split(': ')[0]
+
+const isFile = (path) => {
+  try {
+    return Deno.statSync(path).isFile
+  } catch {
+    return false
+  }
+}
+
 export const readKeyFile = (path) => {
   try {
     return Deno.readTextFileSync(path).trim()
-  } catch {
-    return ''
+  } catch (error) {
+    if (error instanceof Deno.errors.NotFound) return ''
+    throw new Error(`cannot read the key file ${path} (${osReason(error)})`)
   }
 }
 
@@ -40,8 +52,7 @@ export const resolveKey = (auth) => {
     const path = absolutePath(value)
     return { key: readKeyFile(path), path }
   }
-  const fromFile = readKeyFile(value)
-  if (fromFile) return { key: fromFile, path: absolutePath(value) }
+  if (isFile(value)) return { key: readKeyFile(value), path: absolutePath(value) }
   return { key: value, path: '' }
 }
 
@@ -55,13 +66,27 @@ export const findKey = (auth) => {
   return key
 }
 
-export const findOrCreateKey = (auth) => {
+export const findOrCreateKey = (auth, defaultPath = defaultKeyPath()) => {
   const { key, path } = resolveKey(auth)
-  const target = path || defaultKeyPath()
-  if (key && key === readKeyFile(target)) return { key, path: target }
+  const target = path || defaultPath
+  const saved = readKeyFile(target)
+  if (key && key === saved) return { key, path: target }
+  if (key && saved) {
+    throw new Error(
+      `the key file ${target} holds a different key - pass -a ${target}, or remove the file to save the new key`,
+    )
+  }
   const fresh = key || generateKey()
-  Deno.mkdirSync(dirname(target), { recursive: true })
-  Deno.writeTextFileSync(target, `${fresh}\n`, { mode: 0o600 })
+  try {
+    Deno.mkdirSync(dirname(target), { recursive: true })
+    Deno.writeTextFileSync(target, `${fresh}\n`, { mode: 0o600 })
+  } catch (error) {
+    throw new Error(
+      `cannot save the key to ${target} (${
+        osReason(error)
+      }) - pass -a <file> with a path that you can write`,
+    )
+  }
   logger.info(`Key saved to ${target}`)
   return { key: fresh, path: target }
 }
@@ -78,10 +103,26 @@ const sign = async (key, text) => {
   return toHex(new Uint8Array(mac))
 }
 
-export const createToken = async (key) => {
-  const timestamp = Date.now()
+export const EMPTY_BODY_HASH = sha256Hex(new Uint8Array(0))
+
+const HASH_PATTERN = /^[0-9a-f]{64}$/
+
+export const requestTarget = (path) => {
+  const url = new URL(path, 'http://imp-aly')
+  return `${url.pathname}${url.search}`
+}
+
+const signedText = ({ timestamp, nonce, method, target, bodyHash }) =>
+  [timestamp, nonce, method.toUpperCase(), target, bodyHash].join('\n')
+
+export const createToken = async (key, { method, path, bodyHash = EMPTY_BODY_HASH }) => {
+  const timestamp = String(Date.now())
   const nonce = toHex(crypto.getRandomValues(new Uint8Array(NONCE_BYTES)))
-  return `${timestamp}.${nonce}.${await sign(key, `${timestamp}.${nonce}`)}`
+  const mac = await sign(
+    key,
+    signedText({ timestamp, nonce, method, target: requestTarget(path), bodyHash }),
+  )
+  return `${timestamp}.${nonce}.${bodyHash}.${mac}`
 }
 
 export const safeEqual = (a, b) => {
@@ -97,20 +138,23 @@ export const safeEqual = (a, b) => {
 
 export const createTokenVerifier = (key, ttlMs = TOKEN_TTL_MS) => {
   const used = new Map()
-  return async (token) => {
-    const [timestampText, nonce, mac, ...rest] = String(token ?? '').split('.')
-    const timestamp = Number(timestampText)
-    if (!nonce || !mac || rest.length || !Number.isSafeInteger(timestamp)) {
-      return 'malformed token'
+  return async (token, { method, target }) => {
+    const [timestamp, nonce, bodyHash, mac, ...rest] = String(token ?? '').split('.')
+    const time = Number(timestamp)
+    if (
+      !nonce || !mac || rest.length || !Number.isSafeInteger(time) || !HASH_PATTERN.test(bodyHash)
+    ) {
+      return { problem: 'malformed token' }
     }
     const now = Date.now()
     for (const [usedNonce, expires] of used) if (expires <= now) used.delete(usedNonce)
-    if (Math.abs(now - timestamp) > ttlMs) {
-      return 'token expired (check the clock on both machines)'
+    if (Math.abs(now - time) > ttlMs) {
+      return { problem: 'token expired (check the clock on both machines)' }
     }
-    if (!safeEqual(mac, await sign(key, `${timestampText}.${nonce}`))) return 'wrong key'
-    if (used.has(nonce)) return 'token already used'
+    const expected = await sign(key, signedText({ timestamp, nonce, method, target, bodyHash }))
+    if (!safeEqual(mac, expected)) return { problem: 'wrong key, or a token for another request' }
+    if (used.has(nonce)) return { problem: 'token already used' }
     used.set(nonce, now + 2 * ttlMs)
-    return ''
+    return { problem: '', bodyHash }
   }
 }

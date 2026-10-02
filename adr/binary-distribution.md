@@ -13,7 +13,7 @@ and publishes it with a SHA-256 file to a GitHub Release.**
 - The version in `deno.json` is the source of truth. `--version` imports it.
 - The targets are Linux and macOS on x64 and arm64. Each one builds on a runner of its own platform
   and runs a smoke test: start, register an app, send a record, query it.
-- The assets are `imp-analytics-server-{linux|macos}-{x64|arm64}` and a `.sha256` file for each.
+- The assets are `imp-aly-{linux|macos}-{x64|arm64}` and a `.sha256` file for each.
 - `install.sh` detects the platform, downloads the latest asset and its checksum, checks it, and
   installs to `/usr/local/bin`. GitHub Pages serves the script.
 

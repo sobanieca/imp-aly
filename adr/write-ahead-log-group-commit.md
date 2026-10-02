@@ -20,14 +20,18 @@ separate worker moves the log into the column files later.**
   is deleted, so an idle server writes nothing.
 - When a write fails, the server cuts the part back to its size before the write and closes it. So a
   torn line can only be the last line of a part, and no later record follows it. When the cut fails
-  too, the server closes the part as `.bad`, which the worker never reads. So records that a client
-  got `503` for are never stored.
+  too, the server closes the part as `<id>-<size>.log`. The worker reads only the first `<size>`
+  bytes. So the records before the failed write are stored, and records that a client got `503` for
+  are not.
 - At start, the server renames a leftover `.open` part to `.log`. A torn last line after a crash is
   not valid JSON, and the worker skips it.
-- Part ids grow for ever. The worker writes the id of the last stored part to `wal/applied`, and the
-  server starts after the largest id in the folder or in that file. The server reads them before it
-  starts the worker, so the worker cannot delete the largest part first. An id is never used twice,
-  also when the folder is empty. The worker logs a part that a day already holds.
+- Part ids grow for ever. The id of a new part is the current time in milliseconds, or one more than
+  the last id when that is larger. The worker writes the id of the last stored part to
+  `wal/applied`, and the server starts after the largest id in the folder or in that file. The
+  server reads them before it starts the worker, so the worker cannot delete the largest part first.
+  An id is never used twice, also when the folder is empty. The time keeps the ids larger than the
+  stored ones when somebody deletes `wal/`. A day skips a part that it already holds, so an old id
+  would lose records. The worker logs such a part.
 
 ## Consequences
 

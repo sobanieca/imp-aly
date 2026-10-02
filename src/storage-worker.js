@@ -26,6 +26,15 @@ self.onmessage = (event) => {
     storage?.wake()
     return
   }
+  if (message.type === 'restore') {
+    const reply = (fields) => self.postMessage({ type: 'restored', id: message.id, ...fields })
+    if (!storage) return reply({ error: 'the storage worker is not ready', status: 503 })
+    storage.restore(message.path).then(
+      (result) => reply({ result }),
+      (error) => reply({ error: error.message, status: error.status ?? 500 }),
+    )
+    return
+  }
   if (message.type === 'stop') {
     storage?.stop()
     Promise.resolve(running).then(() => self.postMessage({ type: 'stopped' }))

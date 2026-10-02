@@ -1,8 +1,17 @@
 import { dayDir, listDays, readDay, readDaySummary } from './column-store.js'
-import { forEachVisitLine, parseReady, tableLines } from './summary.js'
+import { COUNT_MEASURES, forEachVisitLine, parseReadyCells, tableLines } from './summary.js'
 import { decodeValue } from './rle.js'
 import { dayOf, isDay } from './days.js'
 import { BASE_COLUMNS, isAppName, SEGMENT_NAME_PATTERN } from './names.js'
+import {
+  addReadyValue,
+  createReady,
+  isBucket,
+  mergeReady,
+  readyPercentile,
+  readyShareUnder,
+  readyToJson,
+} from './ready.js'
 
 export class QueryError extends Error {
   constructor(message) {
@@ -15,13 +24,24 @@ export const DEFAULT_LIMIT = 1_000
 
 export const MAX_LIMIT = 100_000
 
+export const MAX_GROUPS = 100_000
+
 const MAX_WHERE_VALUES = 1_000
 
 const DIMENSIONS = BASE_COLUMNS.filter((column) => column !== 'at' && column !== 'readyMs')
 
 const QUERY_KEYS = ['app', 'from', 'to', 'where', 'groupBy', 'measures', 'limit']
 
-const READY_MEASURE = /^readyMs\.(avg|min|max|p([1-9]\d?))$/
+const READY_MEASURE = /^readyMs\.(avg|min|max|p([1-9]\d?)|under:(0|[1-9]\d*))$/
+
+const BUCKET_KINDS = ['p', 'under']
+
+const readyMeasure = (measure) => {
+  const [, name, percent, limit] = READY_MEASURE.exec(measure)
+  if (percent) return { kind: 'p', percent: Number(percent) }
+  if (limit) return { kind: 'under', limit: Number(limit) }
+  return { kind: name }
+}
 
 const isDimension = (field) =>
   typeof field === 'string' &&
@@ -89,7 +109,13 @@ export const parseQuery = (input, now = Date.now()) => {
   for (const measure of measures) {
     if (measure !== 'records' && measure !== 'visits' && !READY_MEASURE.test(measure)) {
       throw new QueryError(
-        `measure "${measure}" is not known - use records, visits, readyMs.avg, readyMs.min, readyMs.max or readyMs.p1 to readyMs.p99`,
+        `measure "${measure}" is not known - use records, visits, readyMs.avg, readyMs.min, readyMs.max, readyMs.p1 to readyMs.p99 or readyMs.under:<ms>`,
+      )
+    }
+    const ready = READY_MEASURE.test(measure) ? readyMeasure(measure) : null
+    if (ready?.kind === 'under' && (ready.limit === 0 || !isBucket(ready.limit))) {
+      throw new QueryError(
+        `measure "${measure}" takes 1 to 3600000 ms with at most 2 significant digits, like readyMs.under:2500`,
       )
     }
     if (groupBy.includes(measure)) throw new QueryError(`"${measure}" is a measure and a group`)
@@ -101,36 +127,6 @@ export const parseQuery = (input, now = Date.now()) => {
     throw new QueryError(`limit is a whole number from 1 to ${MAX_LIMIT}`)
   }
   return { app: input.app, from, to, where, groupBy, measures, limit }
-}
-
-const round = (value) => Math.round(value * 10) / 10
-
-const valueAtRank = (entries, rank) => {
-  let seen = 0
-  for (const [value, count] of entries) {
-    seen += count
-    if (rank < seen) return value
-  }
-  return entries.at(-1)[0]
-}
-
-const readyValue = (measure, ready) => {
-  const [, kind, percent] = READY_MEASURE.exec(measure)
-  if (ready.size === 0) return null
-  const entries = [...ready].sort((a, b) => a[0] - b[0])
-  if (kind === 'min') return entries[0][0]
-  if (kind === 'max') return entries.at(-1)[0]
-  let total = 0
-  let sum = 0
-  for (const [value, count] of entries) {
-    total += count
-    sum += value * count
-  }
-  if (kind === 'avg') return round(sum / total)
-  const position = (total - 1) * (Number(percent) / 100)
-  const lower = valueAtRank(entries, Math.floor(position))
-  const upper = valueAtRank(entries, Math.ceil(position))
-  return round(lower + (upper - lower) * (position - Math.floor(position)))
 }
 
 const KEY_SEPARATOR = '\u0000'
@@ -148,14 +144,25 @@ export const canUseSummary = ({ where, groupBy, measures }) => {
   return !fields.some((field) => VISIT_BLIND_DIMENSIONS.includes(field))
 }
 
-const createAggregate = ({ groupBy, wantsReady }) => {
+const needsOf = (measures) => {
+  const ready = measures.filter((measure) => READY_MEASURE.test(measure)).map(readyMeasure)
+  return {
+    wantsVisits: measures.includes('visits'),
+    wantsReady: ready.length > 0,
+    wantsBuckets: ready.some((measure) => BUCKET_KINDS.includes(measure.kind)),
+  }
+}
+
+const readyOf = (target) => (target.ready ??= createReady())
+
+const createAggregate = () => {
   const groups = new Map()
 
   const group = (parts) => {
     const key = keyOf(parts)
     let found = groups.get(key)
     if (!found) {
-      found = { key, parts, records: 0, visits: 0, ready: new Map(), stamp: 0 }
+      found = { key, parts, records: 0, visits: 0, ready: null, stamp: 0 }
       groups.set(key, found)
     }
     return found
@@ -165,12 +172,11 @@ const createAggregate = ({ groupBy, wantsReady }) => {
     groups,
     group,
     stamp: 0,
-    addReady: (target, value, count) => {
-      if (!wantsReady) return
-      target.ready.set(value, (target.ready.get(value) ?? 0) + count)
-    },
-    ensureTotal: () => {
-      if (!groupBy.length && !groups.size) group([])
+    merge: (source) => {
+      const target = group(source.parts)
+      target.records += source.records
+      target.visits += source.visits
+      if (source.ready) mergeReady(readyOf(target), source.ready)
     },
   }
 }
@@ -210,7 +216,7 @@ const scanDay = async ({ path, day, query, aggregate, wantsVisits, wantsReady })
       visits.add(values.visit[row])
     }
     if (wantsReady && values.readyMs[row] !== null) {
-      aggregate.addReady(target, Number(values.readyMs[row]), 1)
+      addReadyValue(readyOf(target), Number(values.readyMs[row]))
     }
   }
   for (const [target, visits] of dayVisits) target.visits += visits.size
@@ -238,7 +244,7 @@ const summaryDay = ({ summary, day, query, aggregate, wantsVisits, wantsReady })
 
   const counts = tableLines(summary.counts)
   const readCounts = cellsOf(counts.header, needed)
-  const recordsAt = counts.header.length - 2
+  const recordsAt = counts.header.length - COUNT_MEASURES.length
   let matched = 0
   for (const line of counts.lines) {
     const cells = wantsReady ? line.split('\t') : line.split('\t', recordsAt + 1)
@@ -248,9 +254,8 @@ const summaryDay = ({ summary, day, query, aggregate, wantsVisits, wantsReady })
     matched += records
     target.records += records
     if (wantsReady) {
-      for (const [value, count] of parseReady(cells[recordsAt + 1])) {
-        aggregate.addReady(target, value, count)
-      }
+      const ready = parseReadyCells(cells.slice(recordsAt + 1))
+      if (ready) mergeReady(readyOf(target), ready)
     }
   }
 
@@ -272,38 +277,109 @@ const summaryDay = ({ summary, day, query, aggregate, wantsVisits, wantsReady })
 }
 
 export const runQuery = async ({ dataDir, query }) => {
-  const { app, from, to, groupBy, measures, limit } = query
-  const wantsVisits = measures.includes('visits')
-  const wantsReady = measures.some((measure) => measure.startsWith('readyMs.'))
+  const { app, from, to, measures } = query
+  const { wantsVisits, wantsReady, wantsBuckets } = needsOf(measures)
   const useSummary = canUseSummary(query)
-  const aggregate = createAggregate({ groupBy, wantsReady })
+  const aggregate = createAggregate()
 
   const days = (await listDays(dataDir, app)).filter((day) => day >= from && day <= to)
   let scanned = 0
   let matched = 0
   let summaryDays = 0
+  const skippedDays = []
   for (const day of days) {
     const path = dayDir(dataDir, app, day)
-    const summary = useSummary ? await readDaySummary(path, { withVisits: wantsVisits }) : null
-    const result = summary
-      ? summaryDay({ summary, day, query, aggregate, wantsVisits, wantsReady })
-      : await scanDay({ path, day, query, aggregate, wantsVisits, wantsReady })
+    const draft = createAggregate()
+    let summary = null
+    let result
+    try {
+      summary = useSummary ? await readDaySummary(path, { withVisits: wantsVisits }) : null
+      result = summary
+        ? summaryDay({ summary, day, query, aggregate: draft, wantsVisits, wantsReady })
+        : await scanDay({ path, day, query, aggregate: draft, wantsVisits, wantsReady })
+    } catch (error) {
+      skippedDays.push({ day, reason: error.message })
+      continue
+    }
+    for (const group of draft.groups.values()) aggregate.merge(group)
+    if (aggregate.groups.size > MAX_GROUPS) {
+      throw new QueryError(
+        `the query makes more than ${MAX_GROUPS} groups - group by fewer fields or use a shorter range`,
+      )
+    }
     if (summary) summaryDays++
     scanned += result.scanned
     matched += result.matched
   }
-  aggregate.ensureTotal()
+
+  return {
+    app,
+    from,
+    to,
+    days,
+    summaryDays,
+    scanned,
+    matched,
+    skippedDays,
+    groups: [...aggregate.groups.values()].map((group) => {
+      const entry = { by: group.parts, records: group.records }
+      if (wantsVisits) entry.visits = group.visits
+      if (wantsReady && group.ready) entry.ready = readyToJson(group.ready, wantsBuckets)
+      return entry
+    }),
+  }
+}
+
+const measureValue = (measure, group) => {
+  if (measure === 'records') return group.records
+  if (measure === 'visits') return group.visits
+  const { ready } = group
+  if (!ready?.count) return null
+  const { kind, percent, limit } = readyMeasure(measure)
+  if (kind === 'avg') return Math.round((ready.sum / ready.count) * 10) / 10
+  if (kind === 'min') return ready.min
+  if (kind === 'max') return ready.max
+  if (kind === 'p') return readyPercentile(ready, percent)
+  return readyShareUnder(ready, limit)
+}
+
+export const finalizeQuery = (query, answers) => {
+  const { app, from, to, groupBy, measures, limit } = query
+  const aggregate = createAggregate()
+  const days = new Set()
+  const servers = []
+  const skippedDays = []
+  let scanned = 0
+  let matched = 0
+  for (const { server, answer } of answers) {
+    for (const day of answer.days) days.add(day)
+    for (const group of answer.groups) {
+      aggregate.merge({
+        parts: group.by,
+        records: group.records,
+        visits: group.visits ?? 0,
+        ready: group.ready ?? null,
+      })
+    }
+    scanned += answer.scanned
+    matched += answer.matched
+    servers.push({
+      server,
+      days: answer.days.length,
+      summaryDays: answer.summaryDays,
+      scanned: answer.scanned,
+      matched: answer.matched,
+    })
+    skippedDays.push(...answer.skippedDays.map((entry) => ({ server, ...entry })))
+  }
+  if (!groupBy.length && !aggregate.groups.size) aggregate.group([])
 
   const rows = [...aggregate.groups.values()].map((group) => {
     const row = {}
     groupBy.forEach((field, index) => {
       row[field] = group.parts[index]
     })
-    for (const measure of measures) {
-      if (measure === 'records') row.records = group.records
-      else if (measure === 'visits') row.visits = group.visits
-      else row[measure] = readyValue(measure, group.ready)
-    }
+    for (const measure of measures) row[measure] = measureValue(measure, group)
     return { row, key: group.key }
   })
   const [first] = measures
@@ -316,11 +392,12 @@ export const runQuery = async ({ dataDir, query }) => {
     app,
     from,
     to,
-    days: days.length,
-    summaryDays,
+    days: days.size,
     scanned,
     matched,
     rows: rows.slice(0, limit).map((entry) => entry.row),
     truncated: rows.length > limit,
+    servers,
+    skippedDays,
   }
 }

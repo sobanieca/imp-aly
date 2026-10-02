@@ -1,5 +1,12 @@
 import { dayOf } from './days.js'
-import { appDir, listApps, listDays } from './column-store.js'
+import {
+  appDir,
+  dayDir,
+  isSummaryOnlyDay,
+  keepOnlySummary,
+  listApps,
+  listDays,
+} from './column-store.js'
 import { listDirectory, removeIfExists } from './fs-utils.js'
 import { join } from './paths.js'
 
@@ -64,29 +71,75 @@ export const listStoredDays = async (dataDir) => {
   return days.sort((a, b) => (a.day === b.day ? (a.app < b.app ? -1 : 1) : a.day < b.day ? -1 : 1))
 }
 
+const removalOrder = async (dataDir, today) => {
+  const withRecords = []
+  const summaryOnly = []
+  for (const entry of await listStoredDays(dataDir)) {
+    if (entry.day >= today) continue
+    if (await isSummaryOnlyDay(dayDir(dataDir, entry.app, entry.day))) {
+      summaryOnly.push({ ...entry, summaryOnly: true })
+    } else {
+      withRecords.push({ ...entry, summaryOnly: false })
+    }
+  }
+  return [...withRecords, ...summaryOnly]
+}
+
+const removeDay = async (dataDir, app, day) => {
+  const trash = join(appDir(dataDir, app), `${day}${TRASH_SUFFIX}`)
+  await Deno.rename(join(appDir(dataDir, app), day), trash)
+  await removeIfExists(trash, { recursive: true })
+}
+
+const tryKeepOnlySummary = async (path, log) => {
+  try {
+    return await keepOnlySummary(path)
+  } catch (error) {
+    log?.warn(`Cannot keep the daily summary of ${path}: ${error.message}`)
+    return false
+  }
+}
+
 export const enforceRetention = async (
   { dataDir, minFree, usage = diskUsage, now = Date.now(), log },
 ) => {
   let current = await usage(dataDir)
   const needed = minFreeBytes(minFree, current.totalBytes)
+  const summarized = []
   const removed = []
-  if (current.freeBytes >= needed) return { ...current, neededBytes: needed, removed }
+  const result = () => ({ ...current, neededBytes: needed, summarized, removed })
+  if (current.freeBytes >= needed) return result()
   await removeTrash(dataDir)
   const today = dayOf(now)
-  for (const { app, day } of await listStoredDays(dataDir)) {
-    if (day >= today) break
-    const trash = join(appDir(dataDir, app), `${day}${TRASH_SUFFIX}`)
-    await Deno.rename(join(appDir(dataDir, app), day), trash)
-    await removeIfExists(trash, { recursive: true })
-    removed.push(`${app}/${day}`)
-    log?.info(`Removed ${app}/${day} to keep free disk space`)
+  const enough = async () => {
     current = await usage(dataDir)
-    if (current.freeBytes >= needed) break
+    return current.freeBytes >= needed
   }
+  const summarize = async () => {
+    for (const { app, day, summaryOnly } of await removalOrder(dataDir, today)) {
+      if (summaryOnly) return
+      if (!(await tryKeepOnlySummary(dayDir(dataDir, app, day), log))) continue
+      summarized.push(`${app}/${day}`)
+      log?.info(`Removed the records of ${app}/${day} to keep free disk space, kept its summary`)
+      if (await enough()) return
+    }
+  }
+  const remove = async (withSummaryOnly) => {
+    for (const { app, day, summaryOnly } of await removalOrder(dataDir, today)) {
+      if (summaryOnly !== withSummaryOnly) continue
+      await removeDay(dataDir, app, day)
+      removed.push(`${app}/${day}`)
+      log?.info(`Removed ${app}/${day} to keep free disk space`)
+      if (await enough()) return
+    }
+  }
+  await summarize()
+  if (current.freeBytes < needed) await remove(false)
+  if (current.freeBytes < needed) await remove(true)
   if (current.freeBytes < needed) {
     log?.warn(
       `Free disk space is ${current.freeBytes} bytes, below ${needed} bytes, and no older day is left to remove`,
     )
   }
-  return { ...current, neededBytes: needed, removed }
+  return result()
 }

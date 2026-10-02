@@ -1,7 +1,7 @@
 import { listDirectory, writeAll, writeFileAtomic } from './fs-utils.js'
 import { join } from './paths.js'
 
-export const SEGMENT_PATTERN = /^(\d{16})\.(log|open|bad)$/
+export const SEGMENT_PATTERN = /^(\d{16})(?:-(\d+))?\.(log|open)$/
 
 export const APPLIED_FILE = 'applied'
 
@@ -11,7 +11,8 @@ export const DEFAULT_SEGMENT_BYTES = 8_388_608
 
 const encoder = new TextEncoder()
 
-export const segmentFileName = (id, extension) => `${String(id).padStart(16, '0')}.${extension}`
+export const segmentFileName = (id, extension, validBytes) =>
+  `${String(id).padStart(16, '0')}${validBytes === undefined ? '' : `-${validBytes}`}.${extension}`
 
 export const readAppliedSegment = async (walDir) => {
   try {
@@ -30,8 +31,12 @@ export const listClosedSegments = async (walDir) => {
   const segments = []
   for (const entry of await listDirectory(walDir)) {
     const match = SEGMENT_PATTERN.exec(entry.name)
-    if (entry.isFile && match && match[2] === 'log') {
-      segments.push({ id: Number(match[1]), path: join(walDir, entry.name) })
+    if (entry.isFile && match && match[3] === 'log') {
+      segments.push({
+        id: Number(match[1]),
+        path: join(walDir, entry.name),
+        validBytes: match[2] === undefined ? null : Number(match[2]),
+      })
     }
   }
   return segments.sort((a, b) => a.id - b.id)
@@ -42,6 +47,7 @@ export const openWal = async ({
   segmentMs = DEFAULT_SEGMENT_MS,
   segmentBytes = DEFAULT_SEGMENT_BYTES,
   onSegment = () => {},
+  now = Date.now,
 }) => {
   await Deno.mkdir(dir, { recursive: true })
   let lastId = await readAppliedSegment(dir)
@@ -50,7 +56,7 @@ export const openWal = async ({
     if (!entry.isFile || !match) continue
     const id = Number(match[1])
     lastId = Math.max(lastId, id)
-    if (match[2] === 'open') {
+    if (match[3] === 'open') {
       await Deno.rename(join(dir, entry.name), join(dir, segmentFileName(id, 'log')))
     }
   }
@@ -70,7 +76,8 @@ export const openWal = async ({
   }
 
   const openSegment = async () => {
-    fileId = ++lastId
+    fileId = Math.max(lastId + 1, now())
+    lastId = fileId
     file = await Deno.open(join(dir, segmentFileName(fileId, 'open')), {
       write: true,
       create: true,
@@ -86,8 +93,10 @@ export const openWal = async ({
     current.close()
     const openPath = join(dir, segmentFileName(fileId, 'open'))
     if (broken) {
+      const validBytes = size
       size = 0
-      await Deno.rename(openPath, join(dir, segmentFileName(fileId, 'bad')))
+      await Deno.rename(openPath, join(dir, segmentFileName(fileId, 'log', validBytes)))
+      onSegment(fileId)
       return
     }
     if (size === 0) {

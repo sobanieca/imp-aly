@@ -108,6 +108,49 @@ Deno.test('sealing sorts the rows, keeps them aligned and runs the values', asyn
   await Deno.remove(dir, { recursive: true })
 })
 
+const filesOf = async (dir) => {
+  const files = {}
+  for await (const entry of Deno.readDir(dir)) {
+    files[entry.name] = await Deno.readTextFile(`${dir}/${entry.name}`)
+  }
+  return files
+}
+
+Deno.test('sealing in small chunks writes the same files as one chunk', async () => {
+  const records = (offset) =>
+    Array.from({ length: 200 }, (_, index) => ({
+      ...visits[(index + offset) % visits.length],
+      visit: `v${(index * 3 + offset) % 11}`,
+      at: 5000 - index - offset,
+    }))
+  const seal = async (chunkRows) => {
+    const dir = await temporaryDir()
+    await appendRecords({ dir: `${dir}/raw-1`, segment: 1, records: records(0) })
+    await sealDay(dir, { chunkRows })
+    await appendRecords({ dir: `${dir}/raw-2`, segment: 2, records: records(1) })
+    await sealDay(dir, { chunkRows })
+    const files = await filesOf(`${dir}/sealed-2`)
+    await Deno.remove(dir, { recursive: true })
+    return files
+  }
+  const whole = await seal(1000)
+  assertEquals(Object.keys(whole).sort(), [
+    'at.txt',
+    'country.rle',
+    'meta.json',
+    'page.rle',
+    'plan.rle',
+    'readyMs.rle',
+    'summary-counts.tsv',
+    'summary-tuples.tsv',
+    'summary-visits.tsv',
+    'type.rle',
+    'visit.rle',
+    'zone.rle',
+  ])
+  assertEquals(await seal(7), whole)
+})
+
 Deno.test('records that arrive after sealing are read and sealed again', async () => {
   const dir = await temporaryDir()
   await appendRecords({ dir: `${dir}/raw-1`, segment: 1, records: visits.slice(0, 2) })

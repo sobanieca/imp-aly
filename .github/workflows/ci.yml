@@ -52,16 +52,16 @@ jobs:
         include:
           - runner: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            asset: imp-analytics-server-linux-x64
+            asset: imp-aly-linux-x64
           - runner: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
-            asset: imp-analytics-server-linux-arm64
+            asset: imp-aly-linux-arm64
           - runner: macos-15-intel
             target: x86_64-apple-darwin
-            asset: imp-analytics-server-macos-x64
+            asset: imp-aly-macos-x64
           - runner: macos-latest
             target: aarch64-apple-darwin
-            asset: imp-analytics-server-macos-arm64
+            asset: imp-aly-macos-arm64
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
@@ -76,12 +76,12 @@ jobs:
       - name: Smoke test
         run: |
           test "$(./${{ matrix.asset }} --version)" = "${{ needs.version.outputs.version }}"
-          ./${{ matrix.asset }} --foreground -p 2980 -d "$RUNNER_TEMP/data" -a "$RUNNER_TEMP/key" &
+          ./${{ matrix.asset }} server --foreground -p 2980 -d "$RUNNER_TEMP/data" -a "$RUNNER_TEMP/key" &
           sleep 3
           printf '/\n/invoices\n' > "$RUNNER_TEMP/app-map.txt"
           ./${{ matrix.asset }} app add smoke "$RUNNER_TEMP/app-map.txt" -a "$RUNNER_TEMP/key"
           curl -fsS -X POST http://127.0.0.1:2980/collect/smoke \
-            -d '{"type":"error","visit":"v1","at":1,"page":"/invoices"}'
+            -d "{\"type\":\"error\",\"visit\":\"v1\",\"at\":$(date +%s)000,\"page\":\"/invoices\"}"
           sleep 4
           ./${{ matrix.asset }} query '{"app":"smoke"}' --json -a "$RUNNER_TEMP/key" | grep '"matched": 1'
           kill %1

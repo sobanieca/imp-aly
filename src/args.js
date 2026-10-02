@@ -1,15 +1,24 @@
 const FLAGS = {
   port: 'string',
+  'admin-port': 'string',
+  'admin-bind': 'string',
   data: 'string',
   auth: 'string',
   bind: 'string',
   url: 'string',
+  server: 'string',
   'ip-header': 'string',
+  'trusted-proxy': 'string',
+  'max-requests': 'string',
   'country-header': 'string',
+  'allow-origin': 'string',
   'min-free': 'string',
   'tls-cert': 'string',
   'tls-key': 'string',
   segments: 'string',
+  app: 'string',
+  from: 'string',
+  to: 'string',
   'limit-5s': 'string',
   'limit-1m': 'string',
   'limit-1h': 'string',
@@ -22,7 +31,7 @@ const FLAGS = {
   debug: 'boolean',
 }
 
-const ALIASES = { p: 'port', a: 'auth', d: 'data', h: 'help', v: 'version' }
+const ALIASES = { p: 'port', a: 'auth', d: 'data', s: 'server', h: 'help', v: 'version' }
 
 const camelCase = (name) => name.replace(/-([a-z0-9])/g, (_, letter) => letter.toUpperCase())
 
@@ -43,13 +52,13 @@ export const parseArgs = (argv) => {
       inline = equals === -1 ? null : argument.slice(equals + 1)
     } else if (/^-[a-zA-Z]$/.test(argument)) {
       name = ALIASES[argument[1]]
-      if (!name) throw new Error(`unknown option ${argument} - run imp-analytics-server help`)
+      if (!name) throw new Error(`unknown option ${argument} - run imp-aly help`)
     } else {
       positional.push(argument)
       continue
     }
     const kind = FLAGS[name]
-    if (!kind) throw new Error(`unknown option --${name} - run imp-analytics-server help`)
+    if (!kind) throw new Error(`unknown option --${name} - run imp-aly help`)
     if (kind === 'boolean') {
       if (inline !== null) throw new Error(`--${name} takes no value`)
       flags[camelCase(name)] = true

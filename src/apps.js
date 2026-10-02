@@ -45,6 +45,14 @@ export const validateSegments = (segments) => {
   return [...segments]
 }
 
+export const appConfig = async (app) => {
+  if (!app) return null
+  const text = JSON.stringify({ pages: [...app.pages].sort(), segments: [...app.segments].sort() })
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))
+  return [...new Uint8Array(digest)].slice(0, 8).map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('')
+}
+
 const toStored = (app) => ({
   mapUrl: app.mapUrl,
   pages: [...app.pages],

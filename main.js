@@ -1,23 +1,40 @@
 import { parseArgs } from './src/args.js'
 import { app } from './src/commands/app.js'
+import { backup } from './src/commands/backup.js'
 import { help } from './src/commands/help.js'
 import { query } from './src/commands/query.js'
-import { serve } from './src/commands/serve.js'
+import { restore } from './src/commands/restore.js'
+import { server } from './src/commands/server.js'
+import { add, ls, rm, use } from './src/commands/servers.js'
 import { status } from './src/commands/status.js'
 import { token } from './src/commands/token.js'
 import { version } from './src/commands/version.js'
 import { logger } from './src/logger.js'
 
-const COMMANDS = { app, help, query, status, token, version }
+const COMMANDS = {
+  add,
+  app,
+  backup,
+  help,
+  ls,
+  query,
+  restore,
+  rm,
+  server,
+  status,
+  token,
+  use,
+  version,
+}
 
 try {
   const parsed = parseArgs(Deno.args)
   logger.setDebug(Boolean(parsed.flags.debug))
   const [name] = parsed.positional
-  if (parsed.flags.help) help()
+  if (parsed.flags.help || name === undefined) help()
   else if (parsed.flags.version) version()
-  else if (name && Object.hasOwn(COMMANDS, name)) await COMMANDS[name](parsed)
-  else await serve(parsed)
+  else if (Object.hasOwn(COMMANDS, name)) await COMMANDS[name](parsed)
+  else throw new Error(`unknown command "${name}" - run imp-aly help`)
 } catch (error) {
   logger.error(error instanceof Error ? error.message : String(error))
   logger.debug(error)

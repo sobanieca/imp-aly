@@ -2,11 +2,11 @@
 
 set -e
 
-REPO="sobanieca/imp-analytics-server"
+REPO="sobanieca/imp-aly"
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
-BINARY_NAME="imp-analytics-server"
+BINARY_NAME="imp-aly"
 
-echo "Installing imp-analytics-server..."
+echo "Installing imp-aly..."
 
 OS="$(uname -s)"
 case "$OS" in
@@ -70,4 +70,4 @@ $SUDO mkdir -p "${INSTALL_DIR}"
 $SUDO mv "${TMP_DIR}/${BINARY_NAME}" "${INSTALL_DIR}/${BINARY_NAME}"
 
 echo "Installed ${INSTALL_DIR}/${BINARY_NAME} $("${INSTALL_DIR}/${BINARY_NAME}" --version)"
-echo "Run 'imp-analytics-server help' to start."
+echo "Run 'imp-aly help' to start."

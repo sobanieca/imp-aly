@@ -10,17 +10,10 @@ import {
 import { isDay } from './days.js'
 import { BASE_COLUMNS, isAppName } from './names.js'
 import { join } from './paths.js'
-import {
-  compareNumeric,
-  countRuns,
-  decodeRuns,
-  dictionaryEncode,
-  encodeValue,
-  plainLines,
-  runLines,
-  splitLines,
-} from './rle.js'
-import { buildSummary, SUMMARY_FILES } from './summary.js'
+import { nullValues, openLineWriter, openRunReader, openValueReader } from './line-files.js'
+import { decodeRuns, encodeValue, splitLines } from './rle.js'
+import { SEAL_CHUNK_ROWS, sortDay } from './seal-sort.js'
+import { createSummaryBuilder, SUMMARY_FILES } from './summary.js'
 
 export const COMMIT_FILE = 'commit.json'
 
@@ -29,8 +22,6 @@ export const SEALED_META_FILE = 'meta.json'
 export const SORT_COLUMNS = ['page', 'type', 'zone', 'name', 'visit']
 
 const GENERATION_PATTERN = /^(raw|sealed)-(\d+)$/
-
-const WRITE_CHUNK_CHARACTERS = 1_048_576
 
 const encoder = new TextEncoder()
 
@@ -88,8 +79,12 @@ export const readGenerations = async (path) => {
 
 export const appendTarget = async (path) => {
   const { sealed, raws } = await readGenerations(path)
-  const appliedWal = sealed > 0 ? (await readSealedPart(join(path, `sealed-${sealed}`))).wal : 0
-  return { dir: join(path, `raw-${raws.length ? raws.at(-1) : sealed + 1}`), appliedWal }
+  const meta = sealed > 0 ? await readSealedMeta(join(path, `sealed-${sealed}`)) : null
+  if (meta?.summaryOnly === true) return null
+  return {
+    dir: join(path, `raw-${raws.length ? raws.at(-1) : sealed + 1}`),
+    appliedWal: meta?.wal ?? 0,
+  }
 }
 
 const EMPTY_COMMIT = { rows: 0, wal: 0, columns: {} }
@@ -186,6 +181,11 @@ const readRawPart = async (dir) => {
       }
       return values
     },
+    open: async (column) => {
+      const bytes = commit.columns[column]
+      if (bytes === undefined) return nullValues()
+      return await openValueReader(columnPath(dir, column), { maxBytes: bytes })
+    },
   }
 }
 
@@ -201,6 +201,8 @@ const readSealedMeta = async (dir) => {
   return meta
 }
 
+export const SUMMARY_ONLY_PROBLEM = 'only the daily summary of the day is stored'
+
 const readSealedPart = async (dir) => {
   const meta = await readSealedMeta(dir)
   return {
@@ -208,6 +210,7 @@ const readSealedPart = async (dir) => {
     wal: meta.wal,
     columns: meta.columns,
     read: async (column) => {
+      if (meta.summaryOnly === true) throw new Error(SUMMARY_ONLY_PROBLEM)
       if (!meta.columns.includes(column)) return nullColumn(meta.rows)
       if (!meta.plain.includes(column)) {
         return decodeRuns(await Deno.readTextFile(join(dir, `${column}.rle`)), meta.rows)
@@ -219,6 +222,12 @@ const readSealedPart = async (dir) => {
         )
       }
       return values
+    },
+    open: async (column) => {
+      if (meta.summaryOnly === true) throw new Error(SUMMARY_ONLY_PROBLEM)
+      if (!meta.columns.includes(column)) return nullValues()
+      if (meta.plain.includes(column)) return await openValueReader(columnPath(dir, column))
+      return await openRunReader(join(dir, `${column}.rle`))
     },
   }
 }
@@ -244,17 +253,20 @@ const READ_ATTEMPTS = 5
 
 const sameGenerations = (a, b) => a.sealed === b.sealed && a.raws.join() === b.raws.join()
 
+const changedDuringRead = async (error, path, before) =>
+  error instanceof Deno.errors.NotFound && !sameGenerations(before, await readGenerations(path))
+
 export const readDay = async (path, columns) => {
   for (let attempt = 1;; attempt++) {
+    const before = await readGenerations(path)
     try {
-      const before = await readGenerations(path)
       const { parts } = await readDayParts(path, before)
       const rows = parts.reduce((sum, part) => sum + part.rows, 0)
       const values = {}
       for (const column of columns) values[column] = await readColumn(parts, column)
       if (sameGenerations(before, await readGenerations(path))) return { rows, columns: values }
     } catch (error) {
-      if (!(error instanceof Deno.errors.NotFound)) throw error
+      if (!(await changedDuringRead(error, path, before))) throw error
     }
     if (attempt === READ_ATTEMPTS) throw new Error(`${path} changed during each read`)
     await new Promise((resolve) => setTimeout(resolve, 50 * attempt))
@@ -263,9 +275,9 @@ export const readDay = async (path, columns) => {
 
 export const readDaySummary = async (path, { withVisits }) => {
   for (let attempt = 1;; attempt++) {
+    const before = await readGenerations(path)
+    if (before.sealed === 0 || before.raws.length) return null
     try {
-      const before = await readGenerations(path)
-      if (before.sealed === 0 || before.raws.length) return null
       const dir = join(path, `sealed-${before.sealed}`)
       const meta = await readSealedMeta(dir)
       if (meta.summary !== true) return null
@@ -278,60 +290,74 @@ export const readDaySummary = async (path, { withVisits }) => {
       }
       if (sameGenerations(before, await readGenerations(path))) return summary
     } catch (error) {
-      if (!(error instanceof Deno.errors.NotFound)) throw error
+      if (!(await changedDuringRead(error, path, before))) throw error
     }
     if (attempt === READ_ATTEMPTS) throw new Error(`${path} changed during each read`)
     await new Promise((resolve) => setTimeout(resolve, 50 * attempt))
   }
 }
 
-const NUMERIC_COLUMNS = new Set(['at', 'readyMs'])
-
-const encodeColumns = async (parts, columns, rows) => {
-  const encoded = {}
-  for (const column of new Set([...columns, ...SORT_COLUMNS, 'at'])) {
-    const values = columns.includes(column) ? await readColumn(parts, column) : nullColumn(rows)
-    encoded[column] = dictionaryEncode(
-      values,
-      NUMERIC_COLUMNS.has(column) ? compareNumeric : undefined,
-    )
+export const isSummaryOnlyDay = async (path) => {
+  const { sealed, raws } = await readGenerations(path)
+  if (sealed === 0 || raws.length) return false
+  try {
+    return (await readSealedMeta(join(path, `sealed-${sealed}`))).summaryOnly === true
+  } catch {
+    return false
   }
-  return encoded
-}
-
-const sortOrder = (encoded, rows) => {
-  const keys = [...SORT_COLUMNS, 'at'].map((column) => encoded[column].ids)
-  const order = new Uint32Array(rows)
-  for (let index = 0; index < rows; index++) order[index] = index
-  order.sort((a, b) => {
-    for (const key of keys) {
-      const difference = key[a] - key[b]
-      if (difference !== 0) return difference
-    }
-    return a - b
-  })
-  return order
 }
 
 const writeSyncedLines = async (path, lines) => {
-  const file = await Deno.open(path, { write: true, create: true, truncate: true })
+  const writer = await openLineWriter(path)
   try {
-    let chunk = []
-    let size = 0
     for (const line of lines) {
-      chunk.push(line)
-      size += line.length
-      if (size >= WRITE_CHUNK_CHARACTERS) {
-        await writeAll(file, encoder.encode(chunk.join('')))
-        chunk = []
-        size = 0
-      }
+      writer.write(line)
+      if (writer.full) await writer.flush()
     }
-    if (chunk.length) await writeAll(file, encoder.encode(chunk.join('')))
-    await file.syncData()
-  } finally {
-    file.close()
+  } catch (error) {
+    writer.abort()
+    throw error
   }
+  await writer.close()
+}
+
+const writeSummaryFolder = async (path, generation, { rows, wal, files }) => {
+  const temporary = join(path, `sealed-${generation}.tmp`)
+  await removeIfExists(temporary, { recursive: true })
+  await Deno.mkdir(temporary)
+  for (const [kind, text] of Object.entries(files)) {
+    await writeSyncedLines(join(temporary, SUMMARY_FILES[kind]), [text])
+  }
+  const meta = { rows, wal, columns: [], plain: [], summary: true, summaryOnly: true }
+  await writeFileAtomic(join(temporary, SEALED_META_FILE), `${JSON.stringify(meta, null, 2)}\n`)
+  await syncDirectory(temporary)
+  await Deno.rename(temporary, join(path, `sealed-${generation}`))
+  await syncDirectory(path)
+}
+
+export const writeSummaryDay = async (path, { rows, files }) => {
+  await Deno.mkdir(path, { recursive: true })
+  await tidyDay(path)
+  const { sealed, raws } = await readGenerations(path)
+  if (sealed > 0 || raws.length) throw new Error(`${path} already holds data`)
+  await writeSummaryFolder(path, 1, { rows, wal: 0, files })
+}
+
+export const keepOnlySummary = async (path) => {
+  await tidyDay(path)
+  const { sealed, raws } = await readGenerations(path)
+  if (sealed === 0) return false
+  const dir = join(path, `sealed-${sealed}`)
+  const meta = await readSealedMeta(dir)
+  if (meta.summaryOnly === true || meta.summary !== true) return false
+  const files = {}
+  for (const [kind, file] of Object.entries(SUMMARY_FILES)) {
+    files[kind] = await Deno.readTextFile(join(dir, file))
+  }
+  const generation = Math.max(sealed, ...raws) + 1
+  await writeSummaryFolder(path, generation, { rows: meta.rows, wal: meta.wal, files })
+  await tidyDay(path)
+  return true
 }
 
 export const tidyDay = async (path) => {
@@ -345,7 +371,7 @@ export const tidyDay = async (path) => {
   }
 }
 
-export const sealDay = async (path) => {
+export const sealDay = async (path, { chunkRows = SEAL_CHUNK_ROWS } = {}) => {
   await tidyDay(path)
   const { sealed, raws, parts } = await readDayParts(path)
   if (!raws.length) return false
@@ -355,26 +381,23 @@ export const sealDay = async (path) => {
     const rows = parts.reduce((sum, part) => sum + part.rows, 0)
     const wal = Math.max(...parts.map((part) => part.wal))
     const columns = orderColumns(parts.flatMap((part) => part.columns))
-    const encoded = await encodeColumns(parts, columns, rows)
-    const order = sortOrder(encoded, rows)
+    const rowColumns = orderColumns([...columns, ...SORT_COLUMNS, 'at'])
     const temporary = join(path, `sealed-${target}.tmp`)
     await removeIfExists(temporary, { recursive: true })
     await Deno.mkdir(temporary)
-    const plain = []
-    for (const column of columns) {
-      if (countRuns(encoded[column], order) * 2 > rows) {
-        plain.push(column)
-        await writeSyncedLines(columnPath(temporary, column), plainLines(encoded[column], order))
-      } else {
-        await writeSyncedLines(join(temporary, `${column}.rle`), runLines(encoded[column], order))
-      }
-    }
-    const summary = buildSummary({
-      columns,
+    const summary = createSummaryBuilder({ columns, rowColumns })
+    const plain = await sortDay({
+      parts,
       rows,
-      column: (name) => encoded[name] ?? dictionaryEncode(nullColumn(rows)),
+      rowColumns,
+      columns,
+      sortColumns: SORT_COLUMNS,
+      numberColumn: 'at',
+      dir: temporary,
+      chunkRows,
+      onRows: summary.addRows,
     })
-    for (const [kind, lines] of Object.entries(summary)) {
+    for (const [kind, lines] of Object.entries(summary.finish())) {
       await writeSyncedLines(join(temporary, SUMMARY_FILES[kind]), lines)
     }
     const meta = { rows, wal, columns, plain, summary: true, sortedBy: [...SORT_COLUMNS, 'at'] }

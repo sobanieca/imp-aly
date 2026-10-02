@@ -1,3 +1,5 @@
+import { inNetwork, parseIp, parseNetwork } from './ip.js'
+
 export const DEFAULT_LIMITS = [
   { name: '5s', ms: 5_000, limit: 200 },
   { name: '1m', ms: 60_000, limit: 1_500 },
@@ -5,85 +7,129 @@ export const DEFAULT_LIMITS = [
   { name: '24h', ms: 86_400_000, limit: 200_000 },
 ]
 
-export const DEFAULT_MAX_CLIENTS = 100_000
+export const DEFAULT_MAX_CLIENTS = 400_000
 
-const roll = (window, ms, now) => {
-  const elapsed = now - window.start
-  if (elapsed < ms) return
-  const periods = Math.floor(elapsed / ms)
-  window.previous = periods === 1 ? window.current : 0
-  window.current = 0
-  window.start += periods * ms
-}
+export const NETWORK_SCALE = 16
 
-const estimate = (window, ms, now) => {
-  const weight = Math.max(0, (ms - (now - window.start)) / ms)
-  return window.previous * weight + window.current
+export const DEFAULT_TRUSTED_PROXIES = ['127.0.0.0/8', '::1']
+
+const PERIOD = 0
+const CURRENT = 1
+const PREVIOUS = 2
+const FIELDS = 3
+const FIRST_SLOTS = 1024
+
+const createSlab = (width, capacity) => {
+  let counts = new Uint32Array(width * Math.min(capacity, FIRST_SLOTS))
+  let used = 0
+  return {
+    counts: () => counts,
+    add: () => {
+      if ((used + 1) * width > counts.length) {
+        const larger = new Uint32Array(width * Math.min(capacity, (used + 1) * 2))
+        larger.set(counts)
+        counts = larger
+      }
+      return used++
+    },
+  }
 }
 
 export const createRateLimiter = (
   { limits = DEFAULT_LIMITS, maxClients = DEFAULT_MAX_CLIENTS, now = Date.now } = {},
 ) => {
-  const clients = new Map()
+  const generation = Math.max(1, Math.ceil(maxClients / 2))
+  const width = limits.length * FIELDS
+  let recent = { slots: new Map(), slab: createSlab(width, generation) }
+  let older = { slots: new Map(), slab: createSlab(width, 0) }
 
-  const touch = (ip, at) => {
-    let windows = clients.get(ip)
-    if (windows) {
-      clients.delete(ip)
-    } else {
-      windows = limits.map(() => ({ start: at, current: 0, previous: 0 }))
+  const insert = (key) => {
+    if (recent.slots.size >= generation) {
+      older = recent
+      recent = { slots: new Map(), slab: createSlab(width, generation) }
     }
-    clients.set(ip, windows)
-    while (clients.size > maxClients) clients.delete(clients.keys().next().value)
-    limits.forEach((limit, index) => roll(windows[index], limit.ms, at))
-    return windows
+    const slot = recent.slab.add()
+    recent.slots.set(key, slot)
+    return slot * width
   }
+
+  const find = (key) => {
+    const slot = recent.slots.get(key)
+    if (slot !== undefined) return slot * width
+    const oldSlot = older.slots.get(key)
+    if (oldSlot === undefined) return null
+    older.slots.delete(key)
+    const source = older.slab.counts()
+    const base = insert(key)
+    recent.slab.counts().set(source.subarray(oldSlot * width, (oldSlot + 1) * width), base)
+    return base
+  }
+
+  const roll = (counts, offset, period) => {
+    const last = counts[offset + PERIOD]
+    if (last === period) return
+    counts[offset + PREVIOUS] = ((period - last) >>> 0) === 1 ? counts[offset + CURRENT] : 0
+    counts[offset + CURRENT] = 0
+    counts[offset + PERIOD] = period
+  }
+
+  const update = (base, at) => {
+    const counts = recent.slab.counts()
+    for (const [position, limit] of limits.entries()) {
+      roll(counts, base + position * FIELDS, Math.floor(at / limit.ms) >>> 0)
+    }
+    return counts
+  }
+
+  const estimate = (counts, offset, ms, at) =>
+    counts[offset + PREVIOUS] * ((ms - (at % ms)) / ms) + counts[offset + CURRENT]
 
   return {
-    exceeded: (ip) => {
-      const windows = clients.get(ip)
-      if (!windows) return null
+    take: (clients, amount) => {
       const at = now()
-      const current = touch(ip, at)
-      const index = limits.findIndex((limit, position) =>
-        estimate(current[position], limit.ms, at) >= limit.limit
-      )
-      return index === -1 ? null : limits[index]
+      for (const client of clients) {
+        const base = find(client.key)
+        if (base === null) continue
+        const counts = update(base, at)
+        for (const [position, limit] of limits.entries()) {
+          const offset = base + position * FIELDS
+          if (estimate(counts, offset, limit.ms, at) + amount > limit.limit * client.scale) {
+            return limit
+          }
+        }
+      }
+      for (const client of clients) {
+        const base = find(client.key) ?? insert(client.key)
+        const counts = update(base, at)
+        for (const position of limits.keys()) counts[base + position * FIELDS + CURRENT] += amount
+      }
+      return null
     },
-    over: (ip) => {
-      const windows = clients.get(ip)
-      if (!windows) return null
-      const at = now()
-      const index = limits.findIndex((limit, position) =>
-        estimate(windows[position], limit.ms, at) > limit.limit
-      )
-      return index === -1 ? null : limits[index]
-    },
-    add: (ip, amount) => {
-      const at = now()
-      for (const window of touch(ip, at)) window.current += amount
-    },
-    size: () => clients.size,
+    size: () => recent.slots.size + older.slots.size,
   }
 }
 
-export const clientKey = (address) => {
-  const plain = address.replace(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i, '$1')
-  if (!plain.includes(':')) return plain
-  const [head] = plain.split('%')
-  const halves = head.split('::')
-  const left = halves[0] ? halves[0].split(':') : []
-  const right = halves.length > 1 && halves[1] ? halves[1].split(':') : []
-  const missing = Math.max(0, 8 - left.length - right.length)
-  const groups = [...left, ...Array(missing).fill('0'), ...right]
-  return `${
-    groups.slice(0, 4).map((group) => (parseInt(group, 16) || 0).toString(16)).join(':')
-  }::/64`
+export const maxBatch = (limits) => Math.min(...limits.map((limit) => limit.limit))
+
+export const clientKeys = (address) => {
+  const ip = parseIp(address)
+  if (!ip) return [{ key: address, scale: 1 }]
+  const [a, b, c, d] = ip.parts
+  if (ip.version === 4) return [{ key: `${a}.${b}.${c}.${d}`, scale: 1 }]
+  const network = `${a.toString(16)}:${b.toString(16)}:${c.toString(16)}`
+  return [
+    { key: `${network}:${d.toString(16)}::/64`, scale: 1 },
+    { key: `${network}::/48`, scale: NETWORK_SCALE },
+  ]
 }
 
-export const clientAddress = (request, info, ipHeader) => {
+export const parseTrustedProxies = (list) => list.map((entry) => parseNetwork(entry))
+
+export const clientAddress = (request, info, { ipHeader = null, trustedProxies = [] } = {}) => {
   const remote = info?.remoteAddr?.hostname ?? 'unknown'
   if (!ipHeader) return remote
+  const remoteIp = parseIp(remote)
+  if (!trustedProxies.some((network) => inNetwork(remoteIp, network))) return remote
   const value = request.headers.get(ipHeader)
   if (!value) return remote
   const entries = value.split(',').map((entry) => entry.trim()).filter(Boolean)

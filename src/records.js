@@ -1,8 +1,10 @@
-export const MAX_RECORDS_PER_REQUEST = 100
+import { MAX_READY_MS } from './ready.js'
 
 const VISIT_PATTERN = /^[A-Za-z0-9_-]{1,64}$/
 
-const NAMESPACED_NAME = /^[^\s.]+(\.[^\s.]+)+$/
+const NAMESPACED_NAME = /^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)+$/
+
+const SEGMENT_VALUE = /^[A-Za-z0-9._-]{1,64}$/
 
 const hasControlCharacter = (text) => {
   for (let index = 0; index < text.length; index++) {
@@ -14,13 +16,9 @@ const hasControlCharacter = (text) => {
 
 const MAX_NAME_LENGTH = 128
 
-const MAX_SEGMENT_LENGTH = 64
-
 const COUNTRY_PATTERN = /^[A-Z][A-Z0-9]$/
 
-const MAX_READY_MS = 3_600_000
-
-export const MAX_RECORD_AGE_MS = 86_400_000
+export const MAX_RECORD_AGE_MS = 3_600_000
 
 export const MAX_RECORD_AHEAD_MS = 3_600_000
 
@@ -38,26 +36,26 @@ const isPlainObject = (value) =>
   value !== null && typeof value === 'object' && !Array.isArray(value) &&
   Object.getPrototypeOf(value) === Object.prototype
 
-const isName = (value) =>
-  typeof value === 'string' && value.length <= MAX_NAME_LENGTH && NAMESPACED_NAME.test(value) &&
-  !hasControlCharacter(value)
+export const isName = (value) =>
+  typeof value === 'string' && value.length <= MAX_NAME_LENGTH && NAMESPACED_NAME.test(value)
+
+export const isSegmentValue = (value) => typeof value === 'string' && SEGMENT_VALUE.test(value)
+
+export const isCountry = (value) => typeof value === 'string' && COUNTRY_PATTERN.test(value)
 
 const segmentValue = (value) => {
   if (value === null || value === undefined || value === '') return { value: null }
-  if (typeof value === 'boolean') return { value: String(value) }
-  if (typeof value === 'number') {
-    return Number.isFinite(value) ? { value: String(value) } : { problem: 'not a finite number' }
+  if (typeof value === 'number' && !Number.isFinite(value)) {
+    return { problem: 'not a finite number' }
   }
-  if (
-    typeof value === 'string' && value.length <= MAX_SEGMENT_LENGTH &&
-    !hasControlCharacter(value)
-  ) return { value }
-  return { problem: 'not a text of up to 64 characters without control characters' }
+  const text = typeof value === 'number' || typeof value === 'boolean' ? String(value) : value
+  if (isSegmentValue(text)) return { value: text }
+  return { problem: 'not a text of 1 to 64 letters, digits, ".", "-" or "_"' }
 }
 
 export const normalizeCountry = (value) => {
   const country = String(value ?? '').trim().toUpperCase()
-  return COUNTRY_PATTERN.test(country) ? country : null
+  return isCountry(country) ? country : null
 }
 
 export const isSafeText = (value) => typeof value === 'string' && !hasControlCharacter(value)
@@ -78,7 +76,7 @@ export const validateRecord = (input, app, country = null, now = Date.now()) => 
   if (!Number.isSafeInteger(input.at) || input.at <= 0) {
     return { problem: 'at is not a time in milliseconds' }
   }
-  if (input.at < now - MAX_RECORD_AGE_MS) return { problem: 'at is more than 24 hours old' }
+  if (input.at < now - MAX_RECORD_AGE_MS) return { problem: 'at is more than 1 hour old' }
   if (input.at > now + MAX_RECORD_AHEAD_MS) return { problem: 'at is more than 1 hour ahead' }
   if (typeof input.page !== 'string' || !app.pages.has(input.page)) {
     return { problem: 'page is not on the app map' }

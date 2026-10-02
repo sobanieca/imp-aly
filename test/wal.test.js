@@ -4,7 +4,12 @@ import { assertEquals, assertRejects, temporaryDir } from './assert.js'
 Deno.test('appends are grouped and segments close on rotation', async () => {
   const dir = await temporaryDir()
   const closed = []
-  const wal = await openWal({ dir, segmentMs: 60_000, onSegment: (id) => closed.push(id) })
+  const wal = await openWal({
+    dir,
+    segmentMs: 60_000,
+    onSegment: (id) => closed.push(id),
+    now: () => 0,
+  })
   await Promise.all([wal.append('a\n'), wal.append('b\n'), wal.append('c\n')])
   assertEquals(await listClosedSegments(dir), [])
   await wal.close()
@@ -18,7 +23,7 @@ Deno.test('appends are grouped and segments close on rotation', async () => {
 
 Deno.test('a full segment closes and the next one starts', async () => {
   const dir = await temporaryDir()
-  const wal = await openWal({ dir, segmentMs: 60_000, segmentBytes: 4 })
+  const wal = await openWal({ dir, segmentMs: 60_000, segmentBytes: 4, now: () => 0 })
   await wal.append('abcd\n')
   await wal.append('e\n')
   await wal.close()
@@ -30,10 +35,35 @@ Deno.test('an open segment of a crash is closed, and ids never repeat', async ()
   const dir = await temporaryDir()
   await Deno.writeTextFile(`${dir}/${segmentFileName(3, 'open')}`, 'x\n')
   await writeAppliedSegment(dir, 7)
-  const wal = await openWal({ dir, segmentMs: 60_000 })
+  const wal = await openWal({ dir, segmentMs: 60_000, now: () => 0 })
   await wal.append('y\n')
   await wal.close()
   assertEquals((await listClosedSegments(dir)).map((segment) => segment.id), [3, 8])
+  await Deno.remove(dir, { recursive: true })
+})
+
+Deno.test('ids follow the clock, so an empty folder never repeats an old id', async () => {
+  const dir = await temporaryDir()
+  let time = 5_000
+  const wal = await openWal({ dir, segmentMs: 60_000, segmentBytes: 2, now: () => time })
+  await wal.append('a\n')
+  await wal.append('b\n')
+  time = 9_000
+  await wal.append('c\n')
+  await wal.close()
+  assertEquals((await listClosedSegments(dir)).map((segment) => segment.id), [5_000, 5_001, 9_000])
+  await Deno.remove(dir, { recursive: true })
+})
+
+Deno.test('a part named with a size keeps only the bytes before it', async () => {
+  const dir = await temporaryDir()
+  await Deno.writeTextFile(`${dir}/${segmentFileName(4, 'log', 2)}`, 'a\nb\n')
+  const [segment] = await listClosedSegments(dir)
+  assertEquals([segment.id, segment.validBytes], [4, 2])
+  const wal = await openWal({ dir, segmentMs: 60_000, now: () => 0 })
+  await wal.append('c\n')
+  await wal.close()
+  assertEquals((await listClosedSegments(dir)).map((entry) => entry.id), [4, 5])
   await Deno.remove(dir, { recursive: true })
 })
 

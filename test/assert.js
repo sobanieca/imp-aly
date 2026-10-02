@@ -34,7 +34,7 @@ export const assertThrows = (task, pattern) => {
   throw new Error('expected an error')
 }
 
-export const temporaryDir = () => Deno.makeTempDir({ prefix: 'imp-analytics-test-' })
+export const temporaryDir = () => Deno.makeTempDir({ prefix: 'imp-aly-test-' })
 
 export const waitFor = async (check, timeoutMs = 10_000) => {
   const start = Date.now()

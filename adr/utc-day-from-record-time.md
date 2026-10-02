@@ -13,21 +13,21 @@ because retention keeps the current day and everything after it.
 
 ## Decision
 
-**The server puts each record in the folder of the UTC day of its `at`. It accepts an `at` from 24
-hours before to 1 hour after the time of the server.**
+**The server puts each record in the folder of the UTC day of its `at`. It accepts an `at` from 1
+hour before to 1 hour after the time of the server.**
 
 - One request can fill several days. The handler writes each record to the log with its own day.
 - The window is a check of the record, like the other checks, see `app-map-record-validation.md`. A
-  record outside it is rejected with the reason `at is more than 24 hours old` or
+  record outside it is rejected with the reason `at is more than 1 hour old` or
   `at is more
   than 1 hour ahead`.
-- Because no record can be older than 24 hours, the storage worker seals a day 24 hours and 10
-  minutes after its end, see `sealed-days-sorted-runs.md`. After that, no new record can arrive for
-  it.
+- Because no record can be older than 1 hour, the storage worker seals a day 1 hour and 10 minutes
+  after its end, see `sealed-days-sorted-runs.md`. After that, no new record can arrive for it.
 
 ## Consequences
 
 - A day in a query holds the records of what happened on that UTC day.
 - A browser whose clock is wrong by more than the window loses its records. The rejection counts of
   the app show it.
-- The current day and the previous day stay raw until the seal. A query of them parses plain lines.
+- The current day stays raw until the seal at 01:10 UTC of the next day. A query of it parses plain
+  lines.

@@ -1,7 +1,8 @@
 import { sealDay } from '../src/column-store.js'
-import { parseQuery, runQuery } from '../src/query.js'
+import { parseQuery } from '../src/query.js'
 import { applySegment } from '../src/storage.js'
 import { assertEquals, assertThrows, temporaryDir } from './assert.js'
+import { ask } from './fixtures.js'
 
 const VISITS = [
   ['2026-10-01', '/invoice', 'PL', 'pro'],
@@ -44,12 +45,12 @@ Deno.test('visits per day where country is PL and plan is pro', async () => {
     where: { country: 'PL', plan: 'pro' },
     groupBy: ['day'],
   }, NOW)
-  const result = await runQuery({ dataDir, query })
+  const result = await ask(dataDir, query)
   assertEquals(result.rows, [{ day: '2026-10-01', records: 2 }, { day: '2026-10-02', records: 2 }])
   assertEquals(result.scanned, 8)
   assertEquals(result.matched, 4)
   await sealDay(`${dataDir}/apps/myapp/2026-10-01`)
-  assertEquals((await runQuery({ dataDir, query })).rows, result.rows)
+  assertEquals((await ask(dataDir, query)).rows, result.rows)
   await Deno.remove(dataDir, { recursive: true })
 })
 
@@ -62,13 +63,13 @@ Deno.test('visits per day, ready time percentiles and limits', async () => {
     groupBy: ['page'],
     measures: ['records', 'visits', 'readyMs.p50', 'readyMs.max', 'readyMs.avg'],
   }, NOW)
-  const result = await runQuery({ dataDir, query })
+  const result = await ask(dataDir, query)
   assertEquals(result.rows, [
     {
       page: '/invoice',
       records: 6,
       visits: 4,
-      'readyMs.p50': 450,
+      'readyMs.p50': 405,
       'readyMs.max': 800,
       'readyMs.avg': 466.7,
     },
@@ -76,12 +77,12 @@ Deno.test('visits per day, ready time percentiles and limits', async () => {
       page: '/invoice/:id',
       records: 2,
       visits: 2,
-      'readyMs.p50': 400,
+      'readyMs.p50': 205,
       'readyMs.max': 600,
       'readyMs.avg': 400,
     },
   ])
-  const limited = await runQuery({ dataDir, query: { ...query, limit: 1 } })
+  const limited = await ask(dataDir, { ...query, limit: 1 })
   assertEquals(limited.rows.length, 1)
   assertEquals(limited.truncated, true)
   await Deno.remove(dataDir, { recursive: true })
@@ -94,9 +95,9 @@ Deno.test('a query with no match still counts zero', async () => {
     where: { country: 'DE' },
     measures: ['records', 'visits'],
   }, NOW)
-  assertEquals((await runQuery({ dataDir, query })).rows, [{ records: 0, visits: 0 }])
+  assertEquals((await ask(dataDir, query)).rows, [{ records: 0, visits: 0 }])
   const other = parseQuery({ app: 'nothing' }, NOW)
-  assertEquals((await runQuery({ dataDir, query: other })).days, 0)
+  assertEquals((await ask(dataDir, other)).days, 0)
   await Deno.remove(dataDir, { recursive: true })
 })
 
@@ -112,6 +113,13 @@ Deno.test('queries are validated', () => {
   assertThrows(() => parseQuery({ app: 'a', groupBy: ['at'] }, NOW), /dimension/)
   assertThrows(() => parseQuery({ app: 'a', measures: ['sum'] }, NOW), /not known/)
   assertThrows(() => parseQuery({ app: 'a', measures: ['readyMs.p100'] }, NOW), /not known/)
+  assertThrows(() => parseQuery({ app: 'a', measures: ['readyMs.under:2550'] }, NOW), /significant/)
+  assertThrows(() => parseQuery({ app: 'a', measures: ['readyMs.under:0'] }, NOW), /significant/)
+  assertThrows(
+    () => parseQuery({ app: 'a', measures: ['readyMs.under:9000000'] }, NOW),
+    /significant/,
+  )
+  assertEquals(parseQuery({ app: 'a', measures: ['readyMs.under:2500'] }, NOW).measures.length, 1)
   assertThrows(() => parseQuery({ app: 'a', limit: 0 }, NOW), /limit/)
   assertThrows(() => parseQuery({ app: 'a', select: [] }, NOW), /unknown/)
 })

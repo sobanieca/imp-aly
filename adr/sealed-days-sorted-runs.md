@@ -8,21 +8,28 @@ and a query parses every line. A finished day never changes, so it can take a be
 
 ## Decision
 
-**24 hours and 10 minutes after the end of a UTC day, the storage worker seals the day: it sorts the
+**1 hour and 10 minutes after the end of a UTC day, the storage worker seals the day: it sorts the
 rows and writes each field as a run file.**
 
 - The sort keys are `page`, `type`, `zone`, `name`, `visit` and `at`. The worker computes one order
   from these columns and applies it to every column, so the rows stay aligned.
-- To keep memory low, the worker turns each key column into numbers by rank, sorts an index array,
-  and then writes one column at a time.
+- To keep memory low, the worker sorts the day in chunks of 250,000 rows. It turns each key column
+  of a chunk into numbers by rank, and sorts an index array. It writes each sorted chunk to
+  `sort-<chunk>-<field>.txt` files in the `.tmp` folder, and keeps only the last chunk in memory. A
+  day of more than 64 chunks gets larger chunks, so the merge never opens more than 64 chunks.
+- The worker then merges the sorted chunks. It reads each chunk file in blocks of 4,096 rows, takes
+  the smallest row of all chunks, and appends each field to its run file. Rows with equal keys keep
+  the order of arrival.
 - A run file has one line per run: the count, a tab, and the value. An empty value is null.
 - A field with more runs than half its rows gets a plain `.txt` file with one line per row, because
   runs of one row only add the counts.
 - `meta.json` holds the number of rows, the fields, the plain fields, and the largest log part id of
   the day.
-- The worker reads each column once and turns it into a dictionary and a list of ids. The sort, the
-  files and the daily summary come from these lists, see `daily-summaries.md`. The worker writes
-  each file in chunks of about 1 MiB, so it never holds a whole encoded file in memory.
+- The worker reads each part of the day in blocks of 256 KiB, chunk by chunk, and adds each row to
+  the daily summary on the way, see `daily-summaries.md`. It writes each file in pieces of about 1
+  MiB.
+- The worker first writes every field as a run file. It then rewrites a field with more runs than
+  half its rows as a plain file.
 - The worker writes `sealed-<n>.tmp/`, syncs it, renames it to `sealed-<n>/`, and then deletes the
   older sealed folder and the raw folders up to `n`. `n` is the highest raw generation that the seal
   took in.
@@ -36,8 +43,10 @@ rows and writes each field as a run file.**
 - The low-cardinality fields of a past day shrink to a few lines, and queries of past days parse
   much less text.
 - `visit` and `at` do not shrink. They stay plain lines, see `plain-text-column-files.md`.
-- A seal holds the whole day in memory: less than 200 MB of live memory and about 15 seconds for
-  1,000,000 records.
-- The server accepts an `at` of up to 24 hours ago, see `utc-day-from-record-time.md`. The delay
-  waits for those records, and 10 minutes more for the log, so a sealed day gets no new record.
-- A day stays raw for about two days, so queries of the last two days parse plain lines.
+- The memory of a seal does not grow with the day. It holds one or two chunks, the blocks of the
+  merge and the daily summary. The summary holds each visit of the day once.
+- A day of up to 250,000 records needs no chunk files. A larger day is written twice, so it takes
+  about 1.5 times as long: about 15 to 20 seconds for 1,000,000 records.
+- The server accepts an `at` of up to 1 hour ago, see `utc-day-from-record-time.md`. The delay waits
+  for those records, and 10 minutes more for the log, so a sealed day gets no new record.
+- A day stays raw until 01:10 UTC of the next day, so a query of the current day parses plain lines.

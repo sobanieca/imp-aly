@@ -1,9 +1,11 @@
-# imp-analytics-server - Getting started
+# imp-aly - Getting started
 
-imp-analytics-server is a small server that stores the analytics records of imp apps. You run it on
-your own VPS. It accepts the records that the `imp/analytics` sink of your app sends, checks each
-record against the app map of your app, and stores the records on the local disk. You read the
-numbers back with queries.
+imp-aly is a small server that stores the analytics records of imp apps. You run it on your own VPS.
+It accepts the records that the `imp/analytics` sink of your app sends, checks each record against
+the app map of your app, and stores the records on the local disk. You read the numbers back with
+queries.
+
+For the key words and an overview of how the server works, read the [Introduction](introduction.md).
 
 The server is one file. It needs no database, no runtime and no other service.
 
@@ -12,48 +14,84 @@ The server is one file. It needs no database, no runtime and no other service.
 Run this command on the VPS:
 
 ```sh
-curl -fsSL https://sobanieca.github.io/imp-analytics-server/install.sh | bash
+curl -fsSL https://sobanieca.github.io/imp-aly/install.sh | bash
 ```
 
-The script supports Linux and macOS, on x64 and arm64. It installs `imp-analytics-server` to
-`/usr/local/bin`. Run the same command again to update.
+The script supports Linux and macOS, on x64 and arm64. It installs `imp-aly` to `/usr/local/bin`.
+Run the same command again to update.
 
 ## Start the server
 
 ```sh
-sudo imp-analytics-server --port 2980
+sudo imp-aly server --port 2980
 ```
 
-As root on Linux with systemd, this command installs the systemd service `imp-analytics-server`,
-starts it, prints the address and the key, and exits. The service starts again after a reboot. Run
-the same command again at any time to see the address and the key. When you change an option, the
-command updates the service and restarts it.
+As root on Linux with systemd, this command installs the systemd service `imp-aly`, starts it,
+prints the address and the key, and exits. The service starts again after a reboot. Run the same
+command again at any time to see the address and the key. When you change an option, the command
+updates the service and restarts it.
+
+The service does not run as root. The command creates the system user `imp-aly`, which can write
+only the data folder `/var/lib/imp-aly`. The key file stays with root, and systemd gives the service
+a copy of it at each start. Install the binary in `/usr/local/bin`, as the install script does. The
+service cannot run a binary in `/root` or `/home`.
 
 ```
-imp-analytics-server 0.1.0 - systemd service "imp-analytics-server" installed and started
+imp-aly 0.1.0 - systemd service "imp-aly" installed and started
 
   Address:   http://203.0.113.10:2980
   Collect:   http://203.0.113.10:2980/collect/<app>
+  Admin:     http://203.0.113.10:2981  (the app, query, backup and status commands)
   Key:       kD3xW9q1mZ8pR4tY7uH2cV6bN0aS5fGj
-  Key file:  /root/.secret/imp-analytics-server-key
-  Data:      /root/.imp-analytics-server
+  Key file:  /root/.secret/imp-aly-key
+  Data:      /var/lib/imp-aly
 ```
 
-Without root, or without systemd, the server runs in the foreground. `--foreground` forces this.
-`Ctrl+C` stops it. `sudo imp-analytics-server --uninstall` removes the service. The data folder and
-the key file stay.
+Without root, or without systemd, the server runs in the foreground, with the data folder
+`~/.imp-aly`. `--foreground` forces this. `Ctrl+C` stops it. `sudo imp-aly server --uninstall`
+removes the service. The data folder, the key file and the user `imp-aly` stay.
 
 **Keep the key secret.** The key gives access to the queries and to the app registry. The `Collect`
 endpoint is public and needs no key.
+
+## The two ports
+
+The server listens on two ports:
+
+| Port   | Option         | Endpoints                                           | Who calls it                 |
+| ------ | -------------- | --------------------------------------------------- | ---------------------------- |
+| `2980` | `--port`       | `/collect/<app>`                                    | the browsers of your users   |
+| `2981` | `--admin-port` | `/apps`, `/query`, `/status`, `/backup`, `/restore` | the client commands, and you |
+
+Each port answers only its own endpoints. Open the public port to the internet. Open the admin port
+only to the machines that run the client commands, for example with the firewall of the VPS:
+
+```sh
+sudo ufw allow 2980/tcp
+sudo ufw allow from 198.51.100.7 to any port 2981 proto tcp
+```
+
+When you call the commands only on the VPS, give `--admin-bind 127.0.0.1`. Then the admin port is
+not on the network. From another machine, use an SSH tunnel: `ssh -L 2981:127.0.0.1:2981 <vps>`.
 
 ## Serve HTTPS
 
 A page on HTTPS cannot send records to a server on plain HTTP. Use one of these two ways:
 
-- Put the server behind a proxy that ends TLS, such as Caddy or nginx. Start the server with
-  `--ip-header x-forwarded-for`, so that the rate limit sees the address of each visitor and not the
-  address of the proxy. See [Collecting records](collect.md).
-- Give the server a certificate: `--tls-cert fullchain.pem --tls-key privkey.pem`.
+- Put the server behind a proxy that ends TLS, such as Caddy or nginx. Send the public host to the
+  public port. Start the server with `--ip-header x-forwarded-for`, so that the rate limit sees the
+  address of each visitor and not the address of the proxy. When the proxy runs on another machine,
+  also give `--trusted-proxy <proxy address>`. See [Collecting records](collect.md#behind-a-proxy).
+  To call the admin port over HTTPS, give it its own host in the proxy, and limit that host to your
+  addresses.
+- Give the server a certificate: `--tls-cert fullchain.pem --tls-key privkey.pem`. Both ports then
+  serve HTTPS.
+
+The server checks the certificate files once an hour. When a file changes, for example after a
+renewal by certbot, the server restarts its listener with the new certificate. The service restarts
+completely, because systemd gives it a copy of the files at each start. Requests that arrive during
+the restart fail, and a sink loses some records. When the new certificate does not work, the server
+in the foreground keeps the old one and logs an error.
 
 ## Register an app
 
@@ -61,14 +99,14 @@ The server accepts records only for an app that you register. Give the app a nam
 `imp build` writes the app map to `app-map.txt` at the root of the build output:
 
 ```sh
-imp-analytics-server app add myapp https://myapp.example/app-map.txt
+imp-aly app add myapp https://myapp.example/app-map.txt
 ```
 
 The server reads the map at once and again every 10 minutes. You can also upload the file, for
 example from your deploy pipeline:
 
 ```sh
-imp-analytics-server app add myapp dist/app-map.txt
+imp-aly app add myapp dist/app-map.txt
 ```
 
 See [Apps](apps.md) for segments and for the other app commands.
@@ -102,7 +140,7 @@ line of the app map.
 Run a query on the VPS:
 
 ```sh
-imp-analytics-server query '{"app": "myapp", "groupBy": ["page", "type"], "measures": ["records", "visits"]}'
+imp-aly query '{"app": "myapp", "groupBy": ["page", "type"], "measures": ["records", "visits"]}'
 ```
 
 ```
@@ -117,12 +155,16 @@ See [Queries](query.md) for the query fields and for the queries of the imp repo
 
 ## Use the commands from another machine
 
-The commands `app`, `query` and `status` call the API of the server. On the VPS they need no option.
-From another machine, give the URL of the server and the key:
+The commands `app`, `query` and `status` call the admin port of the server. On the VPS they need no
+option. On another machine, save the server once with the URL of its admin port and its key file.
+Then the commands call it:
 
 ```sh
-imp-analytics-server query '{"app": "myapp"}' --url https://analytics.myapp.example -a ~/.secret/imp-analytics-server-key
+imp-aly add myvps http://203.0.113.10:2981 -a ~/.secret/imp-aly-key
+imp-aly query '{"app": "myapp"}'
 ```
+
+You can save many servers. `-s <name>` selects one of them. See [CLI](cli.md#saved-servers).
 
 The key never goes over the network. Each call sends a token that the key signs, and the server
 accepts each token once. See [Security](security.md).
@@ -133,5 +175,6 @@ accepts each token once. See [Security](security.md).
 - [Apps](apps.md) - the registry, the app map and the segments
 - [Queries](query.md) - the query API
 - [Storage](storage.md) - how the server stores the records and removes old ones
+- [Backup](backup.md) - save the daily summaries, restore them, and keep them safe
 - [Security](security.md) - the key, the tokens and the limits
 - [CLI](cli.md) - every command and option

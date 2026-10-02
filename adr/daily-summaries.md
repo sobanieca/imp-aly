@@ -18,8 +18,9 @@ reads the summary of a sealed day when the query allows it, and scans the column
 `visits` is the number of distinct visits of each day, added up over the days.**
 
 - `summary-counts.tsv` has one line per combination of `type`, `page`, `zone`, `name`, `country` and
-  the segments, with the number of records and the `readyMs` values as `value:count` pairs. So the
-  percentiles from a summary are exact.
+  the segments. A line has the number of records, the sum, the minimum and the maximum of `readyMs`,
+  and the `readyMs` buckets as `bucket:count` pairs, see `ready-time-buckets.md`. A scan puts the
+  values into the same buckets, so both paths give the same percentiles.
 - `summary-tuples.tsv` lists each combination of `type`, `page`, `country` and the segments that
   occurs. `summary-visits.tsv` has one line per set of tuples that a visit had, with the number of
   visits that had that set. A query maps each tuple to its group, and adds the count of a line once
@@ -32,6 +33,9 @@ reads the summary of a sealed day when the query allows it, and scans the column
   for many queries.
 - `meta.json` has `summary: true`. The summary files are part of the sealed folder, so the rename of
   the folder makes them visible together with the columns.
+- A backup holds the summaries, and a restored day holds only its summary, see `summary-backups.md`.
+  The retention keeps the summary of an old day when it removes the records, see
+  `disk-space-retention.md`.
 
 ## Consequences
 
@@ -39,4 +43,4 @@ reads the summary of a sealed day when the query allows it, and scans the column
 - A visit that lasts past midnight UTC counts once on each of its days. This is the rule of many
   analytics tools, and the docs state it.
 - A seal takes longer, about 15 seconds for 1,000,000 records. A summary takes about 2 MB a day.
-- The current and the previous day are not sealed, so every query scans them.
+- The current day is not sealed, so every query scans it.
