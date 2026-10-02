@@ -31,8 +31,8 @@ try {
   const parsed = parseArgs(Deno.args)
   logger.setDebug(Boolean(parsed.flags.debug))
   const [name] = parsed.positional
-  if (parsed.flags.help || name === undefined) help()
-  else if (parsed.flags.version) version()
+  if (parsed.flags.version) version()
+  else if (parsed.flags.help || name === undefined) help()
   else if (Object.hasOwn(COMMANDS, name)) await COMMANDS[name](parsed)
   else throw new Error(`unknown command "${name}" - run imp-aly help`)
 } catch (error) {
