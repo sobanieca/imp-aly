@@ -20,6 +20,7 @@ jobs:
       - run: deno lint
       - run: deno task test
       - name: Install imp
+        shell: bash
         run: |
           mkdir -p "$HOME/.local/bin"
           curl -fsSL https://sobanieca.github.io/imp-ui/install.sh | INSTALL_DIR="$HOME/.local/bin" bash
@@ -81,6 +82,7 @@ jobs:
         with:
           deno-version: v2.x
       - name: Install imp
+        shell: bash
         run: |
           mkdir -p "$HOME/.local/bin"
           curl -fsSL https://sobanieca.github.io/imp-ui/install.sh | INSTALL_DIR="$HOME/.local/bin" bash
