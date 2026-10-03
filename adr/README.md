@@ -43,11 +43,12 @@ status field. When a decision changes, replace its ADR. When a decision is dropp
 
 ## Access
 
-| ADR                                                                             | Decision                                                           |
-| ------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| [one-time-token-admin-api](one-time-token-admin-api.md)                         | The private API takes one-time tokens signed with a key            |
-| [separate-admin-port](separate-admin-port.md)                                   | The private API has its own port                                   |
-| [security-headers](security-headers.md)                                         | Every answer carries headers that stop a browser from running it   |
-| [json-query-api-in-a-worker](json-query-api-in-a-worker.md)                     | Queries are JSON objects, run one at a time in a worker            |
-| [saved-servers](saved-servers.md)                                               | The client keeps a list of named servers and a default             |
-| [several-servers-merged-by-the-client](several-servers-merged-by-the-client.md) | Servers hold separate visits, and the client adds up their answers |
+| ADR                                                                             | Decision                                                               |
+| ------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| [one-time-token-admin-api](one-time-token-admin-api.md)                         | The private API takes one-time tokens signed with a key                |
+| [separate-admin-port](separate-admin-port.md)                                   | The private API has its own port                                       |
+| [security-headers](security-headers.md)                                         | Every answer carries headers that stop a browser from running it       |
+| [json-query-api-in-a-worker](json-query-api-in-a-worker.md)                     | Queries are JSON objects, run one at a time in a worker                |
+| [saved-servers](saved-servers.md)                                               | The client keeps a list of named servers and a default                 |
+| [several-servers-merged-by-the-client](several-servers-merged-by-the-client.md) | Servers hold separate visits, and the client adds up their answers     |
+| [agent-skill-location](agent-skill-location.md)                                 | The agent skill goes to the git repository, or else to the home folder |

@@ -43,6 +43,9 @@ imp-aly query '{"app": "myapp", "groupBy": ["page", "type"], "measures": ["recor
 The docs are in [`docs/`](docs/). Read the [Introduction](docs/introduction.md) for the key words,
 then [Getting started](docs/getting-started.md).
 
+To let an AI agent query your analytics, run `imp-aly skill --init`. Then ask the agent with
+`/imp-aly`. See [CLI](docs/cli.md#ai-agents).
+
 ## Work on imp-aly
 
 You need [Deno](https://deno.com/) 2.

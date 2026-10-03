@@ -24,6 +24,7 @@ const FLAGS = {
   'limit-1h': 'string',
   'limit-24h': 'string',
   foreground: 'boolean',
+  init: 'boolean',
   uninstall: 'boolean',
   json: 'boolean',
   help: 'boolean',

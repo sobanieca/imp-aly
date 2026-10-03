@@ -26,6 +26,7 @@ Usage:
   imp-aly token <method> <path> [<body file>]   print a one-time token for one request
   imp-aly add <name> <url> [-a <key|file>]   save a server
   imp-aly ls | use <name> | rm <name>   list, select or remove saved servers
+  imp-aly skill [--init]                print instructions for AI agents, or create a skill
   imp-aly help | version
 
 Server (on the VPS):
@@ -96,6 +97,19 @@ Saved servers (on your machine):
   "add" replaces a server with the same name and makes it the default. A path
   to the key file is saved, not the key. A key given as text is saved as it is.
   The list is in ~/.config/imp-aly/servers.json ($XDG_CONFIG_HOME when set).
+
+AI agents:
+
+  imp-aly skill                             print this help with a short preamble for agents
+  imp-aly skill --init                      create the skill /imp-aly (Claude Code, Cursor)
+                                            and $imp-aly (Codex)
+
+  "skill --init" writes .agents/skills/imp-aly/SKILL.md and
+  .claude/skills/imp-aly/SKILL.md. In a git repository (the command looks for
+  .git from the current folder up to the home folder), the files go to the git
+  root, so agents see the skill in all folders of the repository. Outside a git
+  repository, the files go to the home folder, so agents see the skill in all
+  projects. The command does not replace a skill that exists.
 
 API:
 

@@ -22,29 +22,29 @@ See `adr/plain-javascript-no-dependencies.md`.
 
 ## Architecture
 
-| Module                                | Job                                                                                             |
-| ------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `main.js`                             | parses the arguments and runs a command                                                         |
-| `src/commands/`                       | `server`, `app`, `query`, `backup`, `restore`, `status`, `token`, `add`/`ls`/`use`/`rm`, `help` |
-| `src/server.js`                       | `startServer()`: HTTP routes, workers, log, registry, limiter                                   |
-| `src/records.js`                      | the checks of one imp record                                                                    |
-| `src/apps.js`, `src/app-map.js`       | the app registry in `apps.json`, and reading `app-map.txt`                                      |
-| `src/rate-limit.js`                   | the sliding windows per client address                                                          |
-| `src/origins.js`                      | the allowed browser origins of the public endpoint                                              |
-| `src/wal.js`                          | the write-ahead log with group commit and parts                                                 |
-| `src/storage.js`, `storage-worker.js` | the single writer: log parts to columns, restore, seal, retention                               |
-| `src/column-store.js`, `src/rle.js`   | the column files, the append transaction, sealing, reading                                      |
-| `src/seal-sort.js`                    | the sort of a day in chunks, and the merge of the chunks into the run files                     |
-| `src/line-files.js`                   | the reading and writing of line files in blocks                                                 |
-| `src/summary.js`                      | the daily summary of a sealed day: build, parse and check                                       |
-| `src/backup.js`, `src/tar.js`         | the backup stream of the summaries, and the restore                                             |
-| `src/query.js`, `query-worker.js`     | the query parser and engine, run in a worker, and the merge of the answers of servers           |
-| `src/ready.js`                        | the `readyMs` buckets: count, merge, percentiles and shares                                     |
-| `src/retention.js`                    | `df`, the free space rule, old days to summaries, then removal                                  |
-| `src/auth.js`, `src/sha256.js`        | the key, the one-time tokens signed per request, and a streaming SHA-256                        |
-| `src/servers.js`, `src/api-client.js` | the saved servers of the client, and the calls to the API                                       |
-| `src/service.js`                      | the systemd unit, the service user and its limits                                               |
-| `src/file-watch.js`                   | the hourly check of the TLS files                                                               |
+| Module                                | Job                                                                                                      |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `main.js`                             | parses the arguments and runs a command                                                                  |
+| `src/commands/`                       | `server`, `app`, `query`, `backup`, `restore`, `status`, `token`, `add`/`ls`/`use`/`rm`, `skill`, `help` |
+| `src/server.js`                       | `startServer()`: HTTP routes, workers, log, registry, limiter                                            |
+| `src/records.js`                      | the checks of one imp record                                                                             |
+| `src/apps.js`, `src/app-map.js`       | the app registry in `apps.json`, and reading `app-map.txt`                                               |
+| `src/rate-limit.js`                   | the sliding windows per client address                                                                   |
+| `src/origins.js`                      | the allowed browser origins of the public endpoint                                                       |
+| `src/wal.js`                          | the write-ahead log with group commit and parts                                                          |
+| `src/storage.js`, `storage-worker.js` | the single writer: log parts to columns, restore, seal, retention                                        |
+| `src/column-store.js`, `src/rle.js`   | the column files, the append transaction, sealing, reading                                               |
+| `src/seal-sort.js`                    | the sort of a day in chunks, and the merge of the chunks into the run files                              |
+| `src/line-files.js`                   | the reading and writing of line files in blocks                                                          |
+| `src/summary.js`                      | the daily summary of a sealed day: build, parse and check                                                |
+| `src/backup.js`, `src/tar.js`         | the backup stream of the summaries, and the restore                                                      |
+| `src/query.js`, `query-worker.js`     | the query parser and engine, run in a worker, and the merge of the answers of servers                    |
+| `src/ready.js`                        | the `readyMs` buckets: count, merge, percentiles and shares                                              |
+| `src/retention.js`                    | `df`, the free space rule, old days to summaries, then removal                                           |
+| `src/auth.js`, `src/sha256.js`        | the key, the one-time tokens signed per request, and a streaming SHA-256                                 |
+| `src/servers.js`, `src/api-client.js` | the saved servers of the client, and the calls to the API                                                |
+| `src/service.js`                      | the systemd unit, the service user and its limits                                                        |
+| `src/file-watch.js`                   | the hourly check of the TLS files                                                                        |
 
 Rules that keep the data correct:
 

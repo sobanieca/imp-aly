@@ -12,6 +12,7 @@ imp-aly status
 imp-aly token <method> <path> [<body file>]
 imp-aly add <name> <url> [-a <key|file>]
 imp-aly ls | use <name> | rm <name>
+imp-aly skill [--init]
 imp-aly help | version
 ```
 
@@ -152,6 +153,31 @@ show a saved key.
 
 The command keeps the list in `~/.config/imp-aly/servers.json`, with access for the owner only. When
 `XDG_CONFIG_HOME` is set, the list is in `$XDG_CONFIG_HOME/imp-aly/servers.json`.
+
+## AI agents
+
+`imp-aly skill` prints the reference of `imp-aly help` with a short preamble for AI agents.
+
+`imp-aly skill --init` creates a skill. Then you can ask an agent with `/imp-aly` (Claude Code,
+Cursor) or `$imp-aly` (Codex):
+
+```
+/imp-aly how many visits did myapp have last week, per page
+```
+
+The command writes the same `SKILL.md` to two folders: `.agents/skills/imp-aly/` (Codex, Cursor) and
+`.claude/skills/imp-aly/` (Claude Code, Cursor). It finds the location in this order:
+
+1. The command looks for `.git` in the current folder and in each parent folder, up to your home
+   folder.
+2. In a git repository, the skill goes to the git root. Agents see it in all folders of the
+   repository, also in the packages of a monorepo.
+3. Outside a git repository, the skill goes to your home folder, such as
+   `~/.claude/skills/imp-aly/`. Agents then see the skill in all projects.
+
+The command does not replace a skill that exists. To write it again, remove the `SKILL.md` files.
+
+The skill tells the agent to use saved servers. The agent never gets a key.
 
 ## Exit codes
 

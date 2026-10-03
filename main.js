@@ -6,6 +6,7 @@ import { query } from './src/commands/query.js'
 import { restore } from './src/commands/restore.js'
 import { server } from './src/commands/server.js'
 import { add, ls, rm, use } from './src/commands/servers.js'
+import { skill } from './src/commands/skill.js'
 import { status } from './src/commands/status.js'
 import { token } from './src/commands/token.js'
 import { version } from './src/commands/version.js'
@@ -21,6 +22,7 @@ const COMMANDS = {
   restore,
   rm,
   server,
+  skill,
   status,
   token,
   use,
