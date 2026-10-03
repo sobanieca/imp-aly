@@ -60,6 +60,7 @@ See `adr/plain-javascript-dependency-free-server.md` and `adr/local-console.md`.
 | `console/`                             | the imp project of the page: `src/app.js`, `src/screens/`, `src/parts/`, `src/lib/`, `test/`                        |
 | `src/service.js`                       | the systemd unit, the service user and its limits                                                                   |
 | `src/file-watch.js`                    | the hourly check of the TLS files                                                                                   |
+| `site/index.html`                      | the landing page, one static file that GitHub Pages serves with `install.sh`                                        |
 
 Rules that keep the data correct:
 
@@ -155,4 +156,4 @@ asked. `deno fmt` and `deno lint` must pass before a commit.
 Bump `version` in `deno.json` to release. On a push to `main`, CI checks the code, builds the
 binaries for Linux and macOS on x64 and arm64 when the tag `v<version>` does not exist, runs a smoke
 test of each binary, and publishes them with SHA-256 files to a GitHub Release. GitHub Pages serves
-`install.sh`. See `adr/binary-distribution.md`.
+`install.sh` and the landing page in `site/`. See `adr/binary-distribution.md`.

@@ -15,7 +15,8 @@ and publishes it with a SHA-256 file to a GitHub Release.**
   and runs a smoke test: start, register an app, send a record, query it.
 - The assets are `imp-aly-{linux|macos}-{x64|arm64}` and a `.sha256` file for each.
 - `install.sh` detects the platform, downloads the latest asset and its checksum, checks it, and
-  installs to `/usr/local/bin`. GitHub Pages serves the script.
+  installs to `/usr/local/bin`. GitHub Pages serves the script next to the landing page,
+  `site/index.html`.
 
 ## Consequences
 

@@ -1,5 +1,7 @@
 # imp-aly
 
+Website: https://sobanieca.github.io/imp-aly/
+
 A small analytics server for [imp](https://github.com/sobanieca/imp-ui) apps. Run it on your own
 VPS. It takes the records of `imp/analytics`, checks each one against the app map of your app,
 stores them on the local disk in plain text column files, and answers queries.
