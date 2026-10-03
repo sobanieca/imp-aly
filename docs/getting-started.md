@@ -113,24 +113,27 @@ See [Apps](apps.md) for segments and for the other app commands.
 
 ## Send records from your app
 
-Register a sink in the entry module of your app. Send the records with `batch` and `sendBeacon`:
+Register the imp-aly sink of imp in the entry module of your app. It is in `imp/analytics/aly`:
 
 ```js
 import { flag, mount } from 'imp'
-import { batch, onAnalytics } from 'imp/analytics'
+import { onAnalytics } from 'imp/analytics'
+import { alySink } from 'imp/analytics/aly'
 import { app } from './app.js'
 
 if (flag('ANALYTICS')) {
-  onAnalytics(batch((records) =>
-    navigator.sendBeacon(
-      'https://analytics.myapp.example/collect/myapp',
-      JSON.stringify(records),
-    )
-  ))
+  onAnalytics(alySink({ app: 'myapp', servers: ['https://analytics.myapp.example'] }))
 }
 
 mount('#app', app())
 ```
+
+The sink sends the records in batches to `https://analytics.myapp.example/collect/myapp`. It sends
+the first record of a visit at once, and the next records every 5 seconds or 20 records. It also
+sends a batch when the page hides. When the server rejects records, the sink logs a warning in the
+browser console. The
+[Analytics](https://github.com/sobanieca/imp-ui/blob/main/docs/analytics.md#imp-aly) page of imp
+gives all the options.
 
 The server accepts the records exactly as imp makes them. It drops a record whose `page` is not a
 line of the app map.
@@ -169,6 +172,18 @@ You can save many servers. `-s <name>` selects one of them. See [CLI](cli.md#sav
 The key never goes over the network. Each call sends a token that the key signs, and the server
 accepts each token once. See [Security](security.md).
 
+## See the numbers in the console
+
+On the machine with the saved servers, run:
+
+```sh
+imp-aly console
+```
+
+Open `http://localhost:8010` in a browser. The console shows the visits, the pages, the speed and
+the audience of your apps in charts. It also has a query builder, and pages for the apps, the
+servers and the backups. See [Console](console.md).
+
 ## Next
 
 - [Collecting records](collect.md) - the public endpoint, the checks and the rate limit
@@ -176,5 +191,6 @@ accepts each token once. See [Security](security.md).
 - [Queries](query.md) - the query API
 - [Storage](storage.md) - how the server stores the records and removes old ones
 - [Backup](backup.md) - save the daily summaries, restore them, and keep them safe
+- [Console](console.md) - the web page with charts, a query builder, apps, servers and backups
 - [Security](security.md) - the key, the tokens and the limits
 - [CLI](cli.md) - every command and option

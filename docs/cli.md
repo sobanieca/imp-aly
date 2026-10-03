@@ -9,6 +9,7 @@ imp-aly query '<json>' | query <file.json> [--json]
 imp-aly backup <file> [--app <name>] [--from <day>] [--to <day>]
 imp-aly restore <file>
 imp-aly status
+imp-aly console [--port <port>]
 imp-aly token <method> <path> [<body file>]
 imp-aly add <name> <url> [-a <key|file>]
 imp-aly ls | use <name> | rm <name>
@@ -153,6 +154,12 @@ show a saved key.
 
 The command keeps the list in `~/.config/imp-aly/servers.json`, with access for the owner only. When
 `XDG_CONFIG_HOME` is set, the list is in `$XDG_CONFIG_HOME/imp-aly/servers.json`.
+
+## Console
+
+`imp-aly console` starts a web page on your machine, at `http://localhost:8010`. It shows the
+reports of your apps in charts, and it does the work of the client commands. It uses the saved
+servers and their keys. `--port <port>` changes the port. See [Console](console.md).
 
 ## AI agents
 

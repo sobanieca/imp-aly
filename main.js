@@ -1,6 +1,7 @@
 import { parseArgs } from './src/args.js'
 import { app } from './src/commands/app.js'
 import { backup } from './src/commands/backup.js'
+import { consoleCommand } from './src/commands/console.js'
 import { help } from './src/commands/help.js'
 import { query } from './src/commands/query.js'
 import { restore } from './src/commands/restore.js'
@@ -16,6 +17,7 @@ const COMMANDS = {
   add,
   app,
   backup,
+  console: consoleCommand,
   help,
   ls,
   query,

@@ -4,7 +4,7 @@ A small analytics server for [imp](https://github.com/sobanieca/imp-ui) apps. Ru
 VPS. It takes the records of `imp/analytics`, checks each one against the app map of your app,
 stores them on the local disk in plain text column files, and answers queries.
 
-- One binary. No database, no runtime, no dependency.
+- One binary. No database and no runtime. The server has no dependency.
 - A synced write-ahead log before each answer, and a crash-safe column store behind it.
 - Records checked against `app-map.txt`, strict field rules, and a rate limit per address.
 - Retention by free disk space: the oldest days lose their records first and keep their daily
@@ -22,22 +22,31 @@ sudo imp-aly server --port 2980
 imp-aly app add myapp https://myapp.example/app-map.txt
 ```
 
-Then send the records from your app:
+Then send the records from your app with the imp-aly sink of imp, `imp/analytics/aly`:
 
 ```js
-import { batch, onAnalytics } from 'imp/analytics'
+import { onAnalytics } from 'imp/analytics'
+import { alySink } from 'imp/analytics/aly'
 
-onAnalytics(
-  batch((records) =>
-    navigator.sendBeacon('https://analytics.myapp.example/collect/myapp', JSON.stringify(records))
-  ),
-)
+onAnalytics(alySink({ app: 'myapp', servers: ['https://analytics.myapp.example'] }))
 ```
+
+The sink sends the records in batches to `<server>/collect/<app>`. With several servers in the list,
+it sends each visit to one server, and to the next server when that server fails. See
+[Analytics](https://github.com/sobanieca/imp-ui/blob/main/docs/analytics.md#imp-aly) in the imp
+docs.
 
 And read the numbers:
 
 ```sh
 imp-aly query '{"app": "myapp", "groupBy": ["page", "type"], "measures": ["records", "visits"]}'
+```
+
+Or open the console, a local web page with charts, a query builder, and the apps, servers and
+backups:
+
+```sh
+imp-aly console
 ```
 
 The docs are in [`docs/`](docs/). Read the [Introduction](docs/introduction.md) for the key words,
@@ -48,13 +57,17 @@ To let an AI agent query your analytics, run `imp-aly skill --init`. Then ask th
 
 ## Work on imp-aly
 
-You need [Deno](https://deno.com/) 2.
+You need [Deno](https://deno.com/) 2, and [imp](https://github.com/sobanieca/imp-ui) to build the
+page of the console.
 
-| Task                | What it does                                                         |
-| ------------------- | -------------------------------------------------------------------- |
-| `deno task start`   | runs the server from source in the foreground on ports 2980 and 2981 |
-| `deno task test`    | runs the tests                                                       |
-| `deno task check`   | runs `deno fmt`, `deno lint`, then the tests                         |
-| `deno task compile` | builds the binary `./imp-aly`                                        |
+| Task                      | What it does                                                                                               |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `deno task start`         | starts a demo: a server with 45 days of sample data and new visits, and the console on port 8010           |
+| `deno task server`        | runs the server from source in the foreground on ports 2980 and 2981                                       |
+| `deno task console`       | builds the page of the console, and runs the console from source on port 8010                              |
+| `deno task console:build` | builds the page of the console into `console/dist`                                                         |
+| `deno task test`          | runs the tests                                                                                             |
+| `deno task check`         | runs `deno fmt`, `deno lint` and the tests, then `imp fmt`, `imp lint` and `imp test --unit` in `console/` |
+| `deno task compile`       | builds the page of the console and the binary `./imp-aly`                                                  |
 
 The decisions behind the design are in [`adr/`](adr/).

@@ -64,21 +64,24 @@ The counts of accepted and rejected records live in memory. A restart sets them 
 ## Segments
 
 A segment describes a group of people, such as their plan, their role, their language or the version
-of the app. Your sink adds it to each record:
+of the app. The `segments` option of `alySink` adds it to each record:
 
 ```js
 const user = useState(self, 'myapp.user')
 
 onAnalytics(
   self,
-  batch((records) =>
-    navigator.sendBeacon(
-      'https://analytics.myapp.example/collect/myapp',
-      JSON.stringify(records.map((record) => ({ ...record, plan: user.get()?.plan ?? null }))),
-    )
-  ),
+  alySink({
+    app: 'myapp',
+    servers: ['https://analytics.myapp.example'],
+    segments: () => ({ plan: user.get()?.plan ?? null }),
+  }),
 )
 ```
+
+Register the sink in the `setup` of the component that holds the state, so it can read the state.
+See [Segments](https://github.com/sobanieca/imp-ui/blob/main/docs/analytics.md#segments) in the imp
+docs.
 
 Declare each segment when you register the app. The server rejects a record that has a field that
 the app does not declare. This keeps a typo or a forged field out of the data.

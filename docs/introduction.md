@@ -8,7 +8,7 @@ how to install or run it. For that, read [Getting started](getting-started.md).
 An imp app tells you what its users do. Each time a user opens a screen, sees a part of a screen,
 clicks or completes a task, the app makes a small record. The `imp/analytics` module gives these
 records to a function of your app, the sink. imp-aly is the server that the sink sends the records
-to.
+to. imp ships the sink for imp-aly: `alySink` of `imp/analytics/aly`.
 
 imp-aly does three things:
 
@@ -169,5 +169,6 @@ the key can register apps and run queries.
 - [Queries](query.md) - the query API, and queries of several servers
 - [Storage](storage.md) - the data folder, sealing and retention in detail
 - [Backup](backup.md) - save the daily summaries, restore them, and keep them safe
+- [Console](console.md) - the web page with charts, a query builder, apps, servers and backups
 - [Security](security.md) - the key, the tokens and the limits
 - [CLI](cli.md) - every command and option

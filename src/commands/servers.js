@@ -1,12 +1,14 @@
 import { requireOnlyFlags } from '../args.js'
 import { logger } from '../logger.js'
-import { addServer, loadServers, removeServer, serversPath, useServer } from '../servers.js'
+import {
+  addServer,
+  keyLabel,
+  loadServers,
+  removeServer,
+  serversPath,
+  useServer,
+} from '../servers.js'
 import { formatTable } from '../table.js'
-
-const keyLabel = (auth) => {
-  if (!auth) return 'default key file'
-  return auth.startsWith('/') ? auth : 'saved key'
-}
 
 export const add = ({ positional, flags }) => {
   requireOnlyFlags(flags, ['auth'], 'add')

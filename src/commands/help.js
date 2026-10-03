@@ -1,5 +1,6 @@
 import { DEFAULT_LIMITS, DEFAULT_TRUSTED_PROXIES } from '../rate-limit.js'
 import { DEFAULT_MIN_FREE } from '../retention.js'
+import { DEFAULT_CONSOLE_PORT } from '../console.js'
 import { DEFAULT_ADMIN_PORT, DEFAULT_MAX_REQUESTS, DEFAULT_PORT } from '../server.js'
 import { version } from '../version.js'
 import { SERVICE_DATA_DIR } from '../service.js'
@@ -23,6 +24,7 @@ Usage:
   imp-aly backup <file> [--app <name>] [--from <day>] [--to <day>]
   imp-aly restore <file>                put the summaries of a backup back
   imp-aly status
+  imp-aly console [--port <port>]       open the console, a web page with reports, on this machine
   imp-aly token <method> <path> [<body file>]   print a one-time token for one request
   imp-aly add <name> <url> [-a <key|file>]   save a server
   imp-aly ls | use <name> | rm <name>   list, select or remove saved servers
@@ -97,6 +99,17 @@ Saved servers (on your machine):
   "add" replaces a server with the same name and makes it the default. A path
   to the key file is saved, not the key. A key given as text is saved as it is.
   The list is in ~/.config/imp-aly/servers.json ($XDG_CONFIG_HOME when set).
+
+Console (on your machine):
+
+  imp-aly console                           start the console on http://localhost:${DEFAULT_CONSOLE_PORT}
+  imp-aly console --port 9000               on another port
+
+  The console is a web page with charts of the visits, the pages, the speed
+  and the audience, a query builder, and pages for the apps, the saved
+  servers and the backups. It uses the saved servers and their keys, like the
+  client commands. The key never goes to the browser. It listens on
+  127.0.0.1 and ::1 only. Stop it with Ctrl+C.
 
 AI agents:
 

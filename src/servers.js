@@ -37,6 +37,11 @@ const writeStore = (path, store) => {
 
 export const loadServers = (path = serversPath()) => readStore(path)
 
+export const keyLabel = (auth) => {
+  if (!auth) return 'default key file'
+  return auth.startsWith('/') ? auth : 'saved key'
+}
+
 export const parseServerUrl = (value) => {
   let url
   try {

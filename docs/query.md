@@ -212,8 +212,8 @@ together. Each server stores the visits that reach it. `imp-aly query` adds up t
    imp-aly app add myapp https://myapp.example/app-map.txt -s eu-1,eu-2,eu-3
    ```
 
-3. Let your app send each visit to one server. A visit is one load of the page. The sink picks a
-   server at random when the page loads, and sends every record of that load to it.
+3. Put the URLs of all servers in the `servers` option of `alySink` in your app. The sink picks one
+   server for each visit from the visit id. A visit is one load of the page.
 4. Ask all servers together:
 
    ```sh
@@ -221,8 +221,9 @@ together. Each server stores the visits that reach it. `imp-aly query` adds up t
    ```
 
 **Send all the records of a visit to one server.** When the records of one visit go to two servers,
-each server counts the visit, and `visits` counts it twice. A sink that changes the server after an
-error splits only the visits that had the error.
+each server counts the visit, and `visits` counts it twice. `alySink` sends every record of a visit
+to one server. It moves a visit to the next server only when its server does not answer or answers
+with a 5xx. So only the visits that had the error count twice.
 
 The command asks the servers at the same time, and each server reads only its own records. So a
 query of 3 servers takes about one third of the time of the same query on one server.

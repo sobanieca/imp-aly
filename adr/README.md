@@ -10,12 +10,12 @@ status field. When a decision changes, replace its ADR. When a decision is dropp
 
 ## Runtime and distribution
 
-| ADR                                                                     | Decision                                             |
-| ----------------------------------------------------------------------- | ---------------------------------------------------- |
-| [plain-javascript-no-dependencies](plain-javascript-no-dependencies.md) | Plain JavaScript on Deno, with no dependency         |
-| [single-binary-systemd-service](single-binary-systemd-service.md)       | One binary that installs itself as a systemd service |
-| [binary-distribution](binary-distribution.md)                           | Binaries on GitHub Releases, with a checksum         |
-| [tls-certificate-check](tls-certificate-check.md)                       | The server checks its TLS certificate once an hour   |
+| ADR                                                                                   | Decision                                                   |
+| ------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| [plain-javascript-dependency-free-server](plain-javascript-dependency-free-server.md) | Plain JavaScript on Deno, with no dependency in the server |
+| [single-binary-systemd-service](single-binary-systemd-service.md)                     | One binary that installs itself as a systemd service       |
+| [binary-distribution](binary-distribution.md)                                         | Binaries on GitHub Releases, with a checksum               |
+| [tls-certificate-check](tls-certificate-check.md)                                     | The server checks its TLS certificate once an hour         |
 
 ## Collection
 
@@ -52,3 +52,4 @@ status field. When a decision changes, replace its ADR. When a decision is dropp
 | [saved-servers](saved-servers.md)                                               | The client keeps a list of named servers and a default                 |
 | [several-servers-merged-by-the-client](several-servers-merged-by-the-client.md) | Servers hold separate visits, and the client adds up their answers     |
 | [agent-skill-location](agent-skill-location.md)                                 | The agent skill goes to the git repository, or else to the home folder |
+| [local-console](local-console.md)                                               | A local console with a web page, on top of the client code             |

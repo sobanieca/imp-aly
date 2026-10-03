@@ -1,5 +1,5 @@
 import { requireOnlyFlags } from '../args.js'
-import { callApi, resolveTargets } from '../api-client.js'
+import { eachServer, resolveTargets } from '../api-client.js'
 import { logger } from '../logger.js'
 import { formatTable } from '../table.js'
 
@@ -18,25 +18,15 @@ const summary = (app) =>
   }, map ${app.mapUrl ?? 'uploaded'}`
 
 const onEachServer = async (targets, run) => {
-  const results = []
-  const failed = []
-  for (const { label, ...target } of targets) {
-    const call = (method, path, body) => callApi({ ...target, method, path, body })
-    try {
-      results.push({ server: label, result: await run(call) })
-    } catch (error) {
-      if (targets.length === 1) throw error
-      logger.error(`${label}: ${error.message}`)
-      failed.push(label)
-    }
-  }
+  const { results, failed } = await eachServer(targets, run)
+  for (const { server, reason } of failed) logger.error(`${server}: ${reason}`)
   return {
     results,
     finish: () => {
       if (failed.length) {
         throw new Error(
           `the command failed on ${failed.length} of ${targets.length} servers: ${
-            failed.join(', ')
+            failed.map(({ server }) => server).join(', ')
           }`,
         )
       }

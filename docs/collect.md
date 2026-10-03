@@ -7,8 +7,8 @@ POST /collect/<app>
 ```
 
 `<app>` is the name of a registered app. The body is one record, or a JSON array of records, of up
-to 64 KiB. That is the shape that `batch` of `imp/analytics` sends. The content type can be any
-value, so `navigator.sendBeacon` with a string body works.
+to 64 KiB. That is the shape that `alySink` of `imp/analytics/aly` sends. The content type can be
+any value, so a `fetch` or a `navigator.sendBeacon` with a string body works.
 
 The server answers `202` with the counts:
 
@@ -60,7 +60,8 @@ terminal or a page that shows it, and it cannot change the layout of the data fi
 
 The server counts the rejected records of each app by reason. `imp-aly app show myapp` prints the
 counts. A record that your app sends and the server rejects is a bug in the sink, so check the
-counts after you deploy a change of the sink.
+counts after you deploy a change of the sink. `alySink` also logs a warning in the browser console
+when the server rejects records.
 
 The day of a record is the UTC day of its `at`. One request can hold records of two days, for
 example a batch that the browser sends just after midnight UTC. Each record goes to its own day.
@@ -80,9 +81,10 @@ wrong by more than the window loses its records, and the rejection counts of the
 | app that is not known  |                                    | `404`  |
 | requests in progress   | 1,024 on the public port           | `503`  |
 
-The browser limits a `sendBeacon` body to about 64 KiB. 20 records are about 2 KB. One request holds
-at most as many records as the smallest window of the rate limit allows. A larger request can never
-pass the rate limit, so the server answers `413` at once. Send a large batch in parts.
+The browser limits the body of a `keepalive` request or a `sendBeacon` to about 64 KiB. 20 records
+are about 2 KB. One request holds at most as many records as the smallest window of the rate limit
+allows. A larger request can never pass the rate limit, so the server answers `413` at once. Send a
+large batch in parts.
 
 ## Rate limit per address
 
@@ -164,7 +166,8 @@ the header is missing or holds another value. The server never stores the addres
 
 By default, the endpoint accepts requests from every origin and answers with
 `access-control-allow-origin: *`. It answers the preflight `OPTIONS` request of a `fetch` with
-`content-type: application/json`. `sendBeacon` with a string body sends no preflight.
+`content-type: application/json`. `alySink` and `sendBeacon` send a string body, so the browser
+sends no preflight.
 
 To accept records only from the pages of your apps, give their origins:
 
@@ -180,6 +183,10 @@ does this for `/collect/<app>`:
 - A request with another `Origin` header gets `403`, also a preflight. This includes `Origin: null`.
   The server does not read the body.
 - A request without an `Origin` header passes. A browser always sends the header with a `POST`.
+
+`alySink` sends the `Origin` header, and a `Referer` header with the origin only. When the origin of
+the page is not allowed, the server answers `403`. The browser hides this answer from the sink, so
+the sink tries the next server.
 
 The check stops a script on another site from sending records to your server from the browsers of
 its visitors. Many browsers can come from many addresses, so the rate limit alone cannot stop them.
