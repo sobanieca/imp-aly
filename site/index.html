@@ -629,7 +629,11 @@
         </div>
         <div class="point">
           <h3>Fast queries</h3>
-          <p>Most queries read only the daily summaries. Group by page, type, zone, country or your own segments. Measure visits and speed.</p>
+          <p>Most queries read only the daily summaries. Group by page, type, zone, country or your own segments. Count records and visits.</p>
+        </div>
+        <div class="point">
+          <h3>Viewed, and also used</h3>
+          <p>imp marks a page view as used at the first click, tap or key on the page. See which pages people open but do not use, with no setup in your app.</p>
         </div>
         <div class="point">
           <h3>Several servers, one answer</h3>
@@ -684,39 +688,40 @@ onAnalytics(alySink({
         <div class="col">
           <h3>Terminal <span>imp-aly query</span></h3>
           <pre><span class="dim">$</span> imp-aly query '{"app": "myapp", "groupBy": ["page"],
-    "measures": ["visits", "readyMs.under:2500"]}'
-<span class="dim">page             visits   readyMs.under:2500</span>
-/                  4812                 94.1
-/invoices          3920                 <span class="ok">96.8</span>
-/invoices/:id      2177                 88.3
-/settings           609                 97.5
+    "measures": ["records", "visits"],
+    "where": {"type": "page"}}'
+<span class="dim">page            records   visits</span>
+/                  6319     4812
+/invoices          5410     3920
+/invoices/:id      2980     2177
+/settings           702      609
 
-<span class="dim">4 rows | 30 days | 41902 records scanned | 41902 matched</span></pre>
+<span class="dim">4 rows | 30 days | 41902 records scanned | 15411 matched</span></pre>
         </div>
         <div class="col console">
-          <h3>Console <span>overview</span></h3>
+          <h3>Console <span>pages</span></h3>
           <div class="tiles">
             <div class="tile">
-              <div class="k">Visits</div>
-              <div class="v">11518</div>
+              <div class="k">Page views</div>
+              <div class="v">15411</div>
             </div>
             <div class="tile">
-              <div class="k">Fast page views</div>
-              <div class="v good">93.6%</div>
+              <div class="k">Page uses</div>
+              <div class="v">12328</div>
             </div>
             <div class="tile">
-              <div class="k">Ready p75</div>
-              <div class="v">840 ms</div>
+              <div class="k">Used when viewed</div>
+              <div class="v good">80.0%</div>
             </div>
             <div class="tile">
-              <div class="k">Errors</div>
-              <div class="v">37</div>
+              <div class="k">Never reached</div>
+              <div class="v">2</div>
             </div>
           </div>
           <div class="chart">
-            <div class="k">Visits per day, last 30 days</div>
+            <div class="k">Page uses per day, last 30 days</div>
             <svg viewBox="0 0 600 120" role="img"
-              aria-label="Bar chart of visits per day over 30 days, with lower bars on weekends and a slow rise">
+              aria-label="Bar chart of page uses per day over 30 days, with lower bars on weekends and a slow rise">
               <rect x="3" y="47" width="14" height="73" rx="2" />
               <rect x="23" y="44" width="14" height="76" rx="2" />
               <rect x="43" y="51" width="14" height="69" rx="2" />
@@ -757,11 +762,11 @@ onAnalytics(alySink({
         <p
           class="lead"><code>imp-aly skill --init</code> creates a <code>/imp-aly</code> skill for Claude Code, Codex and Cursor. The agent writes the queries and runs <code class="name">imp-aly</code> with your saved servers. The key stays in its file.</p>
         <div class="chat" aria-label="Example of a question to an AI agent">
-          <div class="you"><code>/imp-aly</code> which pages got slower this week?</div>
+          <div class="you"><code>/imp-aly</code> which pages do people open but not use?</div>
           <div
-            class="run">imp-aly query '{"app": "myapp", "from": "2026-09-21", "groupBy": ["page", "day"], "measures": ["readyMs.p75"]}'</div>
+            class="run">imp-aly query '{"app": "myapp", "where": {"type": ["page", "used"], "zone": null}, "groupBy": ["page", "type"]}'</div>
           <div
-            class="bot"><code>/invoices/:id</code> went from 910 ms to 1340 ms at p75. The other pages did not change.</div>
+            class="bot"><code>/settings</code> had 702 views and only 31 uses, so 4% of the views. The other pages are used in 60% of their views or more.</div>
         </div>
       </section>
 

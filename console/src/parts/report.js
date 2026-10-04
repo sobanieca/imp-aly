@@ -4,7 +4,7 @@ import { navigate } from 'imp/router'
 import { computed, initState, useState } from 'imp/state'
 import { button, heading, text } from 'imp/std'
 import { chart } from 'imp/std/data'
-import { card, emptyState, tag } from 'imp/std/display'
+import { card, descriptionList, emptyState, tag } from 'imp/std/display'
 import { loader, notice, skeleton } from 'imp/std/feedback'
 import { stack } from 'imp/std/layout'
 import { luBox, luCalendarX } from 'imp/icons'
@@ -114,8 +114,22 @@ export const reportCard = ({ title, description, actions }, ...content) =>
     ),
   )
 
-export const screenHeader = (title, description) =>
-  stack({ gap: 1 }, heading({ level: 1 }, title), text({ tone: 'secondary' }, description))
+const termsCard = (terms) =>
+  card(
+    { padding: 'sm', label: 'What the numbers mean', header: 'What the numbers mean' },
+    descriptionList({
+      columns: 2,
+      layout: 'vertical',
+      items: terms.map(([term, details]) => ({ term, details })),
+    }),
+  )
+
+export const screenHeader = (title, description, terms = []) =>
+  stack(
+    { gap: 4 },
+    stack({ gap: 1 }, heading({ level: 1 }, title), text({ tone: 'secondary' }, description)),
+    terms.length ? termsCard(terms) : null,
+  )
 
 export const reportLoading = () => stack({ gap: 4 }, skeleton({ lines: 2 }), skeleton({ lines: 6 }))
 
@@ -203,7 +217,7 @@ export const trendChart = ({ label, bar, buckets, series }) =>
 
 export const reportScreen = (
   self,
-  { title, description, filters: fields = [], pageLabel, render },
+  { title, description, terms, filters: fields = [], pageLabel, render },
 ) => {
   const scope = useScope(self)
   const catalog = useState(self, 'aly.catalog')
@@ -220,7 +234,7 @@ export const reportScreen = (
   return page(
     stack(
       { gap: 5 },
-      screenHeader(title, description),
+      screenHeader(title, description, terms),
       scopeBar({ note: true }),
       fields.length
         ? div(

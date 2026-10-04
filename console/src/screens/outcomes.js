@@ -2,6 +2,7 @@ import { component } from 'imp'
 import { useHttpClient } from 'imp/http'
 import { table } from 'imp/std/data'
 import { stack } from 'imp/std/layout'
+import { OUTCOME_TERMS } from '../lib/terms.js'
 import { previousScope, problemsOf, runQuery } from '../lib/api.js'
 import { barOf, bucketsOf } from '../lib/days.js'
 import { formatCount, formatPercent } from '../lib/format.js'
@@ -167,6 +168,7 @@ const outcomesReport = component('aly-outcomes-report', {
 export const outcomesScreen = component('aly-outcomes', {
   setup: (self) =>
     reportScreen(self, {
+      terms: OUTCOME_TERMS,
       title: 'Outcomes',
       description: 'How often the visits reached each outcome of the app.',
       filters: ['name', 'page', 'segments'],

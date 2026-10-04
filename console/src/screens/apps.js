@@ -12,6 +12,7 @@ import { formatCount, formatPercent } from '../lib/format.js'
 import { changeOf, MAX_ROWS, shareOf } from '../lib/reports.js'
 import { stackedSeries, topKeys } from '../lib/series.js'
 import { useScope } from '../lib/scope.js'
+import { APP_TERMS } from '../lib/terms.js'
 import {
   changeHint,
   changeTag,
@@ -179,7 +180,7 @@ export const appsScreen = component('aly-apps', {
     return page(
       stack(
         { gap: 5 },
-        screenHeader('Apps', 'The visits of every registered app, and how they change.'),
+        screenHeader('Apps', 'The visits of every registered app, and how they change.', APP_TERMS),
         scopeBar({ app: false, note: true }),
         div(
           computed([scope, names], (current, list) => ({ current, list })).view((

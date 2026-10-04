@@ -22,6 +22,7 @@ import {
 } from '../lib/query-draft.js'
 import { cliCommand, labelOf, resultChart, toCsv } from '../lib/rows.js'
 import { useScope } from '../lib/scope.js'
+import { EXPLORE_TERMS } from '../lib/terms.js'
 import { readStored, writeStored } from '../lib/storage.js'
 import { page, reportCard, reportError, reportLoading, screenHeader } from '../parts/report.js'
 import { scopeBar } from '../parts/scope-bar.js'
@@ -413,6 +414,7 @@ export const exploreScreen = component('aly-explore', {
         screenHeader(
           'Explore',
           'Build any query of the app. The servers, the app and the days come from the bar.',
+          EXPLORE_TERMS,
         ),
         scopeBar(),
         reportCard(

@@ -89,10 +89,13 @@ has a different app map or different segments on the servers. See [Queries](quer
 | Report   | What it shows                                                                                    |
 | -------- | ------------------------------------------------------------------------------------------------ |
 | Apps     | the visits of each registered app, their change and their share of all visits                    |
-| Pages    | the most and the least visited pages of the app, and the pages of the app map with no view       |
+| Pages    | how often each page was viewed and used, and the pages that people reach but do not use          |
 | Zones    | how often each zone was seen and used on each page, and the zones that people see but do not use |
 | Outcomes | how often the visits reached each outcome, and the share of the visits with an outcome           |
 | Errors   | the pages with the most errors, and the errors per 100 page views                                |
+
+Each report, and Explore, starts with "What the numbers mean". This panel tells what each measure,
+column and flag of the report counts. So you can read a report without this page.
 
 A chart of a report shows one column per bar. The column stacks the 10 items with the highest total,
 and puts all other items into "Other". Move the pointer over a column to see the counts.
@@ -112,15 +115,29 @@ the most visited app and the app with the highest growth.
 
 ### Pages
 
-The tables show the 10 pages with the most views, and the 10 pages with the fewest views. A page
-view is a `page` record. The least visited pages include every page of the app map with no view,
-marked "Never reached".
+The tables show each page:
 
-The chart shows the views of the top 10 pages. Choose a page in "Page on the chart" to see the views
-of that page only. The page can be any page of the app map. The other filters are the segments of
-the app and the country. They apply to the tables and to the chart.
+| Column           | What it is                                                                   |
+| ---------------- | ---------------------------------------------------------------------------- |
+| Views            | the `page` records of the page. One page view sends one.                     |
+| Used             | the `used` records with no zone. One page view sends one at most.            |
+| Used when viewed | Used divided by Views, in percent: the share of the views that used the page |
+| Flag             | "Never reached", "Never used", or "Viewed, rarely used"                      |
 
-The tiles show the page views, the pages of the app map with views, and the pages with no view.
+A page view is used when the person clicks, taps or types anywhere on the page. You do not declare
+zones for this. imp sends the record for every page.
+
+"Never reached" marks a page of the app map with no view. "Viewed, rarely used" marks a page that
+was viewed 100 times or more and used in less than 5% of them. The first table shows the 10 most
+used pages. The second table shows the 10 least used pages, and every page with no use.
+
+The chart shows the uses of the top 10 pages. Choose a page in "Page on the chart" to see that page
+only. The page can be any page of the app map. The chart then shows the views that used the page,
+and the views that did not use it. The other filters are the segments of the app and the country.
+They apply to the tables and to the chart.
+
+The tiles show the page views and the page uses with their change, the share of the views that used
+the page, and the pages that were never reached or never used.
 
 ### Zones
 

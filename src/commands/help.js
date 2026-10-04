@@ -105,11 +105,11 @@ Console (on your machine):
   imp-aly console                           start the console on http://localhost:${DEFAULT_CONSOLE_PORT}
   imp-aly console --port 9000               on another port
 
-  The console is a web page with charts of the visits, the pages, the speed
-  and the audience, a query builder, and pages for the apps, the saved
-  servers and the backups. It uses the saved servers and their keys, like the
-  client commands. The key never goes to the browser. It listens on
-  127.0.0.1 and ::1 only. Stop it with Ctrl+C.
+  The console is a web page with reports on the visits, the pages, the
+  zones, the outcomes and the errors, a query builder, and pages for the
+  apps, the saved servers and the backups. It uses the saved servers and
+  their keys, like the client commands. The key never goes to the browser.
+  It listens on 127.0.0.1 and ::1 only. Stop it with Ctrl+C.
 
 AI agents:
 

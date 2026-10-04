@@ -59,3 +59,23 @@ export const stackedSeries = (
   }
   return hasRest ? [...series, { name: OTHER, color: 'gray', values: rest }] : series
 }
+
+export const usedSeries = (rows, { bar, buckets, shownType, shownLabel }) => {
+  const position = new Map(buckets.map((bucket, index) => [bucket, index]))
+  const used = buckets.map(() => 0)
+  const shown = buckets.map(() => 0)
+  for (const row of rows) {
+    const index = position.get(row[bar])
+    if (index === undefined) continue
+    if (row.type === 'used') used[index] += row.records ?? 0
+    if (row.type === shownType) shown[index] += row.records ?? 0
+  }
+  return [
+    { name: 'Used', color: 'blue', values: used },
+    {
+      name: shownLabel,
+      color: 'gray',
+      values: shown.map((count, index) => Math.max(count - used[index], 0)),
+    },
+  ]
+}

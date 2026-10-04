@@ -112,6 +112,18 @@ Pages - views, visits and errors. The `page` rows give the views and the visits:
 }
 ```
 
+Pages - viewed and used. A `used` record with no zone means that the person clicked, tapped or typed
+on the page. A page view sends one at most, so `used` divided by `page` is the share of the page
+views where people used the page. This is the query of the Pages report of the console:
+
+```json
+{
+  "app": "myapp",
+  "where": { "type": ["page", "used"], "zone": null },
+  "groupBy": ["page", "type"]
+}
+```
+
 The zones of a page, seen and used. A zone has at most one `seen` and one `used` record per page
 view, so `used` divided by `seen` is the share of the page views where people used the zone after
 they saw it:

@@ -19,15 +19,19 @@ import {
   changeOf,
   emptyFilters,
   errorRows,
-  leastVisited,
+  leastUsed,
+  NEVER_REACHED,
   NEVER_USED,
+  pageFlag,
+  pageRows,
   RARELY,
+  RARELY_VIEWED,
   withoutFields,
   zoneFlag,
   zoneRows,
 } from '../src/lib/reports.js'
 import { cliCommand, resultChart, toCsv } from '../src/lib/rows.js'
-import { OTHER, stackedSeries, topKeys } from '../src/lib/series.js'
+import { OTHER, stackedSeries, topKeys, usedSeries } from '../src/lib/series.js'
 
 const NOW = Date.parse('2026-10-03T12:00:00Z')
 
@@ -108,14 +112,48 @@ test('a change says up or down with a whole percent', () => {
   expect(changeOf(0, 0).text).toEqual('no change')
 })
 
-test('the least visited pages include the pages of the app map with no view', () => {
-  const rows = [{ page: '/', records: 50 }, { page: '/cart', records: 2 }]
-  expect(leastVisited(rows, ['/', '/cart', '/account'], 2)).toEqual([
-    { page: '/account', views: 0, never: true },
-    { page: '/cart', views: 2, never: false },
+test('pages get a flag when they are never reached, never used or rarely used', () => {
+  expect(pageFlag({ views: 0, used: 0 })).toEqual(NEVER_REACHED)
+  expect(pageFlag({ views: 10, used: 0 })).toEqual(NEVER_USED)
+  expect(pageFlag({ views: 200, used: 9 })).toEqual(RARELY_VIEWED)
+  expect(pageFlag({ views: 200, used: 10 })).toEqual(null)
+  expect(pageRows([
+    { page: '/', type: 'page', records: 200 },
+    { page: '/', type: 'used', records: 50 },
+    { page: '/cart', type: 'page', records: 4 },
+  ], ['/', '/cart', '/account'])).toEqual([
+    { id: '/', page: '/', views: 200, used: 50, share: 25, flag: null },
+    { id: '/cart', page: '/cart', views: 4, used: 0, share: 0, flag: NEVER_USED },
+    { id: '/account', page: '/account', views: 0, used: 0, share: null, flag: NEVER_REACHED },
   ])
-  const many = leastVisited([], ['/a', '/b', '/c'], 2)
-  expect(many.map(({ page }) => page)).toEqual(['/a', '/b', '/c'])
+})
+
+test('the least used pages include every page with no use', () => {
+  const rows = [
+    { page: '/', views: 50, used: 20 },
+    { page: '/cart', views: 9, used: 2 },
+    { page: '/a', views: 0, used: 0 },
+    { page: '/b', views: 3, used: 0 },
+  ]
+  expect(leastUsed(rows, 1).map(({ page }) => page)).toEqual(['/b', '/a'])
+  expect(leastUsed(rows, 3).map(({ page }) => page)).toEqual(['/b', '/a', '/cart'])
+})
+
+test('the used series splits the shown records into used and not used', () => {
+  const rows = [
+    { day: '2026-10-01', type: 'page', records: 10 },
+    { day: '2026-10-01', type: 'used', records: 4 },
+    { day: '2026-10-02', type: 'page', records: 3 },
+  ]
+  expect(usedSeries(rows, {
+    bar: 'day',
+    buckets: ['2026-10-01', '2026-10-02'],
+    shownType: 'page',
+    shownLabel: 'Viewed, not used',
+  })).toEqual([
+    { name: 'Used', color: 'blue', values: [4, 0] },
+    { name: 'Viewed, not used', color: 'gray', values: [6, 3] },
+  ])
 })
 
 test('zones get a flag when they are never used or rarely used', () => {

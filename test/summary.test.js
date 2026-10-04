@@ -14,6 +14,7 @@ const QUERIES = [
   { groupBy: ['month'], measures: ['visits', 'records'] },
   { groupBy: ['country', 'week'], measures: ['visits'] },
   { where: { type: ['seen', 'used'] }, groupBy: ['zone', 'type', 'month'] },
+  { where: { type: ['page', 'used'], zone: null }, groupBy: ['page', 'type', 'week'] },
   { where: { type: 'outcome', page: '/invoices/:id' }, groupBy: ['name'] },
   { where: { country: 'PL', plan: 'pro' }, groupBy: ['day'], measures: ['records', 'visits'] },
   { where: { plan: null }, groupBy: ['country', 'plan'], measures: ['visits'] },

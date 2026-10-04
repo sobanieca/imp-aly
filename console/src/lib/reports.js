@@ -2,13 +2,15 @@ import { labelOf, NULL_LABEL } from './rows.js'
 
 export const MAX_ROWS = 100_000
 
-export const RARELY_USED = { minSeen: 100, maxShare: 5 }
+export const RARELY_USED = { minShown: 100, maxShare: 5 }
 
 export const NEVER_REACHED = 'Never reached'
 
 export const NEVER_USED = 'Never used'
 
 export const RARELY = 'Seen, rarely used'
+
+export const RARELY_VIEWED = 'Viewed, rarely used'
 
 export const changeOf = (current, previous) => {
   if (!previous) {
@@ -24,24 +26,22 @@ export const changeOf = (current, previous) => {
 
 export const shareOf = (part, whole) => (whole ? (part / whole) * 100 : null)
 
-export const leastVisited = (rows, mapPages, count = 10) => {
-  const views = new Map()
-  for (const row of rows) {
-    if (row.page !== null && row.page !== undefined) views.set(row.page, row.records ?? 0)
-  }
-  const pages = [...new Set([...mapPages, ...views.keys()])].map((page) => ({
-    page,
-    views: views.get(page) ?? 0,
-    never: !views.get(page),
-  })).sort((a, b) => a.views - b.views || (a.page < b.page ? -1 : 1))
-  const never = pages.filter((entry) => entry.never).length
-  return pages.slice(0, Math.max(count, never))
+const usageFlag = (shown, used, rarely) => {
+  if (!used) return NEVER_USED
+  if (shown >= RARELY_USED.minShown && (used / shown) * 100 < RARELY_USED.maxShare) return rarely
+  return null
 }
 
-export const zoneFlag = ({ seen, used }) => {
-  if (!used) return NEVER_USED
-  if (seen >= RARELY_USED.minSeen && (used / seen) * 100 < RARELY_USED.maxShare) return RARELY
-  return null
+export const zoneFlag = ({ seen, used }) => usageFlag(seen, used, RARELY)
+
+export const pageFlag = ({ views, used }) =>
+  views ? usageFlag(views, used, RARELY_VIEWED) : NEVER_REACHED
+
+export const leastUsed = (rows, count = 10) => {
+  const sorted = [...rows].sort((a, b) =>
+    a.used - b.used || b.views - a.views || (a.page < b.page ? -1 : 1)
+  )
+  return sorted.slice(0, Math.max(count, rows.filter((row) => !row.used).length))
 }
 
 export const zoneRows = (rows) => {
@@ -58,6 +58,22 @@ export const zoneRows = (rows) => {
     ...entry,
     share: shareOf(entry.used, entry.seen),
     flag: zoneFlag(entry),
+  }))
+}
+
+export const pageRows = (rows, mapPages = []) => {
+  const table = new Map(mapPages.map((page) => [page, { id: page, page, views: 0, used: 0 }]))
+  for (const row of rows) {
+    const page = labelOf(row.page)
+    const entry = table.get(page) ?? { id: page, page, views: 0, used: 0 }
+    if (row.type === 'page') entry.views += row.records ?? 0
+    if (row.type === 'used') entry.used += row.records ?? 0
+    table.set(page, entry)
+  }
+  return [...table.values()].map((entry) => ({
+    ...entry,
+    share: shareOf(entry.used, entry.views),
+    flag: pageFlag(entry),
   }))
 }
 

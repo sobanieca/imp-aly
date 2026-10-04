@@ -4,6 +4,7 @@ import { table } from 'imp/std/data'
 import { emptyState } from 'imp/std/display'
 import { stack } from 'imp/std/layout'
 import { luCircleCheck } from 'imp/icons'
+import { ERROR_TERMS } from '../lib/terms.js'
 import { previousScope, problemsOf, runQuery } from '../lib/api.js'
 import { barOf, bucketsOf } from '../lib/days.js'
 import { formatCount } from '../lib/format.js'
@@ -159,6 +160,7 @@ const errorsReport = component('aly-errors-report', {
 export const errorsScreen = component('aly-errors', {
   setup: (self) =>
     reportScreen(self, {
+      terms: ERROR_TERMS,
       title: 'Errors',
       description: 'The pages with errors, and the errors per 100 page views.',
       filters: ['page', 'segments'],

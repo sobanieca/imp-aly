@@ -4,7 +4,7 @@ export const app = appMap({
   console: {
     path: '/',
     apps: { description: 'The visits of every registered app', group: 'Reports' },
-    pages: { description: 'The most and the least visited pages of an app', group: 'Reports' },
+    pages: { description: 'How often each page was viewed and used', group: 'Reports' },
     zones: { description: 'How often each zone was seen and used', group: 'Reports' },
     outcomes: { description: 'How often the visits reached each outcome', group: 'Reports' },
     errors: { description: 'The pages with errors, and the errors per view', group: 'Reports' },

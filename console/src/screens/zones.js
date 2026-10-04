@@ -3,11 +3,12 @@ import { useHttpClient } from 'imp/http'
 import { table } from 'imp/std/data'
 import { tag } from 'imp/std/display'
 import { stack } from 'imp/std/layout'
+import { ZONE_TERMS } from '../lib/terms.js'
 import { previousScope, problemsOf, runQuery } from '../lib/api.js'
 import { barOf, bucketsOf } from '../lib/days.js'
 import { formatCount, formatPercent } from '../lib/format.js'
 import { changeOf, MAX_ROWS, NEVER_USED, RARELY, RARELY_USED, zoneRows } from '../lib/reports.js'
-import { stackedSeries, TOP, topKeys, totalsBy } from '../lib/series.js'
+import { stackedSeries, TOP, topKeys, totalsBy, usedSeries } from '../lib/series.js'
 import {
   changeHint,
   dataNote,
@@ -57,26 +58,6 @@ const usedOf = (rows) =>
     0,
   )
 
-const oneZoneSeries = (rows, { bar, buckets }) => {
-  const position = new Map(buckets.map((bucket, index) => [bucket, index]))
-  const used = buckets.map(() => 0)
-  const seen = buckets.map(() => 0)
-  for (const row of rows) {
-    const index = position.get(row[bar])
-    if (index === undefined) continue
-    if (row.type === 'used') used[index] += row.records
-    if (row.type === 'seen') seen[index] += row.records
-  }
-  return [
-    { name: 'Used', color: 'blue', values: used },
-    {
-      name: 'Seen, not used',
-      color: 'gray',
-      values: seen.map((count, index) => Math.max(count - used[index], 0)),
-    },
-  ]
-}
-
 const zonesReport = component('aly-zones-report', {
   loading: () => reportLoading(),
   setup: async (self, { scope, filters }) => {
@@ -120,7 +101,7 @@ const zonesReport = component('aly-zones-report', {
     const rarely = rows.filter((row) => row.flag === RARELY).length
     const zoneTrend = trend.rows.filter((row) => row.zone !== null)
     const series = one
-      ? oneZoneSeries(trend.rows, { bar, buckets })
+      ? usedSeries(trend.rows, { bar, buckets, shownType: 'seen', shownLabel: 'Seen, not used' })
       : stackedSeries(zoneTrend, { bar, field: 'zone', buckets, keys: topKeys(zoneTrend, 'zone') })
     return stack(
       { gap: 5 },
@@ -145,7 +126,7 @@ const zonesReport = component('aly-zones-report', {
           label: RARELY,
           value: formatCount(rarely),
           hint:
-            `Seen ${RARELY_USED.minSeen} times or more, used in less than ${RARELY_USED.maxShare}%`,
+            `Seen ${RARELY_USED.minShown} times or more, used in less than ${RARELY_USED.maxShare}%`,
         }),
       ),
       reportCard(
@@ -171,7 +152,7 @@ const zonesReport = component('aly-zones-report', {
           {
             title: 'Least used zones',
             description:
-              `"${RARELY}" marks a zone seen ${RARELY_USED.minSeen} times or more and used in less than ${RARELY_USED.maxShare}% of them.`,
+              `"${RARELY}" marks a zone seen ${RARELY_USED.minShown} times or more and used in less than ${RARELY_USED.maxShare}% of them.`,
           },
           table({ label: 'Least used zones', rows: leastUsed, columns: ZONE_COLUMNS }),
         ),
@@ -185,6 +166,7 @@ const zonesReport = component('aly-zones-report', {
 export const zonesScreen = component('aly-zones', {
   setup: (self) =>
     reportScreen(self, {
+      terms: ZONE_TERMS,
       title: 'Zones',
       description: 'How often each zone was seen and used on each page.',
       filters: ['page', 'zone', 'segments', 'country'],
