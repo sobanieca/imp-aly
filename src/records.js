@@ -1,5 +1,3 @@
-import { MAX_READY_MS } from './ready.js'
-
 const VISIT_PATTERN = /^[A-Za-z0-9_-]{1,64}$/
 
 const NAMESPACED_NAME = /^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)+$/
@@ -25,9 +23,9 @@ export const MAX_RECORD_AHEAD_MS = 3_600_000
 const COMMON_FIELDS = ['type', 'visit', 'at', 'page']
 
 export const TYPE_FIELDS = {
-  page: ['readyMs'],
+  page: [],
   seen: ['zone'],
-  interaction: ['zone'],
+  used: ['zone'],
   outcome: ['name'],
   error: [],
 }
@@ -64,7 +62,7 @@ export const validateRecord = (input, app, country = null, now = Date.now()) => 
   if (!isPlainObject(input)) return { problem: 'record is not an object' }
   const { type } = input
   if (typeof type !== 'string' || !Object.hasOwn(TYPE_FIELDS, type)) {
-    return { problem: 'type is not one of page, seen, interaction, outcome, error' }
+    return { problem: 'type is not one of page, seen, used, outcome, error' }
   }
   const allowed = new Set([...COMMON_FIELDS, ...TYPE_FIELDS[type], ...app.segments])
   for (const key of Object.keys(input)) {
@@ -82,18 +80,11 @@ export const validateRecord = (input, app, country = null, now = Date.now()) => 
     return { problem: 'page is not on the app map' }
   }
   const record = { type, visit: input.visit, at: input.at, page: input.page }
-  if (type === 'page') {
-    const { readyMs } = input
-    if (typeof readyMs !== 'number' || !(readyMs >= 0) || readyMs > MAX_READY_MS) {
-      return { problem: 'readyMs is not a number of milliseconds from 0 to 3600000' }
-    }
-    record.readyMs = Math.round(readyMs)
-  }
   if (type === 'seen') {
     if (!isName(input.zone)) return { problem: 'zone is not a namespaced name' }
     record.zone = input.zone
   }
-  if (type === 'interaction') {
+  if (type === 'used') {
     if (!Object.hasOwn(input, 'zone')) return { problem: 'zone is missing' }
     if (input.zone !== null && !isName(input.zone)) {
       return { problem: 'zone is not a namespaced name or null' }

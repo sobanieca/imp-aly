@@ -1,16 +1,21 @@
 import { component } from 'imp'
-import { div } from 'imp/html'
+import { div, span } from 'imp/html'
 import { navigate } from 'imp/router'
-import { useState } from 'imp/state'
+import { computed, initState, useState } from 'imp/state'
 import { button, heading, text } from 'imp/std'
-import { card, emptyState } from 'imp/std/display'
+import { chart } from 'imp/std/data'
+import { card, emptyState, tag } from 'imp/std/display'
 import { loader, notice, skeleton } from 'imp/std/feedback'
 import { stack } from 'imp/std/layout'
 import { luBox, luCalendarX } from 'imp/icons'
 import { app } from '../app-map.js'
 import { messageOf } from '../lib/api.js'
+import { mapPagesOf, segmentsOf } from '../lib/catalog.js'
+import { bucketLabel } from '../lib/days.js'
 import { formatCount } from '../lib/format.js'
+import { activeFilters } from '../lib/reports.js'
 import { useScope } from '../lib/scope.js'
+import { filterBar } from './filters.js'
 import { scopeBar } from './scope-bar.js'
 
 const TILE_STYLES = `
@@ -156,7 +161,7 @@ export const noRecords = (answer) =>
       `The servers hold no record of ${answer.app} from ${answer.from} to ${answer.to}. Choose other days.`,
   })
 
-const noApp = (catalog) =>
+export const noApp = (catalog) =>
   catalog.view((value) => {
     if (value === undefined) return loader({ label: 'Loading the apps' })
     if (value.error) {
@@ -169,21 +174,68 @@ const noApp = (catalog) =>
         description: 'Register an app, then send records to the server.',
       },
       button(
-        { variant: 'primary', events: { click: () => navigate(app.console.apps.href()) } },
+        { variant: 'primary', events: { click: () => navigate(app.console.registry.href()) } },
         'Register an app',
       ),
     )
   })
 
-export const reportScreen = (self, { title, description, render }) => {
+export const changeTag = (change, { upIsBad = false } = {}) => {
+  const good = change.direction === 'up' ? !upIsBad : upIsBad
+  const color = change.direction === 'same' ? 'neutral' : good ? 'green' : 'red'
+  return tag({ color, size: 'sm' }, change.text)
+}
+
+export const changeHint = (change, previous, options) =>
+  span(changeTag(change, options), ` from ${formatCount(previous)}`)
+
+export const trendChart = ({ label, bar, buckets, series }) =>
+  series.length
+    ? chart({
+      type: 'column',
+      stacked: true,
+      label,
+      labels: buckets.map((bucket) => bucketLabel(bucket, bar)),
+      series,
+      format: formatCount,
+    })
+    : emptyState({ title: 'Nothing to draw', description: 'No record matches in these days.' })
+
+export const reportScreen = (
+  self,
+  { title, description, filters: fields = [], pageLabel, render },
+) => {
   const scope = useScope(self)
   const catalog = useState(self, 'aly.catalog')
+  const filters = initState(self, 'aly.report.filters', null)
+  const meta = computed([catalog, scope], (value, current) => ({
+    segments: segmentsOf(value, current.app),
+    mapPages: mapPagesOf(value, current.app),
+  }))
+  const active = computed(
+    [filters, scope],
+    (saved, current) => (saved && saved.app === current.app ? activeFilters(saved.values) : {}),
+  )
+  const ready = (current) => current.app && current.from
   return page(
     stack(
       { gap: 5 },
       screenHeader(title, description),
-      scopeBar(),
-      div(scope.view((value) => (value.app && value.from ? render(value) : noApp(catalog)))),
+      scopeBar({ note: true }),
+      fields.length
+        ? div(
+          computed([scope, meta], (current, info) => ({ current, info })).view((
+            { current, info },
+          ) => (ready(current) ? filterBar({ scope: current, fields, pageLabel, ...info }) : null)),
+        )
+        : null,
+      div(
+        computed([scope, active, meta], (current, where, info) => ({
+          scope: current,
+          filters: where,
+          ...info,
+        })).view((value) => (ready(value.scope) ? render(value) : noApp(catalog))),
+      ),
     ),
   )
 }

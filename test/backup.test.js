@@ -141,7 +141,7 @@ Deno.test('records for a restored day are dropped', async () => {
   await writeSummaryDay(path, {
     rows: 0,
     files: {
-      counts: 'type\tpage\tzone\tname\tcountry\trecords\treadySum\treadyMin\treadyMax\treadyMs\n',
+      counts: 'type\tpage\tzone\tname\tcountry\trecords\n',
       tuples: 'type\tpage\tcountry\n',
       visits: 'visits\ttuples\n',
     },

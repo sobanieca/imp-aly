@@ -24,7 +24,6 @@ const fill = async () => {
       visit: `v${index % 3}`,
       at: 1 + index,
       page,
-      readyMs: (index + 1) * 100,
       country,
       plan,
     }
@@ -54,37 +53,37 @@ Deno.test('visits per day where country is PL and plan is pro', async () => {
   await Deno.remove(dataDir, { recursive: true })
 })
 
-Deno.test('visits per day, ready time percentiles and limits', async () => {
+Deno.test('visits per page and limits', async () => {
   const dataDir = await fill()
   const query = parseQuery({
     app: 'myapp',
     from: '2026-10-01',
     to: '2026-10-02',
     groupBy: ['page'],
-    measures: ['records', 'visits', 'readyMs.p50', 'readyMs.max', 'readyMs.avg'],
+    measures: ['records', 'visits'],
   }, NOW)
   const result = await ask(dataDir, query)
   assertEquals(result.rows, [
-    {
-      page: '/invoice',
-      records: 6,
-      visits: 4,
-      'readyMs.p50': 405,
-      'readyMs.max': 800,
-      'readyMs.avg': 466.7,
-    },
-    {
-      page: '/invoice/:id',
-      records: 2,
-      visits: 2,
-      'readyMs.p50': 205,
-      'readyMs.max': 600,
-      'readyMs.avg': 400,
-    },
+    { page: '/invoice', records: 6, visits: 4 },
+    { page: '/invoice/:id', records: 2, visits: 2 },
   ])
   const limited = await ask(dataDir, { ...query, limit: 1 })
   assertEquals(limited.rows.length, 1)
   assertEquals(limited.truncated, true)
+  await Deno.remove(dataDir, { recursive: true })
+})
+
+Deno.test('a week or a month adds up the visits of its days', async () => {
+  const dataDir = await fill()
+  const range = { app: 'myapp', from: '2026-10-01', to: '2026-10-02', measures: ['visits'] }
+  const weeks = await ask(dataDir, parseQuery({ ...range, groupBy: ['week'] }, NOW))
+  assertEquals(weeks.rows, [{ week: '2026-09-28', visits: 6 }])
+  const months = await ask(dataDir, parseQuery({ ...range, groupBy: ['month', 'plan'] }, NOW))
+  assertEquals(months.rows, [
+    { month: '2026-10', plan: 'pro', visits: 5 },
+    { month: '2026-10', plan: 'enterprise', visits: 2 },
+    { month: '2026-10', plan: 'free', visits: 1 },
+  ])
   await Deno.remove(dataDir, { recursive: true })
 })
 
@@ -107,19 +106,15 @@ Deno.test('queries are validated', () => {
   assertThrows(() => parseQuery({ app: '../etc' }, NOW), /app/)
   assertThrows(() => parseQuery({ app: 'a', from: '2026-02-30' }, NOW), /from/)
   assertThrows(() => parseQuery({ app: 'a', from: '2026-10-02', to: '2026-10-01' }, NOW), /after/)
-  assertThrows(() => parseQuery({ app: 'a', where: { readyMs: '1' } }, NOW), /dimension/)
+  assertThrows(() => parseQuery({ app: 'a', where: { day: '1' } }, NOW), /dimension/)
+  assertThrows(() => parseQuery({ app: 'a', where: { week: '1' } }, NOW), /dimension/)
   assertThrows(() => parseQuery({ app: 'a', where: { 'x/y': '1' } }, NOW), /dimension/)
   assertThrows(() => parseQuery({ app: 'a', where: { page: 1 } }, NOW), /text/)
   assertThrows(() => parseQuery({ app: 'a', groupBy: ['at'] }, NOW), /dimension/)
-  assertThrows(() => parseQuery({ app: 'a', measures: ['sum'] }, NOW), /not known/)
-  assertThrows(() => parseQuery({ app: 'a', measures: ['readyMs.p100'] }, NOW), /not known/)
-  assertThrows(() => parseQuery({ app: 'a', measures: ['readyMs.under:2550'] }, NOW), /significant/)
-  assertThrows(() => parseQuery({ app: 'a', measures: ['readyMs.under:0'] }, NOW), /significant/)
-  assertThrows(
-    () => parseQuery({ app: 'a', measures: ['readyMs.under:9000000'] }, NOW),
-    /significant/,
-  )
-  assertEquals(parseQuery({ app: 'a', measures: ['readyMs.under:2500'] }, NOW).measures.length, 1)
+  assertThrows(() => parseQuery({ app: 'a', measures: ['sum'] }, NOW), /records and visits/)
+  assertThrows(() => parseQuery({ app: 'a', measures: ['readyMs.p75'] }, NOW), /records and visits/)
+  assertThrows(() => parseQuery({ app: 'a', groupBy: ['day', 'week'] }, NOW), /one of day/)
+  assertThrows(() => parseQuery({ app: 'a', groupBy: ['constructor'] }, NOW), /dimension/)
   assertThrows(() => parseQuery({ app: 'a', limit: 0 }, NOW), /limit/)
   assertThrows(() => parseQuery({ app: 'a', select: [] }, NOW), /unknown/)
 })

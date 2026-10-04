@@ -10,7 +10,7 @@ import {
 import { assert, assertEquals, assertRejects, temporaryDir } from './assert.js'
 
 const visits = [
-  { type: 'page', visit: 'v1', at: 1, page: '/invoice', readyMs: 100, country: 'PL', plan: 'pro' },
+  { type: 'page', visit: 'v1', at: 1, page: '/invoice', country: 'PL', plan: 'pro' },
   { type: 'page', visit: 'v2', at: 2, page: '/invoice/:id', country: 'PL', plan: 'pro' },
   { type: 'seen', visit: 'v3', at: 3, page: '/invoice', zone: 'a.b', country: 'EN' },
   { type: 'error', visit: 'v4', at: 4, page: '/invoice', country: 'PL', plan: 'free' },
@@ -30,9 +30,9 @@ Deno.test('an append writes one line per record in every column', async () => {
   const commit = await readCommit(raw)
   assertEquals(commit.rows, 4)
   assertEquals(commit.wal, 2)
-  const day = await readDay(dir, ['visit', 'readyMs', 'name'])
+  const day = await readDay(dir, ['visit', 'zone', 'name'])
   assertEquals(day.columns.visit, ['v1', 'v2', 'v3', 'v4'])
-  assertEquals(day.columns.readyMs, ['100', null, null, null])
+  assertEquals(day.columns.zone, [null, null, 'a.b', null])
   assertEquals(day.columns.name, [null, null, null, null])
   await Deno.remove(dir, { recursive: true })
 })
@@ -88,7 +88,7 @@ Deno.test('sealing sorts the rows, keeps them aligned and runs the values', asyn
     at: 1000 - index,
   }))
   await appendRecords({ dir: `${dir}/raw-1`, segment: 1, records: many })
-  const columns = ['type', 'visit', 'at', 'page', 'readyMs', 'zone', 'country', 'plan']
+  const columns = ['type', 'visit', 'at', 'page', 'zone', 'country', 'plan']
   const before = rowsOf(await readDay(dir, columns), columns).map((row) => JSON.stringify(row))
     .sort()
   assert(await sealDay(dir))
@@ -140,7 +140,6 @@ Deno.test('sealing in small chunks writes the same files as one chunk', async ()
     'meta.json',
     'page.rle',
     'plan.rle',
-    'readyMs.rle',
     'summary-counts.tsv',
     'summary-tuples.tsv',
     'summary-visits.tsv',

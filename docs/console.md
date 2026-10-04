@@ -57,34 +57,121 @@ To use the console of another machine, forward the port with SSH, such as
 
 The reports and Explore have a bar at the top:
 
-| Control    | What it does                                                                           |
-| ---------- | -------------------------------------------------------------------------------------- |
-| Servers    | the saved servers to ask. Empty means the default server. More servers add up.         |
-| App        | the app of the reports                                                                 |
-| Period     | today, or the last 7, 30 or 90 days. The last day is today.                            |
-| Days (UTC) | any range of days. A day is a UTC day, as in the queries.                              |
-| Run again  | sends the queries again, and reads the apps again. Use it to see new records of today. |
+| Control         | What it does                                                                           |
+| --------------- | -------------------------------------------------------------------------------------- |
+| Servers         | the saved servers to ask. Empty means the default server. More servers add up.         |
+| App             | the app of the report. The Apps report has no app control, because it shows all apps.  |
+| Period          | the last 30 days, 3 months, 6 months, 1 year or 5 years. The last day is today.        |
+| From - to (UTC) | any range of days. A day is a UTC day, as in the queries.                              |
+| Run again       | sends the queries again, and reads the apps again. Use it to see new records of today. |
+
+The length of the range sets the size of one bar in the charts:
+
+| Range              | One bar is                                 |
+| ------------------ | ------------------------------------------ |
+| up to 45 days      | one day                                    |
+| 46 to 200 days     | one week. A week starts on Monday, in UTC. |
+| more than 200 days | one month                                  |
+
+A note under the bar tells the size of one bar. The first and the last bar can hold a part of a week
+or a month only.
+
+Each total of a report has a change. The change compares the total with the previous period. The
+previous period has the same number of days and ends on the day before the first day of the range.
+The change shows as a word and a colour, such as "up 8%" or "down 3%". "new" means that the previous
+period has no record.
 
 A report shows a notice when a server does not answer, when the query skips days, or when the app
 has a different app map or different segments on the servers. See [Queries](query.md#the-answer).
 
 ## Reports
 
-| Report   | What it shows                                                                                                                                                                                         |
-| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Overview | the visits, the page views, the share of fast page views, the ready time p75, the errors and the interactions. The traffic, the speed and the errors per day. The top pages, and the errors per page. |
-| Pages    | the views, the visits, the interactions, the outcomes, the errors and the speed of each page. Choose a page to see its zones, its outcomes and its speed per day.                                     |
-| Speed    | the share of the page views that were ready in less than 1, 2.5 or 4 seconds. The percentiles p50, p75 and p95 per day. The distribution of the ready time. The speed per country and per page.       |
-| Audience | the visits per country, the records per type, and the visits per value of each segment of the app.                                                                                                    |
-| Explore  | any query of the app, with a table and a chart of the result.                                                                                                                                         |
+| Report   | What it shows                                                                                    |
+| -------- | ------------------------------------------------------------------------------------------------ |
+| Apps     | the visits of each registered app, their change and their share of all visits                    |
+| Pages    | the most and the least visited pages of the app, and the pages of the app map with no view       |
+| Zones    | how often each zone was seen and used on each page, and the zones that people see but do not use |
+| Outcomes | how often the visits reached each outcome, and the share of the visits with an outcome           |
+| Errors   | the pages with the most errors, and the errors per 100 page views                                |
 
-A fast page view is a `page` record with a `readyMs` below the limit. The share is the measure
-`readyMs.under:<ms>`, see [Queries](query.md).
+A chart of a report shows one column per bar. The column stacks the 10 items with the highest total,
+and puts all other items into "Other". Move the pointer over a column to see the counts.
+
+Pages, Zones, Outcomes and Errors have filters under the bar. A filter of a segment shows the values
+of the segment in the range. "Clear the filters" removes all the filters.
 
 The current day is not sealed. So a report always reads its records, and a long day can make the
 report slower. See [Storage](storage.md).
 
-### Explore
+### Apps
+
+The chart shows the visits of each app, one on top of the other. Choose the apps on the chart in
+"Apps on the chart". Empty means all apps. The table shows each app with its visits, the visits of
+the previous period, the change and the share of all visits. The tiles show the visits of all apps,
+the most visited app and the app with the highest growth.
+
+### Pages
+
+The tables show the 10 pages with the most views, and the 10 pages with the fewest views. A page
+view is a `page` record. The least visited pages include every page of the app map with no view,
+marked "Never reached".
+
+The chart shows the views of the top 10 pages. Choose a page in "Page on the chart" to see the views
+of that page only. The page can be any page of the app map. The other filters are the segments of
+the app and the country. They apply to the tables and to the chart.
+
+The tiles show the page views, the pages of the app map with views, and the pages with no view.
+
+### Zones
+
+The tables show each zone on each page:
+
+| Column         | What it is                                                                  |
+| -------------- | --------------------------------------------------------------------------- |
+| Seen           | the `seen` records of the zone. One page view sends one at most.            |
+| Used           | the `used` records of the zone. One page view sends one at most.            |
+| Used when seen | Used divided by Seen, in percent: the share of the views that used the zone |
+| Flag           | "Never used", or "Seen, rarely used"                                        |
+
+"Seen, rarely used" marks a zone that was seen 100 times or more and used in less than 5% of them.
+The first table shows the 10 most used zones. The second table shows the 10 least used zones.
+
+The chart shows the uses of the top 10 zones. One visit can use several zones, so a visit can count
+in more than one part of a column. Choose a zone to see that zone only. The chart then shows the
+views that used the zone, and the views that saw the zone but did not use it.
+
+The filters are the page, the zone, the segments and the country. The tiles show the uses of all
+zones, the most used zone, the number of zones seen, and the number of zones that are seen but
+rarely used.
+
+### Outcomes
+
+The table shows the 10 most reached outcomes, with the count, the share of all outcomes, the count
+of the previous period and the change. The chart shows the same outcomes per bar.
+
+Choose one or more outcomes in "Outcomes" to see only those outcomes in the table and in the chart.
+The other filters are the page and the segments.
+
+The tiles show the count of all outcomes, the share of the visits with an outcome, and the most
+reached outcome. The share is the visits with an `outcome` record, divided by the visits with a
+`page` record.
+
+The report does not count the visits of each outcome. That query cannot use the daily summaries and
+reads all the records of the range. Use Explore or `imp-aly query` for it.
+
+### Errors
+
+The table shows the 10 pages with the most errors, with the page views, the errors per 100 views and
+the change. The chart shows the errors of the same pages per bar. Choose a page to see that page
+only. The other filters are the segments.
+
+One `error` record stands for up to 5 seconds of failures on one page view. The tiles show the
+errors, the errors per 100 page views, and the pages of the app map with errors. More errors than in
+the previous period show in red.
+
+## Explore
+
+Explore is in the Manage group of the menu.
 
 Build a query in one of two ways:
 
@@ -92,26 +179,31 @@ Build a query in one of two ways:
   values that the servers hold in the chosen days. `Rows` is the `limit` of the query.
 - **JSON.** Write the query as JSON. A field of the JSON wins over the bar, such as `from` or `app`.
 
+Group by one time field at most: `day`, `week` or `month`. A query that counts `visits` and names
+`zone` or `name` cannot use the daily summaries. It reads all the records of the range, so it is
+slow.
+
 `Examples` loads the queries of the imp report. The result has these tabs:
 
-| Tab          | What it shows                                             |
-| ------------ | --------------------------------------------------------- |
-| Table        | the rows. Click a column to sort it.                      |
-| Chart        | a line per day when the first group is `day`, else bars   |
-| Servers      | the days, the summary days and the records of each server |
-| Skipped days | the days that the query cannot read, with the reason      |
-| CLI          | the same query as an `imp-aly query` command, to copy     |
+| Tab          | What it shows                                                                |
+| ------------ | ---------------------------------------------------------------------------- |
+| Table        | the rows. Click a column to sort it.                                         |
+| Chart        | a line over time when the first group is `day`, `week` or `month`, else bars |
+| Servers      | the days, the summary days and the records of each server                    |
+| Skipped days | the days that the query cannot read, with the reason                         |
+| CLI          | the same query as an `imp-aly query` command, to copy                        |
 
 `CSV` and `JSON` download the result. `Save` keeps the query of the builder under a name, in the
 storage of the browser. A saved query runs again with a click.
 
 ## Manage
 
-| Page    | What you can do                                                                                                                                                                    |
-| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Apps    | see the apps of the servers in the bar. Register an app from a URL, a file or text, with segments. See the reasons of the rejected records. Read the app map again. Remove an app. |
-| Servers | see the saved servers, and the state of each one: the version, the free disk space and the problems of the storage. Save a server. Make a server the default. Remove a server.     |
-| Backup  | download a backup of one server, of one app or all apps, and of some days or all days. Restore a backup into a server.                                                             |
+| Page            | What you can do                                                                                                                                                                    |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Explore         | run any query of the app. See [Explore](#explore).                                                                                                                                 |
+| Registered apps | see the apps of the servers in the bar. Register an app from a URL, a file or text, with segments. See the reasons of the rejected records. Read the app map again. Remove an app. |
+| Servers         | see the saved servers, and the state of each one: the version, the free disk space and the problems of the storage. Save a server. Make a server the default. Remove a server.     |
+| Backup          | download a backup of one server, of one app or all apps, and of some days or all days. Restore a backup into a server.                                                             |
 
 "Register" registers the app on each server of the bar, like `imp-aly app add -s a,b`. See
 [Apps](apps.md).

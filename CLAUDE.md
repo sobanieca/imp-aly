@@ -50,7 +50,6 @@ See `adr/plain-javascript-dependency-free-server.md` and `adr/local-console.md`.
 | `src/summary.js`                       | the daily summary of a sealed day: build, parse and check                                                           |
 | `src/backup.js`, `src/tar.js`          | the backup stream of the summaries, and the restore                                                                 |
 | `src/query.js`, `query-worker.js`      | the query parser and engine, run in a worker, and the merge of the answers of servers                               |
-| `src/ready.js`                         | the `readyMs` buckets: count, merge, percentiles and shares                                                         |
 | `src/retention.js`                     | `df`, the free space rule, old days to summaries, then removal                                                      |
 | `src/auth.js`, `src/sha256.js`         | the key, the one-time tokens signed per request, and a streaming SHA-256                                            |
 | `src/servers.js`, `src/api-client.js`  | the saved servers of the client, the calls to the API, and the merge of the answers of several servers              |

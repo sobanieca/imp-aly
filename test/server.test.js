@@ -76,13 +76,13 @@ Deno.test('collects valid records and answers queries', async () => {
     assertEquals((await send(adminBase, 'GET', '/apps')).status, 401)
     const added = await admin('PUT', '/apps/myapp', { map: MAP, segments: ['plan'] })
     assertEquals(added.status, 200)
-    assertEquals(added.body.pages, 3)
+    assertEquals(added.body.pages.length, 3)
 
     const posted = await call('POST', '/collect/myapp', [
-      record({ type: 'page', readyMs: 420, plan: 'pro' }),
+      record({ type: 'page', plan: 'pro' }),
       record({ type: 'seen', zone: 'myapp.send' }),
-      record({ type: 'interaction', zone: null }),
-      record({ type: 'page', readyMs: 1, page: '/admin' }),
+      record({ type: 'used', zone: null }),
+      record({ type: 'page', page: '/admin' }),
     ])
     assertEquals(posted.status, 202)
     assertEquals(posted.body, { accepted: 3, rejected: 1 })
@@ -103,9 +103,9 @@ Deno.test('collects valid records and answers queries', async () => {
     })
     assertEquals(result.body.groups.map((group) => [group.by[0], group.records]).sort(), [
       ['error', 1],
-      ['interaction', 1],
       ['page', 1],
       ['seen', 1],
+      ['used', 1],
     ])
     const plans = await admin('POST', '/query', { app: 'myapp', where: { plan: 'pro' } })
     assertEquals(plans.body.groups, [{ by: [], records: 1 }])
@@ -140,6 +140,9 @@ Deno.test('rejects malformed and oversized requests', async () => {
     )
     assertEquals((await admin('PUT', '/apps/x', { map: MAP, segments: ['page'] })).status, 400)
     assertEquals((await admin('PUT', '/apps/x', { map: MAP, segments: ['Page'] })).status, 400)
+    for (const segment of ['week', 'constructor', 'toString']) {
+      assertEquals((await admin('PUT', '/apps/x', { map: MAP, segments: [segment] })).status, 400)
+    }
     assertEquals(
       (await admin('PUT', '/apps/x', { map: MAP, segments: ['plan', 'Plan'] })).status,
       400,

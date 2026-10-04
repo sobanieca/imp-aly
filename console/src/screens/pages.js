@@ -1,17 +1,17 @@
 import { component } from 'imp'
 import { useHttpClient } from 'imp/http'
-import { computed, initState } from 'imp/state'
-import { button } from 'imp/std'
-import { chart, table } from 'imp/std/data'
-import { emptyState } from 'imp/std/display'
-import { textField } from 'imp/std/inputs'
-import { drawer, stack } from 'imp/std/layout'
-import { problemsOf, runQueries } from '../lib/api.js'
-import { formatCount, formatMs, formatPercent } from '../lib/format.js'
-import { FAST_MS, fastMeasure } from '../lib/measures.js'
-import { dailySeries, indexBy, labelOf, pivot } from '../lib/rows.js'
+import { table } from 'imp/std/data'
+import { tag } from 'imp/std/display'
+import { stack } from 'imp/std/layout'
+import { previousScope, problemsOf, runQuery } from '../lib/api.js'
+import { barOf, bucketsOf } from '../lib/days.js'
+import { formatCount } from '../lib/format.js'
+import { changeOf, leastVisited, MAX_ROWS, NEVER_REACHED, withoutFields } from '../lib/reports.js'
+import { indexBy } from '../lib/rows.js'
+import { stackedSeries, TOP, topKeys } from '../lib/series.js'
 import {
-  columns,
+  changeHint,
+  changeTag,
   dataNote,
   noRecords,
   problemNotices,
@@ -19,12 +19,10 @@ import {
   reportError,
   reportLoading,
   reportScreen,
-  wide,
+  statTile,
+  tileGrid,
+  trendChart,
 } from '../parts/report.js'
-
-const FAST = fastMeasure()
-
-const ALL = 100_000
 
 const countColumn = (key, label) => ({
   key,
@@ -34,218 +32,141 @@ const countColumn = (key, label) => ({
   render: (row) => formatCount(row[key]),
 })
 
-const pageDetail = component('aly-page-detail', {
-  loading: () => reportLoading(),
-  setup: async (self, { scope, page }) => {
-    const api = useHttpClient(self, 'aly.api')
-    const [zones, outcomes, perDay] = await runQueries(api, scope, [
-      { where: { page, type: ['seen', 'interaction'] }, groupBy: ['zone', 'type'], limit: 50 },
-      { where: { page, type: 'outcome' }, groupBy: ['name'], limit: 30 },
-      {
-        where: { page, type: ['page', 'error'] },
-        groupBy: ['day', 'type'],
-        measures: ['records', FAST, 'readyMs.p75'],
-      },
-    ])
-    const zoneTable = pivot(zones.rows, { by: 'zone', across: 'type', value: 'records' })
-    const zoneNames = [...zoneTable.keys()]
-    const days = { from: scope.from, to: scope.to }
-    const views = perDay.rows.filter((row) => row.type === 'page')
-    const errors = perDay.rows.filter((row) => row.type === 'error')
-    const traffic = dailySeries(views, {
-      ...days,
-      series: [{ name: 'Views', color: 'teal', pick: ([row]) => row.records }],
-    })
-    const errorSeries = dailySeries(errors, {
-      ...days,
-      series: [{ name: 'Errors', color: 'red', pick: ([row]) => row.records }],
-    })
-    const speed = dailySeries(views, {
-      ...days,
-      series: [{ name: 'p75', color: 'purple', pick: ([row]) => row['readyMs.p75'], empty: null }],
-    })
-    return stack(
-      { gap: 5 },
-      ...problemNotices(problemsOf([zones, outcomes, perDay])),
-      reportCard(
-        { title: 'Views and errors per day' },
-        chart({
-          type: 'column',
-          label: `Views and errors of ${page} per day`,
-          labels: traffic.labels,
-          series: [...traffic.series, ...errorSeries.series],
-        }),
-      ),
-      reportCard(
-        { title: 'Ready time p75 per day' },
-        chart({ type: 'line', label: `Ready time p75 of ${page}`, ...speed, format: formatMs }),
-      ),
-      reportCard(
-        {
-          title: 'Zones',
-          description: 'How often each zone was seen, and how often a person used it.',
-        },
-        zoneNames.length
-          ? chart({
-            type: 'bar',
-            label: `Zones of ${page}`,
-            labels: zoneNames,
-            series: [
-              {
-                name: 'Seen',
-                color: 'blue',
-                values: zoneNames.map((zone) => zoneTable.get(zone).seen ?? 0),
-              },
-              {
-                name: 'Used',
-                color: 'orange',
-                values: zoneNames.map((zone) => zoneTable.get(zone).interaction ?? 0),
-              },
-            ],
-          })
-          : emptyState({ title: 'No zone records', description: 'The page sent no zone.' }),
-      ),
-      reportCard(
-        { title: 'Outcomes' },
-        outcomes.rows.length
-          ? chart({
-            type: 'bar',
-            label: `Outcomes of ${page}`,
-            labels: outcomes.rows.map((row) => labelOf(row.name)),
-            series: [{
-              name: 'Outcomes',
-              color: 'green',
-              values: outcomes.rows.map((row) => row.records),
-            }],
-          })
-          : emptyState({ title: 'No outcomes', description: 'The page sent no outcome.' }),
-      ),
-    )
-  },
-  error: (self, error) => reportError(error),
-})
+const changeColumn = {
+  key: 'percent',
+  label: 'Change',
+  align: 'end',
+  sortable: true,
+  sortValue: (row) => row.change.percent ?? Infinity,
+  render: (row) => changeTag(row.change),
+}
 
 const pagesReport = component('aly-pages-report', {
   loading: () => reportLoading(),
-  setup: async (self, scope) => {
+  setup: async (self, { scope, filters, mapPages }) => {
     const api = useHttpClient(self, 'aly.api')
-    const filter = initState(self, 'aly.pages.filter', '')
-    const selected = initState(self, 'aly.pages.selected', null)
-    const open = initState(self, 'aly.pages.open', false)
-    const [byType, byPage] = await runQueries(api, scope, [
-      {
-        where: { type: ['page', 'interaction', 'outcome', 'error'] },
-        groupBy: ['page', 'type'],
-        limit: ALL,
-      },
-      {
-        where: { type: 'page' },
+    const bar = barOf(scope.from, scope.to)
+    const buckets = bucketsOf(scope.from, scope.to, bar)
+    const where = { ...withoutFields(filters, ['page']), type: 'page' }
+    const trendWhere = { ...where, ...(filters.page === undefined ? {} : { page: filters.page }) }
+    const [current, before, trend] = await Promise.all([
+      runQuery(api, scope, {
+        where,
         groupBy: ['page'],
-        measures: ['records', 'visits', FAST, 'readyMs.p75'],
-        limit: ALL,
-      },
+        measures: ['records', 'visits'],
+        limit: MAX_ROWS,
+      }),
+      runQuery(api, previousScope(scope), {
+        where,
+        groupBy: ['page'],
+        measures: ['records'],
+        limit: MAX_ROWS,
+      }),
+      runQuery(api, scope, {
+        where: trendWhere,
+        groupBy: [bar, 'page'],
+        measures: ['records'],
+        limit: MAX_ROWS,
+      }),
     ])
-    if (!byType.days) return noRecords(byType)
-    const counts = pivot(byType.rows, { by: 'page', across: 'type', value: 'records' })
-    const speed = indexBy(byPage.rows, 'page')
-    const rows = [...new Set([...counts.keys(), ...speed.keys()])].map((page) => ({
-      id: page,
-      page,
-      views: counts.get(page)?.page ?? 0,
-      visits: speed.get(page)?.visits ?? 0,
-      interactions: counts.get(page)?.interaction ?? 0,
-      outcomes: counts.get(page)?.outcome ?? 0,
-      errors: counts.get(page)?.error ?? 0,
-      fast: speed.get(page)?.[FAST] ?? null,
-      p75: speed.get(page)?.['readyMs.p75'] ?? null,
-    })).sort((a, b) => b.views - a.views)
-    const show = (page) => {
-      selected.set(page)
-      open.set(true)
+    if (!current.days) return noRecords(current)
+    const previous = indexBy(before.rows, 'page')
+    const withChange = (row) => {
+      const earlier = previous.get(row.page)?.records ?? 0
+      return { ...row, previous: earlier, change: changeOf(row.views, earlier) }
     }
-    const top = rows.slice(0, 12)
+    const views = current.rows.reduce((total, row) => total + row.records, 0)
+    const earlier = before.rows.reduce((total, row) => total + row.records, 0)
+    const top = current.rows.filter((row) => row.records > 0).slice(0, TOP).map((row) =>
+      withChange({ id: row.page, page: row.page, views: row.records, visits: row.visits })
+    )
+    const least = leastVisited(current.rows, mapPages).map((row) =>
+      withChange({ id: row.page, ...row })
+    )
+    const known = mapPages.length ? mapPages : current.rows.map((row) => row.page)
+    const reached = known.filter((name) => current.rows.some((row) => row.page === name)).length
+    const keys = filters.page === undefined ? topKeys(trend.rows, 'page') : [filters.page]
+    const series = stackedSeries(trend.rows, {
+      bar,
+      field: 'page',
+      buckets,
+      keys,
+      other: filters.page === undefined,
+    })
     return stack(
       { gap: 5 },
-      ...problemNotices(problemsOf([byType, byPage])),
-      columns(
+      ...problemNotices(problemsOf([current, before, trend])),
+      tileGrid(
+        statTile({
+          label: 'Page views',
+          value: formatCount(views),
+          hint: changeHint(changeOf(views, earlier), earlier),
+        }),
+        statTile({
+          label: 'Pages with views',
+          value: `${formatCount(reached)} of ${formatCount(known.length)}`,
+          hint: 'The pages of the app map',
+        }),
+        statTile({
+          label: NEVER_REACHED,
+          value: formatCount(known.length - reached),
+          hint: 'Pages of the app map with no view',
+        }),
+      ),
+      reportCard(
+        {
+          title: filters.page === undefined ? 'Views of the top pages' : `Views of ${filters.page}`,
+          description: filters.page === undefined
+            ? 'The 10 pages with the most views, and the views of all other pages as "Other".'
+            : 'The views of the chosen page.',
+        },
+        trendChart({ label: 'Page views', bar, buckets, series }),
+      ),
+      stack(
+        { gap: 5 },
         reportCard(
-          { title: 'Views per page', description: 'The 12 pages with the most views.' },
-          chart({
-            type: 'bar',
-            label: 'Views per page',
-            labels: top.map((row) => row.page),
-            series: [{ name: 'Views', color: 'teal', values: top.map((row) => row.views) }],
+          { title: 'Most visited pages', description: 'The 10 pages with the most views.' },
+          table({
+            label: 'Most visited pages',
+            rows: top,
+            columns: [
+              { key: 'page', label: 'Page', sortable: true },
+              countColumn('views', 'Views'),
+              countColumn('visits', 'Visits'),
+              changeColumn,
+            ],
           }),
         ),
         reportCard(
           {
-            title: 'Fast views per page',
-            description: `The share of the views that were ready in less than ${
-              FAST_MS / 1000
-            } seconds.`,
+            title: 'Least visited pages',
+            description:
+              'The 10 pages with the fewest views, and every page of the app map with no view.',
           },
-          chart({
-            type: 'bar',
-            label: 'Fast views per page',
-            labels: top.map((row) => row.page),
-            series: [{ name: 'Fast views', color: 'green', values: top.map((row) => row.fast) }],
-            format: formatPercent,
+          table({
+            label: 'Least visited pages',
+            rows: least,
+            columns: [
+              {
+                key: 'page',
+                label: 'Page',
+                sortable: true,
+                render: (row) =>
+                  row.never
+                    ? stack(
+                      { gap: 1 },
+                      row.page,
+                      tag({ color: 'orange', size: 'sm' }, NEVER_REACHED),
+                    )
+                    : row.page,
+              },
+              countColumn('views', 'Views'),
+              changeColumn,
+            ],
           }),
         ),
       ),
-      reportCard(
-        {
-          title: 'All pages',
-          description: 'Choose a page to see its zones, its outcomes and its speed per day.',
-        },
-        textField({
-          type: 'search',
-          label: 'Filter',
-          value: filter,
-          placeholder: 'Part of a page path',
-        }),
-        table({
-          label: 'All pages',
-          rows,
-          filter,
-          columns: [
-            {
-              key: 'page',
-              label: 'Page',
-              sortable: true,
-              render: (row) =>
-                button(
-                  { variant: 'link', events: { click: () => show(row.page) } },
-                  row.page,
-                ),
-            },
-            countColumn('views', 'Views'),
-            countColumn('visits', 'Visits'),
-            countColumn('interactions', 'Interactions'),
-            countColumn('outcomes', 'Outcomes'),
-            countColumn('errors', 'Errors'),
-            {
-              key: 'fast',
-              label: `Under ${FAST_MS / 1000} s`,
-              align: 'end',
-              sortable: true,
-              render: (row) => formatPercent(row.fast),
-            },
-            {
-              key: 'p75',
-              label: 'p75',
-              align: 'end',
-              sortable: true,
-              render: (row) => formatMs(row.p75),
-            },
-          ],
-        }),
-      ),
-      dataNote(byType),
-      wide(drawer(
-        { title: computed([selected], (page) => page ?? 'Page'), open },
-        selected.view((page) => (page ? pageDetail({ scope, page }) : null)),
-      )),
+      dataNote(current),
     )
   },
   error: (self, error) => reportError(error),
@@ -255,8 +176,9 @@ export const pagesScreen = component('aly-pages', {
   setup: (self) =>
     reportScreen(self, {
       title: 'Pages',
-      description:
-        'The views, the visits, the interactions, the errors and the speed of each page.',
-      render: (scope) => pagesReport(scope),
+      description: 'The views of each page, the most and the least visited pages.',
+      filters: ['page', 'segments', 'country'],
+      pageLabel: 'Page on the chart',
+      render: (value) => pagesReport(value),
     }),
 })

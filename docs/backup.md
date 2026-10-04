@@ -12,8 +12,8 @@ imp-aly restore imp-aly-2026-09.tar.gz
 ## What a backup holds
 
 A backup holds the daily summary of each sealed day of each app. The summary has the number of
-records and the `readyMs` buckets per combination of `type`, `page`, `zone`, `name`, `country` and
-the segments, and the pages and types of each visit. See [Storage](storage.md).
+records per combination of `type`, `page`, `zone`, `name`, `country` and the segments, and the pages
+and types of each visit. See [Storage](storage.md).
 
 A backup does not hold:
 

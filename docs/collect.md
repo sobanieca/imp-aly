@@ -23,13 +23,17 @@ records of the same request.
 
 The server accepts the five record types of imp, with the fields that imp gives them:
 
-| `type`        | Fields                                |
-| ------------- | ------------------------------------- |
-| `page`        | `visit`, `at`, `page`, `readyMs`      |
-| `seen`        | `visit`, `at`, `page`, `zone`         |
-| `interaction` | `visit`, `at`, `page`, `zone` or null |
-| `outcome`     | `visit`, `at`, `page`, `name`         |
-| `error`       | `visit`, `at`, `page`                 |
+| `type`    | Fields                                | One record per                                |
+| --------- | ------------------------------------- | --------------------------------------------- |
+| `page`    | `visit`, `at`, `page`                 | page view                                     |
+| `seen`    | `visit`, `at`, `page`, `zone`         | zone that comes into view, once per page view |
+| `used`    | `visit`, `at`, `page`, `zone` or null | zone that a person uses, once per page view   |
+| `outcome` | `visit`, `at`, `page`, `name`         | outcome that the app reports                  |
+| `error`   | `visit`, `at`, `page`                 | 5 seconds of failures on a page               |
+
+A person uses a zone with a click, a tap, a key or an input in it. A `used` record with a null
+`zone` means that the person used the page at all. So `used` divided by `seen` is the share of the
+page views where a person used a zone after it came into view.
 
 A record can also carry the segments that you declare for the app, such as `plan`. See
 [Apps](apps.md).
@@ -46,7 +50,6 @@ one check fails:
 - `at` is a whole number of milliseconds since the epoch, in UTC. It is at most 1 hour before the
   time of the server and at most 1 hour after it.
 - `page` is a line of the app map. A path such as `/invoices/42` is not a pattern, so it fails.
-- `readyMs` is a number from 0 to 3600000. The server rounds it to a whole number.
 - `zone` and `name` are namespaced names, such as `myapp.send`, of up to 128 characters. A name has
   two or more parts with a `.` between them. A part has only ASCII letters, digits, `-` and `_`.
 - A segment value is null, a text, a number or a boolean. The server stores a number and a boolean
@@ -102,9 +105,9 @@ after it.
 | 24 h   | 200,000       | `--limit-24h` |
 
 The defaults let one address send the records of a small office of active people. One active tab of
-an imp app sends about 70 records a minute: one `interaction` per zone per 5 seconds, plus the
-`page` and `seen` records of each navigation. Raise the limits when many people share one address,
-such as the users of a large company network.
+an imp app sends about 20 records a minute: for each page view, one `page` record, and at most one
+`seen` and one `used` record per zone. Raise the limits when many people share one address, such as
+the users of a large company network.
 
 A window slides. The server weighs the count of the previous window by the part of it that is still
 inside the window. So an address cannot double its limit at the edge of a window.

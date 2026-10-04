@@ -81,7 +81,7 @@ Deno.test('the console registers an app, queries it and removes it through a sav
     const added = await call('PUT', '/api/apps/myapp', { map: MAP, segments: ['plan'], extra: 1 })
     assertEquals(added.status, 200)
     assertEquals(added.body.apps.map(({ server, name, pages }) => [server, name, pages]), [
-      ['one', 'myapp', 3],
+      ['one', 'myapp', ['/', '/invoices', '/invoices/:id']],
     ])
     const listed = await call('GET', '/api/apps')
     assertEquals(listed.body.apps.map(({ name, segments }) => [name, segments]), [
@@ -90,7 +90,7 @@ Deno.test('the console registers an app, queries it and removes it through a sav
 
     const posted = await fetch(`${backend.collect}/collect/myapp`, {
       method: 'POST',
-      body: JSON.stringify({ type: 'page', visit: 'v1', at: Date.now(), page: '/', readyMs: 420 }),
+      body: JSON.stringify({ type: 'page', visit: 'v1', at: Date.now(), page: '/' }),
     })
     assertEquals(posted.status, 202)
     await posted.body?.cancel()
@@ -98,17 +98,17 @@ Deno.test('the console registers an app, queries it and removes it through a sav
       const result = await call('POST', '/api/query', {
         app: 'myapp',
         groupBy: ['type'],
-        measures: ['records', 'readyMs.under:2500'],
+        measures: ['records', 'visits'],
       })
       return result.body.matched === 1 ? result : null
     })
-    assertEquals(answer.body.rows, [{ type: 'page', records: 1, 'readyMs.under:2500': 100 }])
+    assertEquals(answer.body.rows, [{ type: 'page', records: 1, visits: 1 }])
     assertEquals(answer.body.failedServers, [])
     assertEquals(answer.body.warnings, [])
 
     const bad = await call('POST', '/api/query', { app: 'myapp', measures: ['nope'] })
     assertEquals(bad.status, 400)
-    assert(bad.body.error.includes('measure "nope" is not known'))
+    assert(bad.body.error.includes('measures is a list of records and visits'))
 
     const status = await call('GET', '/api/status?server=one')
     assertEquals([status.body.server, status.body.apps], ['one', 1])

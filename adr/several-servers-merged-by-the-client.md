@@ -7,8 +7,7 @@ must not share a disk, a database or a network protocol, because each server is 
 data folder. The owner still wants one report over all the records.
 
 A count of records adds up across servers. A count of distinct visits adds up only when no visit has
-records on two servers. A percentile does not add up: the mean of the p75 of each server is not the
-p75 of all the records.
+records on two servers.
 
 imp makes one random visit id per document load. A reload starts a new visit. imp keeps no cookie
 and nothing in `localStorage` or `sessionStorage`.
@@ -25,9 +24,8 @@ and adds up the counts of each group.**
 - When the chosen server fails, the sink can change to another server, and keeps the new one for the
   rest of the visit. Only such a visit has records on two servers, and it counts twice.
 - The servers do not know each other. There is no proxy, no coordinator and no replication.
-- A server answers a query with counts, not with measures: `records`, `visits`, and the `readyMs`
-  count, sum, minimum, maximum and buckets of each group. The client adds them, then calculates the
-  measures. So the answer of N servers equals the answer of one server with all the records. A test
+- A server answers a query with the counts of each group: `records` and `visits`. The client adds
+  them. So the answer of N servers equals the answer of one server with all the records. A test
   splits the visits of a fixture over two data folders and checks this for every query.
 - A server that fails does not stop the query. The client prints the result of the other servers,
   lists the failed server, and exits with code 1.
@@ -50,4 +48,6 @@ and adds up the counts of each group.**
   counts document loads, per day.
 - Each server keeps its own app registry, key and backups. The owner registers each app on every
   server.
-- A caller of the API must add up the counts and calculate the measures itself.
+- A caller of the API must add up the counts itself.
+- A measure that does not add up, such as a percentile or a count of distinct users, does not fit
+  this design.

@@ -87,8 +87,9 @@ Declare each segment when you register the app. The server rejects a record that
 the app does not declare. This keeps a typo or a forged field out of the data.
 
 - A segment name is 1 to 32 letters and digits, and starts with a letter.
-- These names are reserved, in any case: `type`, `visit`, `at`, `page`, `readyMs`, `zone`, `name`,
-  `country`, `day`, `records` and `visits`.
+- These names are reserved, in any case: `type`, `visit`, `at`, `page`, `zone`, `name`, `country`,
+  `day`, `week`, `month`, `records` and `visits`. The names of the built-in properties of a
+  JavaScript object, such as `constructor`, `toString` and `valueOf`, are reserved too.
 - Two segment names of one app must differ in more than the case, such as `plan` and `Plan`. Some
   file systems do not tell them apart.
 - An app has at most 16 segments.

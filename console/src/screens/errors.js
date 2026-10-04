@@ -1,0 +1,167 @@
+import { component } from 'imp'
+import { useHttpClient } from 'imp/http'
+import { table } from 'imp/std/data'
+import { emptyState } from 'imp/std/display'
+import { stack } from 'imp/std/layout'
+import { luCircleCheck } from 'imp/icons'
+import { previousScope, problemsOf, runQuery } from '../lib/api.js'
+import { barOf, bucketsOf } from '../lib/days.js'
+import { formatCount } from '../lib/format.js'
+import { changeOf, errorRows, MAX_ROWS } from '../lib/reports.js'
+import { stackedSeries, TOP, topKeys } from '../lib/series.js'
+import {
+  changeHint,
+  changeTag,
+  dataNote,
+  noRecords,
+  problemNotices,
+  reportCard,
+  reportError,
+  reportLoading,
+  reportScreen,
+  statTile,
+  tileGrid,
+  trendChart,
+} from '../parts/report.js'
+
+const per100 = (value) => (value === null ? '-' : value.toFixed(2))
+
+const errorsReport = component('aly-errors-report', {
+  loading: () => reportLoading(),
+  setup: async (self, { scope, filters, mapPages }) => {
+    const api = useHttpClient(self, 'aly.api')
+    const bar = barOf(scope.from, scope.to)
+    const buckets = bucketsOf(scope.from, scope.to, bar)
+    const one = filters.page !== undefined
+    const where = { ...filters, type: ['page', 'error'] }
+    const [current, before, trend] = await Promise.all([
+      runQuery(api, scope, {
+        where,
+        groupBy: ['page', 'type'],
+        measures: ['records'],
+        limit: MAX_ROWS,
+      }),
+      runQuery(api, previousScope(scope), {
+        where,
+        groupBy: ['page', 'type'],
+        measures: ['records'],
+        limit: MAX_ROWS,
+      }),
+      runQuery(api, scope, {
+        where: { ...filters, type: 'error' },
+        groupBy: [bar, 'page'],
+        measures: ['records'],
+        limit: MAX_ROWS,
+      }),
+    ])
+    if (!current.days) return noRecords(current)
+    const pages = errorRows(current.rows)
+    const previous = new Map(errorRows(before.rows).map((row) => [row.page, row.errors]))
+    const errors = pages.reduce((total, row) => total + row.errors, 0)
+    const views = pages.reduce((total, row) => total + row.views, 0)
+    const earlier = [...previous.values()].reduce((total, count) => total + count, 0)
+    const rows = pages.filter((row) => row.errors > 0).sort((a, b) => b.errors - a.errors)
+      .slice(0, TOP).map((row) => {
+        const last = previous.get(row.page) ?? 0
+        return { ...row, previous: last, change: changeOf(row.errors, last) }
+      })
+    const known = one ? [filters.page] : mapPages.length ? mapPages : pages.map((row) => row.page)
+    const failing = known.filter((name) => pages.some((row) => row.page === name && row.errors))
+    const keys = one ? [filters.page] : topKeys(trend.rows, 'page')
+    const series = stackedSeries(trend.rows, { bar, field: 'page', buckets, keys, other: !one })
+    return stack(
+      { gap: 5 },
+      ...problemNotices(problemsOf([current, before, trend])),
+      tileGrid(
+        statTile({
+          label: 'Errors',
+          value: formatCount(errors),
+          hint: changeHint(changeOf(errors, earlier), earlier, { upIsBad: true }),
+        }),
+        statTile({
+          label: 'Errors per 100 views',
+          value: per100(views ? (errors / views) * 100 : null),
+          hint: `${formatCount(views)} page views`,
+        }),
+        statTile({
+          label: 'Pages with errors',
+          value: `${formatCount(failing.length)} of ${formatCount(known.length)}`,
+          hint: 'The pages of the app map',
+        }),
+      ),
+      reportCard(
+        {
+          title: one ? `Errors of ${filters.page}` : 'Errors of the top pages',
+          description: `${
+            one
+              ? 'The errors of the chosen page.'
+              : 'The 10 pages with the most errors, and the errors of all other pages as "Other".'
+          } One error record stands for up to 5 seconds of failures on one page view.`,
+        },
+        trendChart({ label: 'Errors', bar, buckets, series }),
+      ),
+      reportCard(
+        {
+          title: 'Pages with the most errors',
+          description: 'The errors per 100 views come from the same query as the views.',
+        },
+        rows.length
+          ? table({
+            label: 'Pages with the most errors',
+            rows,
+            columns: [
+              { key: 'page', label: 'Page', sortable: true },
+              {
+                key: 'errors',
+                label: 'Errors',
+                align: 'end',
+                sortable: true,
+                render: (row) => formatCount(row.errors),
+              },
+              {
+                key: 'views',
+                label: 'Page views',
+                align: 'end',
+                sortable: true,
+                render: (row) => formatCount(row.views),
+              },
+              {
+                key: 'per100',
+                label: 'Per 100 views',
+                align: 'end',
+                sortable: true,
+                sortValue: (row) => row.per100 ?? Infinity,
+                render: (row) => per100(row.per100),
+              },
+              {
+                key: 'percent',
+                label: 'Change',
+                align: 'end',
+                sortable: true,
+                sortValue: (row) => row.change.percent ?? Infinity,
+                render: (row) => changeTag(row.change, { upIsBad: true }),
+              },
+            ],
+          })
+          : emptyState({
+            icon: luCircleCheck,
+            kind: 'success',
+            title: 'No errors',
+            description: 'No page sent an error record in these days.',
+          }),
+      ),
+      dataNote(current),
+    )
+  },
+  error: (self, error) => reportError(error),
+})
+
+export const errorsScreen = component('aly-errors', {
+  setup: (self) =>
+    reportScreen(self, {
+      title: 'Errors',
+      description: 'The pages with errors, and the errors per 100 page views.',
+      filters: ['page', 'segments'],
+      render: (value) => errorsReport(value),
+    }),
+})

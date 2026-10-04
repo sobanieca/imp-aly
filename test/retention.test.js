@@ -61,7 +61,7 @@ Deno.test('days with records go before older days that hold only a summary', asy
   await writeSummaryDay(`${dataDir}/apps/a/2026-09-01`, {
     rows: 0,
     files: {
-      counts: 'type\tpage\tzone\tname\tcountry\trecords\treadyMs\n',
+      counts: 'type\tpage\tzone\tname\tcountry\trecords\n',
       tuples: 'type\tpage\tcountry\n',
       visits: 'visits\ttuples\n',
     },

@@ -14,8 +14,8 @@ folder is record N.**
 
 - The layout is `apps/<app>/<day>/raw-<n>/<field>.txt`. A day is a folder, so a query of a range
   opens only the folders of its days, and retention removes a day with one delete.
-- The fields are `type`, `visit`, `at`, `page`, `readyMs`, `zone`, `name`, `country` and the
-  segments of the app. A field that a record does not have is an empty line, which is null.
+- The fields are `type`, `visit`, `at`, `page`, `zone`, `name`, `country` and the segments of the
+  app. A field that a record does not have is an empty line, which is null.
 - A field that appears for the first time in a folder gets a file with one empty line for each
   earlier record. So every file of a folder always has the same number of lines.
 - No value can hold a line break, a tab or another control character. The record checks enforce this

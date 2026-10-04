@@ -10,8 +10,9 @@ import { codeEditor, comboBox, form, select, submitForm, textField } from 'imp/s
 import { flex, stack, tabs } from 'imp/std/layout'
 import { luPlay, luPlus, luSave, luSearch, luTrash2, luX } from 'imp/icons'
 import { downloadText, problemsOf, runQuery, serversParam } from '../lib/api.js'
-import { formatCount, formatMeasure, measureLabel } from '../lib/format.js'
-import { BASE_DIMENSIONS, COMMON_MEASURES } from '../lib/measures.js'
+import { segmentsOf } from '../lib/catalog.js'
+import { formatCount, measureLabel } from '../lib/format.js'
+import { BASE_DIMENSIONS, MEASURES, TIME_FIELDS } from '../lib/measures.js'
 import {
   DEFAULT_DRAFT,
   draftToQuery,
@@ -30,13 +31,6 @@ const DRAFT_KEY = 'imp-aly.console.draft'
 const SAVED_KEY = 'imp-aly.console.queries'
 
 const ROW_KEY = '#row'
-
-const segmentsOf = (catalog, app) =>
-  [
-    ...new Set(
-      (catalog?.apps ?? []).filter(({ name }) => name === app).flatMap(({ segments }) => segments),
-    ),
-  ].sort()
 
 const pretty = (query) => JSON.stringify(query, null, 2)
 
@@ -182,7 +176,7 @@ const exploreResult = component('aly-explore-result', {
                     label: field,
                     align: 'end',
                     sortable: true,
-                    render: (row) => formatMeasure(field, row[field]),
+                    render: (row) => formatCount(row[field]),
                   }
                   : {
                     key: field,
@@ -202,7 +196,7 @@ const exploreResult = component('aly-explore-result', {
                 label: measureLabel(picture.measure),
                 labels: picture.labels,
                 series: picture.series,
-                format: (value) => formatMeasure(picture.measure, value),
+                format: formatCount,
               })
               : emptyState({ variant: 'noResults' }),
           },
@@ -376,7 +370,7 @@ export const exploreScreen = component('aly-explore', {
     }
 
     const builder = computed([segments, version], (names) => names).view((names) => {
-      const dimensions = ['day', ...BASE_DIMENSIONS, ...names]
+      const dimensions = [...TIME_FIELDS, ...BASE_DIMENSIONS, ...names]
       return form(
         {
           initialValues: currentDraft(),
@@ -392,16 +386,15 @@ export const exploreScreen = component('aly-explore', {
           label: 'Group by',
           multiple: true,
           options: dimensions,
-          help: 'Up to 8 fields. "day" puts the rows on a time line.',
+          help:
+            'Up to 8 fields, with one of day, week and month at most. A time field makes a line chart.',
         }),
         comboBox({
           field: 'measures',
           label: 'Measures',
           multiple: true,
-          custom: true,
-          options: COMMON_MEASURES,
+          options: MEASURES,
           required: true,
-          help: 'Type any readyMs.p<1-99> or readyMs.under:<ms>, then press Enter.',
         }),
         filterRows({ fields: BASE_DIMENSIONS.concat(names), searchValues }),
         flex(

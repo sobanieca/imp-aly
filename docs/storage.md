@@ -37,7 +37,6 @@ changes it. The records are plain text files, so you can read them with `cat`, `
           visit.txt
           at.txt
           page.txt
-          readyMs.txt
           zone.txt
           name.txt
           country.txt
@@ -139,9 +138,7 @@ storage worker seals it:
    make the file larger. `meta.json` lists these fields under `plain`.
 4. It writes the daily summary into the same folder:
    - `summary-counts.tsv`: one line per combination of `type`, `page`, `zone`, `name`, `country` and
-     the segments, with the number of records, and the sum, the smallest and the largest `readyMs`.
-     The line also has the `readyMs` buckets as `bucket:count` pairs. A bucket is the value with all
-     digits after the first two set to zero, such as `1200` for 1234.
+     the segments, with the number of records.
    - `summary-tuples.tsv`: each combination of `type`, `page`, `country` and the segments that a
      visit had.
    - `summary-visits.tsv`: the visits, as a count and a list of tuple numbers. Visits with the same

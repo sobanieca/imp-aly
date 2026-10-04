@@ -13,7 +13,7 @@ const USAGE = `use one of:
 const isUrl = (value) => /^https?:\/\//i.test(value)
 
 const summary = (app) =>
-  `${app.name}: ${app.pages} pages, segments ${
+  `${app.name}: ${app.pages.length} pages, segments ${
     app.segments.length ? app.segments.join(', ') : '-'
   }, map ${app.mapUrl ?? 'uploaded'}`
 

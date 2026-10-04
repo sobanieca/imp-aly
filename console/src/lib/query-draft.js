@@ -12,27 +12,23 @@ export const DEFAULT_DRAFT = {
 export const EXAMPLES = [
   { id: 'visits', label: 'Visits per day', query: { groupBy: ['day'], measures: ['visits'] } },
   {
-    id: 'pages',
-    label: 'Views, interactions and errors per page',
-    query: {
-      where: { type: ['page', 'interaction', 'error'] },
-      groupBy: ['page', 'type'],
-      measures: ['records', 'visits'],
-    },
+    id: 'weeks',
+    label: 'Visits per week',
+    query: { groupBy: ['week'], measures: ['visits'] },
   },
   {
-    id: 'speed',
-    label: 'Speed of each page',
+    id: 'pages',
+    label: 'Views, uses and errors per page',
     query: {
-      where: { type: 'page' },
-      groupBy: ['page'],
-      measures: ['readyMs.under:2500', 'readyMs.p75', 'records'],
+      where: { type: ['page', 'used', 'error'] },
+      groupBy: ['page', 'type'],
+      measures: ['records'],
     },
   },
   {
     id: 'zones',
     label: 'Zones, seen and used',
-    query: { where: { type: ['seen', 'interaction'] }, groupBy: ['zone', 'type'] },
+    query: { where: { type: ['seen', 'used'] }, groupBy: ['zone', 'type'] },
   },
   { id: 'outcomes', label: 'Outcomes', query: { where: { type: 'outcome' }, groupBy: ['name'] } },
   {

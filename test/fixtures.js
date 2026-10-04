@@ -20,7 +20,7 @@ export const fill = async ({ keep = () => true } = {}) => {
       const kept = keep(visitId)
       const plan = visit % 3 === 0 ? null : ['pro', 'free'][visit % 2]
       for (let step = 0; step < 12; step++) {
-        const type = ['page', 'seen', 'interaction', 'interaction', 'outcome', 'error'][next(6)]
+        const type = ['page', 'seen', 'used', 'used', 'outcome', 'error'][next(6)]
         const record = {
           type,
           visit: visitId,
@@ -29,8 +29,7 @@ export const fill = async ({ keep = () => true } = {}) => {
           country: visit % 4 ? 'PL' : 'DE',
         }
         if (plan) record.plan = plan
-        if (type === 'page') record.readyMs = 50 + next(500)
-        if (type === 'seen' || (type === 'interaction' && next(2))) {
+        if (type === 'seen' || (type === 'used' && next(2))) {
           record.zone = `myapp.zone-${next(4)}`
         }
         if (type === 'outcome') record.name = `myapp.done-${next(2)}`

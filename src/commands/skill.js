@@ -11,7 +11,7 @@ const SKILL_TARGETS = [
 
 export const skillContent = `---
 name: ${SKILL_NAME}
-description: Query the analytics of imp apps and check imp-aly servers with the imp-aly CLI. Use when asked about visits, page views, speed (readyMs), errors or other analytics numbers of an imp app, or about the registered apps and the state of an imp-aly server.
+description: Query the analytics of imp apps and check imp-aly servers with the imp-aly CLI. Use when asked about visits, page views, zones, outcomes, errors or other analytics numbers of an imp app, or about the registered apps and the state of an imp-aly server.
 ---
 
 # imp-aly
@@ -41,12 +41,15 @@ files of the user. Never ask for a key and never put a key in a command.
 - Fields: \`app\` (required), \`from\` and \`to\` (\`YYYY-MM-DD\`, UTC), \`where\`,
   \`groupBy\`, \`measures\`, \`limit\`.
 - Dimensions: \`type\`, \`visit\`, \`page\`, \`zone\`, \`name\`, \`country\` and the
-  segments of the app. \`day\` is for \`groupBy\` only.
+  segments of the app. \`day\`, \`week\` and \`month\` are for \`groupBy\`
+  only, one of them per query.
 - \`where\` maps a dimension to a value, to null, or to a list of them.
-- Measures: \`records\`, \`visits\`, \`readyMs.avg\`, \`readyMs.min\`,
-  \`readyMs.max\`, \`readyMs.p1\` to \`readyMs.p99\`, \`readyMs.under:<ms>\`.
-- \`readyMs.under:2500\` is the percent of the page views that were ready in
-  less than 2.5 seconds. It is the main measure of speed.
+- Measures: \`records\` and \`visits\`.
+- Types: \`page\` (a page view), \`seen\` and \`used\` (at most one per zone per
+  page view), \`outcome\`, \`error\`. The share of a zone that people use when
+  they see it is \`used\` / \`seen\` records.
+- Do not count \`visits\` with \`zone\` or \`name\`: such a query reads every
+  record and is slow.
 - Before you report numbers, check \`skippedDays\` and \`failedServers\` in the
   \`--json\` answer.
 

@@ -39,7 +39,6 @@ status field. When a decision changes, replace its ADR. When a decision is dropp
 | [daily-summaries](daily-summaries.md)                               | A sealed day carries a summary that queries read                         |
 | [disk-space-retention](disk-space-retention.md)                     | Retention follows free disk space, and keeps summaries longest           |
 | [summary-backups](summary-backups.md)                               | Backups hold the daily summaries, and a restore writes summary-only days |
-| [ready-time-buckets](ready-time-buckets.md)                         | Ready times are counted in buckets of 2 significant digits               |
 
 ## Access
 

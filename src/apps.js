@@ -96,7 +96,7 @@ export const openApps = async ({ dataDir, fetchMap = fetchAppMap, now = Date.now
   const describe = (app) => ({
     name: app.name,
     mapUrl: app.mapUrl,
-    pages: app.pages.size,
+    pages: [...app.pages].sort(),
     segments: app.segments,
     createdAt: app.createdAt,
     mapUpdatedAt: app.mapUpdatedAt,

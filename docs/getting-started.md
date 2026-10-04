@@ -147,10 +147,10 @@ imp-aly query '{"app": "myapp", "groupBy": ["page", "type"], "measures": ["recor
 ```
 
 ```
-page            type          records   visits
-/invoices       interaction     31000     8100
-/invoices/:id   interaction     52000     6000
-/invoices       page             9800     8400
+page            type   records   visits
+/invoices/:id   seen     12400     6100
+/invoices       page      9800     8400
+/invoices/:id   used      8100     4900
 ...
 ```
 
@@ -180,9 +180,9 @@ On the machine with the saved servers, run:
 imp-aly console
 ```
 
-Open `http://localhost:8010` in a browser. The console shows the visits, the pages, the speed and
-the audience of your apps in charts. It also has a query builder, and pages for the apps, the
-servers and the backups. See [Console](console.md).
+Open `http://localhost:8010` in a browser. The console shows the visits of your apps, and the pages,
+zones, outcomes and errors of each app, in charts. It also has a query builder, and pages for the
+apps, the servers and the backups. See [Console](console.md).
 
 ## Next
 

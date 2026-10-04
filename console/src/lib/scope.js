@@ -4,7 +4,7 @@ import { readStored, writeStored } from './storage.js'
 
 const STORAGE_KEY = 'imp-aly.console.scope'
 
-const DEFAULT_PRESET = '7'
+const DEFAULT_PRESET = '30d'
 
 const SCOPE_STATES = ['aly.scope.servers', 'aly.scope.app', 'aly.scope.range', 'aly.scope.tick']
 

@@ -18,9 +18,7 @@ reads the summary of a sealed day when the query allows it, and scans the column
 `visits` is the number of distinct visits of each day, added up over the days.**
 
 - `summary-counts.tsv` has one line per combination of `type`, `page`, `zone`, `name`, `country` and
-  the segments. A line has the number of records, the sum, the minimum and the maximum of `readyMs`,
-  and the `readyMs` buckets as `bucket:count` pairs, see `ready-time-buckets.md`. A scan puts the
-  values into the same buckets, so both paths give the same percentiles.
+  the segments. A line has the number of records.
 - `summary-tuples.tsv` lists each combination of `type`, `page`, `country` and the segments that
   occurs. `summary-visits.tsv` has one line per set of tuples that a visit had, with the number of
   visits that had that set. A query maps each tuple to its group, and adds the count of a line once

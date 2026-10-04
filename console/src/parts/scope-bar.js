@@ -4,7 +4,17 @@ import { computed, useState } from 'imp/state'
 import { button, icon, text } from 'imp/std'
 import { comboBox, datePicker, segmented, select } from 'imp/std/inputs'
 import { luRefreshCw } from 'imp/icons'
-import { PRESETS, todayUtc } from '../lib/days.js'
+import { appNamesOf } from '../lib/catalog.js'
+import { barNote, barOf, dayCount, PRESETS, previousRange, todayUtc } from '../lib/days.js'
+import { formatCount } from '../lib/format.js'
+
+const rangeNote = (value) => {
+  if (!value?.start || !value?.end) return ''
+  const before = previousRange(value.start, value.end)
+  return `${barNote(barOf(value.start, value.end))} A change compares with the ${
+    formatCount(dayCount(value.start, value.end))
+  } days before, ${before.from} to ${before.to}.`
+}
 
 const serverControl = (store, servers) => {
   const saved = store?.servers ?? []
@@ -24,7 +34,7 @@ const serverControl = (store, servers) => {
 }
 
 const appControl = (catalog, app) => {
-  const names = [...new Set((catalog?.apps ?? []).map(({ name }) => name))].sort()
+  const names = appNamesOf(catalog)
   return select({
     label: 'App',
     value: app,
@@ -37,6 +47,7 @@ const appControl = (catalog, app) => {
 export const scopeBar = component('aly-scope-bar', {
   styles: `
     :host { display: block; }
+    .scope { display: grid; gap: var(--imp-space-2, 8px); }
     .bar {
       display: flex;
       flex-wrap: wrap;
@@ -45,7 +56,7 @@ export const scopeBar = component('aly-scope-bar', {
     }
     .grow { flex: 0 1 15rem; min-inline-size: 11rem; }
   `,
-  setup: (self, { reports = true } = {}) => {
+  setup: (self, { app: withApp = true, period = true, note = false } = {}) => {
     const catalog = useState(self, 'aly.catalog')
     const servers = useState(self, 'aly.scope.servers')
     const app = useState(self, 'aly.scope.app')
@@ -59,27 +70,31 @@ export const scopeBar = component('aly-scope-bar', {
       revision.set((value) => value + 1)
     }
     return div(
-      { class: 'bar' },
-      div({ class: 'grow' }, saved.view((store) => serverControl(store, servers))),
-      reports ? div({ class: 'grow' }, catalog.view((value) => appControl(value, app))) : null,
-      reports ? segmented({ label: 'Period', value: preset, options: PRESETS }) : null,
-      reports
-        ? datePicker({
-          label: 'Days (UTC)',
-          value: range,
-          range: true,
-          required: true,
-          max: todayUtc(),
-        })
-        : null,
-      button(
-        {
-          square: true,
-          label: reports ? 'Run the report again' : 'Load again',
-          events: { click: again },
-        },
-        icon(luRefreshCw),
+      { class: 'scope' },
+      div(
+        { class: 'bar' },
+        div({ class: 'grow' }, saved.view((store) => serverControl(store, servers))),
+        withApp ? div({ class: 'grow' }, catalog.view((value) => appControl(value, app))) : null,
+        period ? segmented({ label: 'Period', value: preset, options: PRESETS }) : null,
+        period
+          ? datePicker({
+            label: 'From - to (UTC)',
+            value: range,
+            range: true,
+            required: true,
+            max: todayUtc(),
+          })
+          : null,
+        button(
+          {
+            square: true,
+            label: period ? 'Run the report again' : 'Load again',
+            events: { click: again },
+          },
+          icon(luRefreshCw),
+        ),
       ),
+      note ? text({ size: 'sm', tone: 'secondary' }, range.text(rangeNote)) : null,
     )
   },
 })

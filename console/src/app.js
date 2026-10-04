@@ -9,24 +9,27 @@ import {
   luArchive,
   luChartColumn,
   luFiles,
-  luGauge,
-  luGlobe,
-  luLayoutDashboard,
+  luLayoutGrid,
+  luMousePointerClick,
   luPackage,
   luSearch,
   luServer,
+  luTarget,
+  luTriangleAlert,
 } from 'imp/icons'
 import { app } from './app-map.js'
 import { messageOf, serversParam } from './lib/api.js'
+import { appNamesOf } from './lib/catalog.js'
 import { initScope } from './lib/scope.js'
 import { appsScreen } from './screens/apps.js'
-import { audienceScreen } from './screens/audience.js'
 import { backupScreen } from './screens/backup.js'
+import { errorsScreen } from './screens/errors.js'
 import { exploreScreen } from './screens/explore.js'
-import { overviewScreen } from './screens/overview.js'
+import { outcomesScreen } from './screens/outcomes.js'
 import { pagesScreen } from './screens/pages.js'
+import { registryScreen } from './screens/registry.js'
 import { serversScreen } from './screens/servers.js'
-import { speedScreen } from './screens/speed.js'
+import { zonesScreen } from './screens/zones.js'
 
 const loadCatalog = async (api, servers) => {
   const saved = await api.get('/servers')
@@ -60,7 +63,7 @@ export const root = component('aly-root', {
       if (run !== latest || self.abortSignal.aborted) return
       if (next.chosen.length !== servers.get().length) servers.set(next.chosen)
       catalog.set(next)
-      const names = [...new Set(next.apps.map(({ name }) => name))].sort()
+      const names = appNamesOf(next)
       if (!next.error && !names.includes(chosenApp.get())) chosenApp.set(names[0])
     }
     servers.watch(self, reload)
@@ -75,12 +78,13 @@ export const root = component('aly-root', {
         navbar: {
           map: app,
           icons: {
-            [app.console.overview]: luLayoutDashboard,
+            [app.console.apps]: luLayoutGrid,
             [app.console.pages]: luFiles,
-            [app.console.speed]: luGauge,
-            [app.console.audience]: luGlobe,
+            [app.console.zones]: luMousePointerClick,
+            [app.console.outcomes]: luTarget,
+            [app.console.errors]: luTriangleAlert,
             [app.console.explore]: luSearch,
-            [app.console.apps]: luPackage,
+            [app.console.registry]: luPackage,
             [app.console.servers]: luServer,
             [app.console.backup]: luArchive,
           },
@@ -91,12 +95,13 @@ export const root = component('aly-root', {
       router({
         map: app,
         screens: {
-          [app.console.overview]: () => overviewScreen(),
-          [app.console.pages]: () => pagesScreen(),
-          [app.console.speed]: () => speedScreen(),
-          [app.console.audience]: () => audienceScreen(),
-          [app.console.explore]: () => exploreScreen(),
           [app.console.apps]: () => appsScreen(),
+          [app.console.pages]: () => pagesScreen(),
+          [app.console.zones]: () => zonesScreen(),
+          [app.console.outcomes]: () => outcomesScreen(),
+          [app.console.errors]: () => errorsScreen(),
+          [app.console.explore]: () => exploreScreen(),
+          [app.console.registry]: () => registryScreen(),
           [app.console.servers]: () => serversScreen(),
           [app.console.backup]: () => backupScreen(),
         },

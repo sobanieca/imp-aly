@@ -1,70 +1,177 @@
 import { expect, test } from 'imp/test'
-import { addDays, daysBetween, presetOf, presetRange, todayUtc } from '../src/lib/days.js'
-import { formatMeasure, formatMs, measureLabel } from '../src/lib/format.js'
+import { mapPagesOf, segmentsOf } from '../src/lib/catalog.js'
+import {
+  addDays,
+  addMonths,
+  barNote,
+  barOf,
+  bucketsOf,
+  dayCount,
+  mondayOf,
+  presetOf,
+  presetRange,
+  previousRange,
+  todayUtc,
+} from '../src/lib/days.js'
 import { draftToQuery, parseQueryText, queryToDraft } from '../src/lib/query-draft.js'
 import {
-  cliCommand,
-  dailySeries,
-  pivot,
-  resultChart,
-  shareHistogram,
-  toCsv,
-} from '../src/lib/rows.js'
+  activeFilters,
+  changeOf,
+  emptyFilters,
+  errorRows,
+  leastVisited,
+  NEVER_USED,
+  RARELY,
+  withoutFields,
+  zoneFlag,
+  zoneRows,
+} from '../src/lib/reports.js'
+import { cliCommand, resultChart, toCsv } from '../src/lib/rows.js'
+import { OTHER, stackedSeries, topKeys } from '../src/lib/series.js'
 
 const NOW = Date.parse('2026-10-03T12:00:00Z')
 
 test('days count in UTC and presets end today', () => {
   expect(todayUtc(NOW)).toEqual('2026-10-03')
   expect(addDays('2026-02-28', 1)).toEqual('2026-03-01')
-  expect(daysBetween('2026-09-29', '2026-10-02')).toEqual([
-    '2026-09-29',
+  expect(addMonths('2026-03-31', -1)).toEqual('2026-02-28')
+  expect(addMonths('2026-10-03', -60)).toEqual('2021-10-03')
+  expect(dayCount('2026-09-29', '2026-10-02')).toEqual(4)
+  expect(presetRange('30d', NOW)).toEqual({ start: '2026-09-04', end: '2026-10-03' })
+  expect(presetRange('3m', NOW)).toEqual({ start: '2026-07-04', end: '2026-10-03' })
+  expect(presetRange('1y', NOW)).toEqual({ start: '2025-10-04', end: '2026-10-03' })
+  expect(presetOf({ start: '2026-07-04', end: '2026-10-03' }, NOW)).toEqual('3m')
+  expect(presetOf({ start: '2026-09-26', end: '2026-10-03' }, NOW)).toEqual(undefined)
+})
+
+test('the bar size follows the length of the range', () => {
+  expect(barOf('2026-09-04', '2026-10-03')).toEqual('day')
+  expect(barOf('2026-08-20', '2026-10-03')).toEqual('day')
+  expect(barOf('2026-08-19', '2026-10-03')).toEqual('week')
+  expect(barOf('2026-03-18', '2026-10-03')).toEqual('week')
+  expect(barOf('2026-03-17', '2026-10-03')).toEqual('month')
+  expect(barNote('week')).toEqual('One bar is one week (UTC). A week starts on Monday.')
+})
+
+test('the previous period has the same length and ends the day before', () => {
+  expect(previousRange('2026-09-04', '2026-10-03')).toEqual({
+    from: '2026-08-05',
+    to: '2026-09-03',
+  })
+  expect(previousRange('2026-10-03', '2026-10-03')).toEqual({
+    from: '2026-10-02',
+    to: '2026-10-02',
+  })
+})
+
+test('the buckets of a range follow the bar', () => {
+  expect(mondayOf('2026-10-04')).toEqual('2026-09-28')
+  expect(mondayOf('2026-09-28')).toEqual('2026-09-28')
+  expect(bucketsOf('2026-09-30', '2026-10-02', 'day')).toEqual([
     '2026-09-30',
     '2026-10-01',
     '2026-10-02',
   ])
-  expect(presetRange('7', NOW)).toEqual({ start: '2026-09-27', end: '2026-10-03' })
-  expect(presetOf({ start: '2026-09-27', end: '2026-10-03' }, NOW)).toEqual('7')
-  expect(presetOf({ start: '2026-09-26', end: '2026-10-03' }, NOW)).toEqual(undefined)
+  expect(bucketsOf('2026-09-30', '2026-10-12', 'week')).toEqual([
+    '2026-09-28',
+    '2026-10-05',
+    '2026-10-12',
+  ])
+  expect(bucketsOf('2026-08-31', '2026-10-01', 'month')).toEqual(['2026-08', '2026-09', '2026-10'])
 })
 
-test('measures format by their unit', () => {
-  expect(formatMs(420)).toEqual('420 ms')
-  expect(formatMs(1650)).toEqual('1.65 s')
-  expect(formatMeasure('readyMs.under:2500', 87.4)).toEqual('87.4%')
-  expect(formatMeasure('readyMs.p75', 12500)).toEqual('12.5 s')
-  expect(formatMeasure('visits', 1612)).toEqual('1,612')
-  expect(formatMeasure('records', null)).toEqual('-')
-  expect(measureLabel('readyMs.under:2500')).toEqual('Ready under 2.5 s')
+test('a stacked trend keeps the top keys and adds the rest as Other', () => {
+  const rows = [
+    { week: '2026-09-28', page: '/a', records: 5 },
+    { week: '2026-09-28', page: '/b', records: 3 },
+    { week: '2026-10-05', page: '/a', records: 2 },
+    { week: '2026-10-05', page: '/c', records: 1 },
+    { week: '2026-09-21', page: '/c', records: 9 },
+  ]
+  const buckets = ['2026-09-28', '2026-10-05']
+  expect(topKeys(rows.slice(0, 4), 'page', { count: 1 })).toEqual(['/a'])
+  const series = stackedSeries(rows, { bar: 'week', field: 'page', buckets, keys: ['/a'] })
+  expect(series.map(({ name, values }) => ({ name, values }))).toEqual([
+    { name: '/a', values: [5, 2] },
+    { name: OTHER, values: [3, 1] },
+  ])
+  expect(stackedSeries(rows, { bar: 'week', field: 'page', buckets, keys: ['/b'], other: false }))
+    .toEqual([{ name: '/b', color: 'blue', values: [3, 0] }])
+  expect(stackedSeries([], { bar: 'week', field: 'page', buckets, keys: [] })).toEqual([])
 })
 
-test('daily series fill the days with no data', () => {
-  const series = dailySeries([{ day: '2026-10-02', visits: 5 }], {
-    from: '2026-10-01',
-    to: '2026-10-03',
-    series: [{ name: 'Visits', pick: ([row]) => row.visits }],
-  })
-  expect(series).toEqual({
-    labels: ['10-01', '10-02', '10-03'],
-    series: [{ name: 'Visits', color: undefined, values: [0, 5, 0] }],
-  })
+test('a change says up or down with a whole percent', () => {
+  expect(changeOf(108, 100)).toEqual({ direction: 'up', percent: 8, text: 'up 8%' })
+  expect(changeOf(97, 100)).toEqual({ direction: 'down', percent: -3, text: 'down 3%' })
+  expect(changeOf(100, 100).text).toEqual('no change')
+  expect(changeOf(5, 0)).toEqual({ direction: 'up', percent: null, text: 'new' })
+  expect(changeOf(0, 0).text).toEqual('no change')
 })
 
-test('a pivot keys null as (none)', () => {
-  const table = pivot([
-    { zone: 'a', type: 'seen', records: 3 },
-    { zone: null, type: 'interaction', records: 2 },
-  ], { by: 'zone', across: 'type', value: 'records' })
-  expect(table.get('a')).toEqual({ seen: 3 })
-  expect(table.get('(none)')).toEqual({ interaction: 2 })
+test('the least visited pages include the pages of the app map with no view', () => {
+  const rows = [{ page: '/', records: 50 }, { page: '/cart', records: 2 }]
+  expect(leastVisited(rows, ['/', '/cart', '/account'], 2)).toEqual([
+    { page: '/account', views: 0, never: true },
+    { page: '/cart', views: 2, never: false },
+  ])
+  const many = leastVisited([], ['/a', '/b', '/c'], 2)
+  expect(many.map(({ page }) => page)).toEqual(['/a', '/b', '/c'])
 })
 
-test('the share histogram turns cumulative shares into ranges', () => {
-  const row = { 'readyMs.under:1000': 40, 'readyMs.under:2500': 90 }
-  expect(shareHistogram(row, [1000, 2500])).toEqual({
-    labels: ['< 1 s', '1-2.5 s', '>= 2.5 s'],
-    values: [40, 50, 10],
-  })
-  expect(shareHistogram({}, [1000])).toEqual(null)
+test('zones get a flag when they are never used or rarely used', () => {
+  expect(zoneFlag({ seen: 10, used: 0 })).toEqual(NEVER_USED)
+  expect(zoneFlag({ seen: 200, used: 9 })).toEqual(RARELY)
+  expect(zoneFlag({ seen: 200, used: 10 })).toEqual(null)
+  expect(zoneFlag({ seen: 99, used: 1 })).toEqual(null)
+  expect(zoneRows([
+    { zone: 'hero', page: '/', type: 'seen', records: 200 },
+    { zone: 'hero', page: '/', type: 'used', records: 50 },
+    { zone: null, page: '/', type: 'used', records: 80 },
+  ])).toEqual([{
+    id: 'hero /',
+    zone: 'hero',
+    page: '/',
+    seen: 200,
+    used: 50,
+    share: 25,
+    flag: null,
+  }])
+})
+
+test('the errors per page come with the views of the same answer', () => {
+  expect(errorRows([
+    { page: '/', type: 'page', records: 400 },
+    { page: '/', type: 'error', records: 2 },
+    { page: '/cart', type: 'error', records: 1 },
+  ])).toEqual([
+    { id: '/', page: '/', views: 400, errors: 2, per100: 0.5 },
+    { id: '/cart', page: '/cart', views: 0, errors: 1, per100: null },
+  ])
+})
+
+test('the filters turn into the where of a query', () => {
+  const values = {
+    ...emptyFilters(['plan']),
+    page: '/',
+    name: ['paid', '(none)'],
+    segment: { plan: 'pro' },
+  }
+  const where = activeFilters(values)
+  expect(where).toEqual({ page: '/', name: ['paid', null], plan: 'pro' })
+  expect(withoutFields(where, ['page', 'name'])).toEqual({ plan: 'pro' })
+  expect(activeFilters(emptyFilters(['plan']))).toEqual({})
+})
+
+test('the catalog joins the app maps and the segments of all servers', () => {
+  const catalog = {
+    apps: [
+      { server: 'eu', name: 'shop', pages: ['/', '/cart'], segments: ['plan'] },
+      { server: 'us', name: 'shop', pages: ['/', '/account'], segments: ['plan', 'role'] },
+      { server: 'us', name: 'blog', pages: ['/post'], segments: [] },
+    ],
+  }
+  expect(mapPagesOf(catalog, 'shop')).toEqual(['/', '/account', '/cart'])
+  expect(segmentsOf(catalog, 'shop')).toEqual(['plan', 'role'])
 })
 
 test('a result exports as CSV and as a command', () => {
@@ -91,6 +198,13 @@ test('the chart of a result follows the first group', () => {
   })
   expect(bars.type).toEqual('bar')
   expect(bars.labels).toEqual(['/ / page'])
+  const weekly = resultChart({
+    rows: [{ week: '2026-09-28', records: 2 }],
+    groupBy: ['week'],
+    measures: ['records'],
+  })
+  expect(weekly.type).toEqual('line')
+  expect(weekly.labels).toEqual(['2026-09-28'])
 })
 
 test('a draft and a query convert both ways', () => {

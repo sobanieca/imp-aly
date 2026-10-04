@@ -49,17 +49,18 @@ the key can register apps and run queries.
 - **Record** - one fact about the use of the app, as a small JSON object. For example: "visit `a1b2`
   opened the page `/invoices` at 10:42:07".
 - **Record type** - the kind of fact. There are five types:
-  - `page` - a user opened a screen. It also holds `readyMs`, the time the screen took to be ready.
-  - `seen` - a user saw a part of a screen.
-  - `interaction` - a user was active on a screen, or on a part of it.
+  - `page` - a user opened a screen.
+  - `seen` - a part of a screen came into view, once per page view.
+  - `used` - a user clicked, tapped or typed in a part of a screen, once per page view. With no
+    zone, it means that the user used the screen at all.
   - `outcome` - a user completed a task, such as "invoice sent".
   - `error` - an error occurred on a screen.
 - **Visit** - one session of a user in one browser tab. All the records of the session have the same
   `visit` id. The server counts visits, not people.
 - **Page** - the screen of a record, as its pattern from the app map, such as `/invoices/:id`. It is
   never the real path, such as `/invoices/42`.
-- **Zone** - a named part of a screen, such as `myapp.invoice-list`. The `seen` and `interaction`
-  records use it.
+- **Zone** - a named part of a screen, such as `myapp.invoice-list`. The `seen` and `used` records
+  use it.
 - **Name** - the name of the task of an `outcome` record, such as `myapp.send`.
 - **at** - the time of a record, in milliseconds since 1970, in UTC.
 - **Segment** - an extra field that your sink adds to each record, to describe a group of users.
@@ -124,9 +125,8 @@ the key can register apps and run queries.
   filters, groups and measures.
 - **Dimension** - a field that a query can filter by or group by, such as `page`, `type`, `country`
   or a segment.
-- **Measure** - a number that a query calculates for each group, such as `records` (the number of
-  records), `visits` (the number of visits) or `readyMs.under:2500` (the percent of page views that
-  were ready in less than 2.5 seconds).
+- **Measure** - a number that a query counts for each group: `records` (the number of records) or
+  `visits` (the number of visits).
 - **Scan** - the slow way to answer a query: the server reads the column files of each day. It
   always scans the current day.
 - **Query worker** - a background thread that runs the queries, one at a time. A long query does not

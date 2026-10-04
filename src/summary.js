@@ -1,13 +1,5 @@
 import { BASE_COLUMNS, MAX_SEGMENTS, RESERVED_NAMES, SEGMENT_NAME_PATTERN } from './names.js'
 import { isCountry, isName, isSegmentValue, TYPE_FIELDS } from './records.js'
-import {
-  addReadyValue,
-  bucketOf,
-  createReady,
-  isBucket,
-  MAX_READY_MS,
-  sortedBuckets,
-} from './ready.js'
 
 export const SUMMARY_FILES = {
   counts: 'summary-counts.tsv',
@@ -19,17 +11,9 @@ export const COUNT_DIMENSIONS = ['type', 'page', 'zone', 'name', 'country']
 
 export const VISIT_DIMENSIONS = ['type', 'page', 'country']
 
-export const COUNT_MEASURES = ['records', 'readySum', 'readyMin', 'readyMax', 'readyMs']
+export const COUNT_MEASURES = ['records']
 
 const segmentsOf = (columns) => columns.filter((column) => !BASE_COLUMNS.includes(column)).sort()
-
-const readyCells = (ready) =>
-  ready === null ? ['', '', '', ''] : [
-    ready.sum,
-    ready.min,
-    ready.max,
-    sortedBuckets(ready).map(([bucket, count]) => `${bucket}:${count}`).join(','),
-  ]
 
 export const createSummaryBuilder = ({ columns, rowColumns }) => {
   const segments = segmentsOf(columns)
@@ -38,7 +22,6 @@ export const createSummaryBuilder = ({ columns, rowColumns }) => {
   const positionsOf = (dimensions) => dimensions.map((dimension) => rowColumns.indexOf(dimension))
   const countPositions = positionsOf(countDimensions)
   const visitPositions = positionsOf(visitDimensions)
-  const readyPosition = rowColumns.indexOf('readyMs')
   const visitPosition = rowColumns.indexOf('visit')
   const keyOf = (columns, row, positions) => {
     let key = ''
@@ -57,17 +40,7 @@ export const createSummaryBuilder = ({ columns, rowColumns }) => {
 
   const add = (columns, row) => {
     const countKey = keyOf(columns, row, countPositions)
-    let entry = counts.get(countKey)
-    if (!entry) {
-      entry = { records: 0, ready: null }
-      counts.set(countKey, entry)
-    }
-    entry.records++
-    const ready = valueAt(columns, row, readyPosition)
-    if (ready !== null) {
-      entry.ready ??= createReady()
-      addReadyValue(entry.ready, Number(ready))
-    }
+    counts.set(countKey, (counts.get(countKey) ?? 0) + 1)
 
     const tupleKey = keyOf(columns, row, visitPositions)
     let index = tuples.get(tupleKey)
@@ -91,9 +64,7 @@ export const createSummaryBuilder = ({ columns, rowColumns }) => {
     },
     finish: () => {
       const countLines = [`${[...countDimensions, ...COUNT_MEASURES].join('\t')}\n`]
-      for (const [key, entry] of counts) {
-        countLines.push(`${[key, entry.records, ...readyCells(entry.ready)].join('\t')}\n`)
-      }
+      for (const [key, records] of counts) countLines.push(`${key}\t${records}\n`)
       const tupleLines = [`${visitDimensions.join('\t')}\n`]
       for (const key of tuples.keys()) tupleLines.push(`${key}\n`)
       const visitCounts = new Map()
@@ -114,22 +85,6 @@ export const tableLines = (text) => {
   lines.pop()
   if (!lines.length) throw new Error('a summary file has no header')
   return { header: lines[0].split('\t'), lines: lines.slice(1) }
-}
-
-const parseBuckets = (text) => {
-  const buckets = []
-  for (const pair of text.split(',')) {
-    const colon = pair.indexOf(':')
-    buckets.push([Number(pair.slice(0, colon)), Number(pair.slice(colon + 1))])
-  }
-  return buckets
-}
-
-export const parseReadyCells = ([sum, min, max, text]) => {
-  if (text === '') return null
-  const buckets = parseBuckets(text)
-  const count = buckets.reduce((total, [, bucketCount]) => total + bucketCount, 0)
-  return { count, sum: Number(sum), min: Number(min), max: Number(max), buckets }
 }
 
 const TAB = 9
@@ -181,10 +136,6 @@ const hasControlCharacter = (text) => {
 
 const POSITIVE = /^[1-9]\d*$/
 
-const NUMBER = /^(0|[1-9]\d*)$/
-
-const READY_TEXT = /^\d+:[1-9]\d*(,\d+:[1-9]\d*)*$/
-
 const VISIT_LINE = /^[1-9]\d*\t\d+(,\d+)*$/
 
 const optional = (check) => (value) => value === '' || check(value)
@@ -202,21 +153,6 @@ const isSegmentCell = optional(isSegmentValue)
 const validCells = (dimensions, cells) =>
   cells.length >= dimensions.length &&
   dimensions.every((dimension, index) => (CELL_CHECKS[dimension] ?? isSegmentCell)(cells[index]))
-
-const validReady = (cells, records) => {
-  const [sum, min, max, text] = cells
-  if (text === '') return cells.every((cell) => cell === '')
-  if (![sum, min, max].every((cell) => NUMBER.test(cell)) || !READY_TEXT.test(text)) return false
-  const ready = parseReadyCells(cells)
-  const buckets = ready.buckets.map(([bucket]) => bucket)
-  return buckets.every((bucket, index) =>
-    isBucket(bucket) && (index === 0 || bucket > buckets[index - 1])
-  ) &&
-    ready.count <= records && ready.max <= MAX_READY_MS && Number.isSafeInteger(ready.sum) &&
-    bucketOf(ready.min) === buckets[0] &&
-    bucketOf(ready.max) === buckets.at(-1) && ready.sum >= ready.min * ready.count &&
-    ready.sum <= ready.max * ready.count
-}
 
 const sameList = (a, b) => a.length === b.length && a.every((item, index) => item === b[index])
 
@@ -250,7 +186,7 @@ export const checkSummary = ({ counts, tuples, visits }) => {
     const records = cells[countDimensions.length]
     if (
       cells.length !== countHeader.length || !validCells(countDimensions, cells) ||
-      !POSITIVE.test(records) || !validReady(cells.slice(-4), Number(records))
+      !POSITIVE.test(records)
     ) {
       throw new Error(`${SUMMARY_FILES.counts} has a line that is not valid`)
     }

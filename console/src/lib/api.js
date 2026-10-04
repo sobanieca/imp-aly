@@ -1,3 +1,5 @@
+import { previousRange } from './days.js'
+
 export const messageOf = (error) => error?.body?.error ?? error?.message ?? String(error)
 
 export const serversParam = (servers) => (servers?.length ? servers.join(',') : undefined)
@@ -7,6 +9,8 @@ export const runQuery = (api, scope, query) =>
     query: { servers: serversParam(scope.servers) },
     body: { app: scope.app, from: scope.from, to: scope.to, ...query },
   })
+
+export const previousScope = (scope) => ({ ...scope, ...previousRange(scope.from, scope.to) })
 
 export const runQueries = (api, scope, queries) =>
   Promise.all(queries.map((query) => runQuery(api, scope, query)))

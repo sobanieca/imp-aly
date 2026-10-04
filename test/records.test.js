@@ -10,17 +10,13 @@ const base = { visit: 'k3v9a1c2', at: NOW, page: '/invoices/:id' }
 const check = (input, country = null) => validateRecord(input, app, country, NOW)
 
 Deno.test('accepts each record type of imp', () => {
-  assertEquals(check({ type: 'page', ...base, readyMs: 420.6 }).record, {
-    type: 'page',
-    ...base,
-    readyMs: 421,
-  })
+  assertEquals(check({ type: 'page', ...base }).record, { type: 'page', ...base })
   assertEquals(
     check({ type: 'seen', ...base, zone: 'myapp.send' }).record.zone,
     'myapp.send',
   )
-  assertEquals(check({ type: 'interaction', ...base, zone: null }).record, {
-    type: 'interaction',
+  assertEquals(check({ type: 'used', ...base, zone: null }).record, {
+    type: 'used',
     ...base,
   })
   assertEquals(
@@ -107,15 +103,14 @@ Deno.test('rejects malformed records', () => {
     { type: 'error', ...base, plan: 'a\nb' },
     { type: 'error', ...base, plan: 'x'.repeat(65) },
     { type: 'error', ...base, plan: {} },
-    { type: 'page', ...base },
-    { type: 'page', ...base, readyMs: -1 },
-    { type: 'page', ...base, readyMs: 4_000_000 },
-    { type: 'page', ...base, readyMs: 1, zone: 'myapp.x' },
+    { type: 'page', ...base, readyMs: 420 },
+    { type: 'page', ...base, zone: 'myapp.x' },
     { type: 'seen', ...base, zone: 'nonamespace' },
     { type: 'seen', ...base, zone: null },
     { type: 'seen', ...base, zone: 'my app.x' },
     { type: 'seen', ...base, zone: 'myapp.\tx' },
-    { type: 'interaction', ...base },
+    { type: 'used', ...base },
+    { type: 'interaction', ...base, zone: null },
     { type: 'outcome', ...base, name: 'sent' },
   ]
   for (const input of problems) {

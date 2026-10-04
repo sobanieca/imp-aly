@@ -10,17 +10,10 @@ const QUERIES = [
   { measures: ['records', 'visits'] },
   { groupBy: ['day'], measures: ['visits', 'records'] },
   { groupBy: ['page', 'type'], measures: ['records', 'visits'] },
-  {
-    where: { type: 'page' },
-    groupBy: ['page'],
-    measures: ['readyMs.p75', 'readyMs.p50', 'records'],
-  },
-  {
-    where: { type: 'page' },
-    measures: ['readyMs.avg', 'readyMs.min', 'readyMs.max', 'readyMs.p99'],
-  },
-  { groupBy: ['country'], measures: ['readyMs.under:300', 'readyMs.p95', 'visits'] },
-  { where: { type: ['seen', 'interaction'] }, groupBy: ['zone', 'type'] },
+  { where: { type: 'page' }, groupBy: ['week', 'page'], measures: ['visits', 'records'] },
+  { groupBy: ['month'], measures: ['visits', 'records'] },
+  { groupBy: ['country', 'week'], measures: ['visits'] },
+  { where: { type: ['seen', 'used'] }, groupBy: ['zone', 'type', 'month'] },
   { where: { type: 'outcome', page: '/invoices/:id' }, groupBy: ['name'] },
   { where: { country: 'PL', plan: 'pro' }, groupBy: ['day'], measures: ['records', 'visits'] },
   { where: { plan: null }, groupBy: ['country', 'plan'], measures: ['visits'] },
@@ -132,9 +125,8 @@ Deno.test('visits by zone or name need a scan', () => {
 })
 
 Deno.test('a summary with a value that a record cannot have fails the check', () => {
-  const summary = (count, tuple, ready = '1\t\t\t\t') => ({
-    counts:
-      `type\tpage\tzone\tname\tcountry\tplan\trecords\treadySum\treadyMin\treadyMax\treadyMs\n${count}\t${ready}\n`,
+  const summary = (count, tuple, records = '1') => ({
+    counts: `type\tpage\tzone\tname\tcountry\tplan\trecords\n${count}\t${records}\n`,
     tuples: `type\tpage\tcountry\tplan\n${tuple}\n`,
     visits: 'visits\ttuples\n1\t0\n',
   })
@@ -156,22 +148,10 @@ Deno.test('a summary with a value that a record cannot have fails the check', ()
     /line that is not valid/,
   )
   const page = 'page\t/\t\t\tPL\tpro'
-  assertEquals(
-    checkSummary(summary(page, 'page\t/\tPL\tpro', '2\t1690\t420\t1270\t420:1,1200:1')),
-    2,
-  )
-  const readies = [
-    '2\t1690\t420\t1270\t',
-    '2\t1690\t420\t1270\t425:1,1200:1',
-    '2\t1690\t420\t1270\t1200:1,420:1',
-    '2\t1690\t420\t1270\t420:2,1200:1',
-    '2\t1690\t420\t1270\t400:1,1200:1',
-    '2\t9999\t420\t1270\t420:1,1200:1',
-    '2\t1690\t420\t5000000\t420:1,5000000:1',
-  ]
-  for (const ready of readies) {
+  assertEquals(checkSummary(summary(page, 'page\t/\tPL\tpro', '2')), 2)
+  for (const records of ['0', '-1', '1.5', '01', '', '2\t420']) {
     assertThrows(
-      () => checkSummary(summary(page, 'page\t/\tPL\tpro', ready)),
+      () => checkSummary(summary(page, 'page\t/\tPL\tpro', records)),
       /line that is not valid/,
     )
   }
