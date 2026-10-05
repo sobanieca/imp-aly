@@ -17,12 +17,12 @@
     "semiColons": false,
     "singleQuote": true,
     "lineWidth": 100,
-    "exclude": ["console/"]
+    "exclude": ["console/", ".claude/"]
   },
   "lint": {
     "rules": {
       "tags": ["recommended"]
     },
-    "exclude": ["console/"]
+    "exclude": ["console/", ".claude/"]
   }
 }
