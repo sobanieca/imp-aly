@@ -3,6 +3,7 @@
 ```
 imp-aly server [options]              start the server
 imp-aly server --uninstall            remove the systemd service
+imp-aly update [--check]              install the newest compatible version
 imp-aly app add <name> <app url|build folder> [--segments plan,role]
 imp-aly app ls | show <name> | refresh <name> | rm <name>
 imp-aly query '<json>' | query <file.json> [--json]
@@ -46,7 +47,8 @@ sudo imp-aly server --port 2980
 | `--limit-1h <n>`           | records per address in 1 hour                    | `30000`                       |
 | `--limit-24h <n>`          | records per address in 24 hours                  | `200000`                      |
 | `--foreground`             | do not touch systemd, run in the foreground      |                               |
-| `--uninstall`              | stop and remove the systemd service              |                               |
+| `--no-auto-update`         | do not install the update timer                  | the timer updates daily       |
+| `--uninstall`              | stop and remove the service and the update timer |                               |
 | `--debug`                  | log each rejected record, in the foreground only |                               |
 
 As root on Linux with systemd, the command writes `/etc/systemd/system/imp-aly.service` with the
@@ -63,6 +65,19 @@ server loads the new certificate. See [Getting started](getting-started.md#serve
 A size for `--min-free` is a number with `B`, `KB`, `MB`, `GB` or `TB`, in units of 1024.
 
 Read the log of the service with `journalctl -u imp-aly -f`.
+
+The command also installs the systemd timer `imp-aly-update`, which runs `imp-aly update` once a
+day. `--no-auto-update` removes it. See [Updates](update.md).
+
+## Update
+
+```sh
+imp-aly update --check     # show the installed version and the update
+sudo imp-aly update        # install the newest compatible version and restart the service
+```
+
+The update installs only a version that reads the same data folder. When the service does not stay
+running, it puts the old binary back. See [Updates](update.md).
 
 ### The service user
 

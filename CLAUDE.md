@@ -14,6 +14,11 @@ remove anything, change the data layout, the API or the CLI, when a better desig
 add a compatibility shim, a fallback path or a migration note. Fix every call site, the docs and the
 ADRs in the same change. Docs and ADRs describe what the code does now. They are not a changelog.
 
+There is one exception. Servers update themselves to a new patch version (see
+`adr/automatic-updates.md`). **A patch release must keep the data folder, the API, the CLI and the
+unit file as they are.** Bump the minor version for any change to them. Increase `DATA_FORMAT` in
+`src/data-format.js` when the old and the new version cannot read the data folder of the other.
+
 ## No dependencies in the server
 
 **Import nothing from outside the repo**, also not in tests. Use the Deno runtime and the web
@@ -33,33 +38,36 @@ See `adr/plain-javascript-dependency-free-server.md` and `adr/local-console.md`.
 
 ## Architecture
 
-| Module                                 | Job                                                                                                                 |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `main.js`                              | parses the arguments and runs a command                                                                             |
-| `src/commands/`                        | `server`, `app`, `query`, `backup`, `restore`, `status`, `console`, `token`, `add`/`ls`/`use`/`rm`, `skill`, `help` |
-| `src/server.js`                        | `startServer()`: HTTP routes, workers, log, registry, limiter                                                       |
-| `src/records.js`                       | the checks of one imp record                                                                                        |
-| `src/apps.js`, `src/app-build.js`      | the app registry in `apps.json`, and reading `app-analytics.json`                                                   |
-| `src/rate-limit.js`                    | the sliding windows per client address                                                                              |
-| `src/origins.js`                       | the allowed browser origins of the public endpoint                                                                  |
-| `src/wal.js`                           | the write-ahead log with group commit and parts                                                                     |
-| `src/storage.js`, `storage-worker.js`  | the single writer: log parts to columns, restore, seal, retention                                                   |
-| `src/column-store.js`, `src/rle.js`    | the column files, the append transaction, sealing, reading                                                          |
-| `src/seal-sort.js`                     | the sort of a day in chunks, and the merge of the chunks into the run files                                         |
-| `src/line-files.js`                    | the reading and writing of line files in blocks                                                                     |
-| `src/summary.js`                       | the daily summary of a sealed day: build, parse and check                                                           |
-| `src/backup.js`, `src/tar.js`          | the backup stream of the summaries, and the restore                                                                 |
-| `src/query.js`, `query-worker.js`      | the query parser and engine, run in a worker, and the merge of the answers of servers                               |
-| `src/retention.js`                     | `df`, the free space rule, old days to summaries, then removal                                                      |
-| `src/auth.js`, `src/sha256.js`         | the key, the one-time tokens signed per request, and a streaming SHA-256                                            |
-| `src/servers.js`, `src/api-client.js`  | the saved servers of the client, the calls to the API, and the merge of the answers of several servers              |
-| `src/console.js`, `src/console-api.js` | the local console: the listener, the Hono API over the client code, the host and origin checks                      |
-| `src/static-files.js`                  | the files of the built page of the console, with the fallback to `index.html`                                       |
-| `dev/start.js`, `dev/demo-data.js`     | the demo of `deno task start`, and the sample records of the app `shop`                                             |
-| `console/`                             | the imp project of the page: `src/app.js`, `src/screens/`, `src/parts/`, `src/lib/`, `test/`                        |
-| `src/service.js`                       | the systemd unit, the service user and its limits                                                                   |
-| `src/file-watch.js`                    | the hourly check of the TLS files                                                                                   |
-| `site/index.html`                      | the landing page, one static file that GitHub Pages serves with `install.sh`                                        |
+| Module                                 | Job                                                                                                                           |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `main.js`                              | parses the arguments and runs a command                                                                                       |
+| `src/commands/`                        | `server`, `update`, `app`, `query`, `backup`, `restore`, `status`, `console`, `token`, `add`/`ls`/`use`/`rm`, `skill`, `help` |
+| `src/server.js`                        | `startServer()`: HTTP routes, workers, log, registry, limiter                                                                 |
+| `src/records.js`                       | the checks of one imp record                                                                                                  |
+| `src/apps.js`, `src/app-build.js`      | the app registry in `apps.json`, and reading `app-analytics.json`                                                             |
+| `src/rate-limit.js`                    | the sliding windows per client address                                                                                        |
+| `src/origins.js`                       | the allowed browser origins of the public endpoint                                                                            |
+| `src/wal.js`                           | the write-ahead log with group commit and parts                                                                               |
+| `src/storage.js`, `storage-worker.js`  | the single writer: log parts to columns, restore, seal, retention                                                             |
+| `src/column-store.js`, `src/rle.js`    | the column files, the append transaction, sealing, reading                                                                    |
+| `src/seal-sort.js`                     | the sort of a day in chunks, and the merge of the chunks into the run files                                                   |
+| `src/line-files.js`                    | the reading and writing of line files in blocks                                                                               |
+| `src/summary.js`                       | the daily summary of a sealed day: build, parse and check                                                                     |
+| `src/backup.js`, `src/tar.js`          | the backup stream of the summaries, and the restore                                                                           |
+| `src/query.js`, `query-worker.js`      | the query parser and engine, run in a worker, and the merge of the answers of servers                                         |
+| `src/retention.js`                     | `df`, the free space rule, old days to summaries, then removal                                                                |
+| `src/auth.js`, `src/sha256.js`         | the key, the one-time tokens signed per request, and a streaming SHA-256                                                      |
+| `src/servers.js`, `src/api-client.js`  | the saved servers of the client, the calls to the API, and the merge of the answers of several servers                        |
+| `src/console.js`, `src/console-api.js` | the local console: the listener, the Hono API over the client code, the host and origin checks                                |
+| `src/static-files.js`                  | the files of the built page of the console, with the fallback to `index.html`                                                 |
+| `dev/start.js`, `dev/demo-data.js`     | the demo of `deno task start`, and the sample records of the app `shop`                                                       |
+| `console/`                             | the imp project of the page: `src/app.js`, `src/screens/`, `src/parts/`, `src/lib/`, `test/`                                  |
+| `src/service.js`                       | the systemd unit, the service user and its limits, the update timer, the restart with a check                                 |
+| `src/update.js`                        | the version list, the choice of the update, the download with its checks, the swap of the binary                              |
+| `src/data-format.js`                   | the data format in `format.json`, which the server checks at start                                                            |
+| `dev/versions-manifest.js`             | writes `versions.json` for GitHub Pages from the release tags                                                                 |
+| `src/file-watch.js`                    | the hourly check of the TLS files                                                                                             |
+| `site/index.html`                      | the landing page, one static file that GitHub Pages serves with `install.sh`                                                  |
 
 Rules that keep the data correct:
 
@@ -154,5 +162,8 @@ asked. `deno fmt` and `deno lint` must pass before a commit.
 
 Bump `version` in `deno.json` to release. On a push to `main`, CI checks the code, builds the
 binaries for Linux and macOS on x64 and arm64 when the tag `v<version>` does not exist, runs a smoke
-test of each binary, and publishes them with SHA-256 files to a GitHub Release. GitHub Pages serves
-`install.sh` and the landing page in `site/`. See `adr/binary-distribution.md`.
+test of each binary, and publishes them with SHA-256 files to a GitHub Release. Then GitHub Pages
+serves `install.sh`, the landing page in `site/` and `versions.json`, the list of released versions
+with their data format. The update timer on each server reads that list. Before `1.0.0`, it installs
+only a patch version of the same minor version. See `adr/binary-distribution.md` and
+`adr/automatic-updates.md`.

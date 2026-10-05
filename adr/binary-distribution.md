@@ -17,6 +17,9 @@ and publishes it with a SHA-256 file to a GitHub Release.**
 - `install.sh` detects the platform, downloads the latest asset and its checksum, checks it, and
   installs to `/usr/local/bin`. GitHub Pages serves the script next to the landing page,
   `site/index.html`.
+- The Pages job runs after the release, and writes `versions.json` with each released version and
+  its data format. `imp-aly update` reads it. See [automatic-updates](automatic-updates.md).
+- Every release stays on GitHub Releases, so the URL of each version stays valid.
 
 ## Consequences
 

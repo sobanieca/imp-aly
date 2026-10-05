@@ -51,6 +51,8 @@ Without root, or without systemd, the server runs in the foreground, with the da
 `~/.imp-aly`. `--foreground` forces this. `Ctrl+C` stops it. `sudo imp-aly server --uninstall`
 removes the service. The data folder, the key file and the user `imp-aly` stay.
 
+The service updates itself once a day to the newest compatible version. See [Updates](update.md).
+
 **Keep the key secret.** The key gives access to the queries and to the app registry. The `Collect`
 endpoint is public and needs no key.
 
@@ -195,4 +197,5 @@ apps, the servers and the backups. See [Console](console.md).
 - [Backup](backup.md) - save the daily summaries, restore them, and keep them safe
 - [Console](console.md) - the web page with charts, a query builder, apps, servers and backups
 - [Security](security.md) - the key, the tokens and the limits
+- [Updates](update.md) - the daily update, and how to control it
 - [CLI](cli.md) - every command and option

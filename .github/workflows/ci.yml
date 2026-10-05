@@ -157,8 +157,8 @@ jobs:
           files: assets/*
 
   pages:
-    needs: check
-    if: github.event_name == 'push'
+    needs: [check, release]
+    if: always() && github.event_name == 'push' && needs.check.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -168,11 +168,18 @@ jobs:
       name: github-pages
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
       - name: Assemble site
         run: |
           mkdir -p _site
           cp -r site/. _site/
           cp install.sh _site/
+          deno run -A dev/versions-manifest.js > _site/versions.json
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

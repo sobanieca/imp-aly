@@ -1,6 +1,7 @@
 import { appConfig, AppError, openApps } from './apps.js'
 import { createTokenVerifier, EMPTY_BODY_HASH } from './auth.js'
 import { BackupError, createBackupStream, parseBackupOptions } from './backup.js'
+import { checkDataFormat, DATA_FORMAT } from './data-format.js'
 import { dayOf } from './days.js'
 import { removeIfExists } from './fs-utils.js'
 import { watchFiles } from './file-watch.js'
@@ -344,6 +345,7 @@ export const startServer = async ({
   }
 
   try {
+    await checkDataFormat(dataDir)
     await removeIfExists(uploadDir, { recursive: true })
     const apps = await openApps({ dataDir, ...(fetchFile ? { fetchFile } : {}) })
     let storage = null
@@ -441,6 +443,7 @@ export const startServer = async ({
         noBody()
         return json(200, {
           version,
+          dataFormat: DATA_FORMAT,
           startedAt,
           dataDir,
           apps: apps.list().length,

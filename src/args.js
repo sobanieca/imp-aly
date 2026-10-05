@@ -24,6 +24,8 @@ const FLAGS = {
   'limit-1h': 'string',
   'limit-24h': 'string',
   foreground: 'boolean',
+  'no-auto-update': 'boolean',
+  check: 'boolean',
   init: 'boolean',
   uninstall: 'boolean',
   json: 'boolean',

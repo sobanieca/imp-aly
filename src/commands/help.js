@@ -18,6 +18,7 @@ Usage:
 
   imp-aly server [options]              start the server (on the VPS)
   imp-aly server --uninstall            remove the systemd service
+  imp-aly update [--check]              install the newest compatible version
   imp-aly app add <name> <app url|build folder> [--segments plan,role]
   imp-aly app ls | show <name> | refresh <name> | rm <name>
   imp-aly query '<json>' | query <file.json> [--json]
@@ -70,7 +71,23 @@ Server (on the VPS):
                             once an hour and loads a renewed certificate
 ${limitLines}
   --foreground              do not touch systemd, run in the foreground
-  --uninstall               stop and remove the systemd service
+  --no-auto-update          do not install the timer that updates imp-aly
+  --uninstall               stop and remove the systemd service and the update timer
+
+Updates (on the VPS):
+
+  sudo imp-aly update                       install the newest compatible version now
+  imp-aly update --check                    show it, and install nothing
+
+  "sudo imp-aly server" also installs the systemd timer "imp-aly-update". Once
+  a day, at a random time, it runs "imp-aly update". The command installs only
+  a version that reads the same data folder: before 1.0.0 a patch release of
+  the same minor version, from 1.0.0 a release of the same major version. It
+  checks the SHA-256 of the download, replaces the binary in one step and
+  restarts the service. When the service does not stay running for 15 seconds,
+  it puts the old binary back, restarts the service again and does not try
+  that version again. The old binary stays next to the new one, as
+  .imp-aly.previous. Without the service, restart the server yourself.
 
 Client commands (app, query, backup, restore, status, token):
 

@@ -11,6 +11,7 @@ import {
   credentialPath,
   CREDENTIALS,
   ensureService,
+  isCompiled,
   isInsideService,
   SERVICE_DATA_DIR,
   SERVICE_NAME,
@@ -41,6 +42,7 @@ const SERVE_FLAGS = [
   'limit1h',
   'limit24h',
   'foreground',
+  'noAutoUpdate',
   'uninstall',
 ]
 
@@ -146,7 +148,12 @@ export const serviceArgs = (options) => {
   return args
 }
 
-const printBanner = ({ options, key, keyPath, mode }) => {
+const updateLine = (autoUpdate) =>
+  autoUpdate
+    ? 'Updates: once a day, to the newest compatible version. Turn off: add --no-auto-update'
+    : 'Updates: off. Run sudo imp-aly update to update'
+
+const printBanner = ({ options, key, keyPath, mode, autoUpdate = false }) => {
   const scheme = options.tlsCert ? 'https' : 'http'
   const addresses = options.bind ? [options.bind] : getLocalAddresses()
   const best = addresses[0] ?? '127.0.0.1'
@@ -162,6 +169,7 @@ const printBanner = ({ options, key, keyPath, mode }) => {
   }[mode]
   const serviceLines = mode === 'foreground' ? '' : `
 Logs: journalctl -u ${SERVICE_NAME} -f    Remove: sudo imp-aly server --uninstall
+${updateLine(autoUpdate)}
 `
   logger.plain(`
 imp-aly ${version} - ${modeLine}
@@ -259,6 +267,7 @@ export const server = async ({ positional, flags }) => {
     return await run({ options: foreground, key, keyPath, debug })
   }
   const serviceOptions = { ...options, dataDir: options.dataDir ?? SERVICE_DATA_DIR }
+  const autoUpdate = !flags.noAutoUpdate && isCompiled()
   const mode = await ensureService({
     args: serviceArgs(serviceOptions),
     dataDir: serviceOptions.dataDir,
@@ -266,6 +275,7 @@ export const server = async ({ positional, flags }) => {
     keyPath,
     tlsCert: serviceOptions.tlsCert,
     tlsKey: serviceOptions.tlsKey,
+    autoUpdate,
   })
-  printBanner({ options: serviceOptions, key, keyPath, mode })
+  printBanner({ options: serviceOptions, key, keyPath, mode, autoUpdate })
 }

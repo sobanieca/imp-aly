@@ -6,6 +6,7 @@ changes it. The records are plain text files, so you can read them with `cat`, `
 ```
 ~/.imp-aly/
   lock                         <- one server per data folder
+  format.json                  <- the data format, see Updates
   apps.json                    <- the registered apps
   wal/
     0001759363202417.open      <- the write-ahead log that takes new records

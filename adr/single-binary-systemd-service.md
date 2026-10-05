@@ -35,8 +35,10 @@ shows the systemd service.**
   command writes it, reloads systemd and restarts the service. So running the same command again is
   always safe.
 - Without root or systemd, or with `--foreground`, the server runs in the foreground with the data
-  folder `~/.imp-aly`. `--uninstall` stops and removes the service and keeps the data, the key and
-  the user.
+  folder `~/.imp-aly`. `--uninstall` stops and removes the service and the update timer, and keeps
+  the data, the key and the user.
+- The command also installs the timer `imp-aly-update`, unless `--no-auto-update` is given. See
+  [automatic-updates](automatic-updates.md).
 - The same binary is the client: `app`, `query`, `backup`, `restore`, `status` and `token` call the
   API. `add`, `ls`, `use` and `rm` keep a list of named servers for them, as the saved connections
   of tunnelr do. See [saved-servers](saved-servers.md).
