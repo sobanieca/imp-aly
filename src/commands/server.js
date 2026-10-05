@@ -180,7 +180,7 @@ Open the port ${options.adminPort} only to the machines that run the client comm
 
 Register an app (on this machine, or anywhere with --url <admin address> and -a):
 
-  imp-aly app add myapp https://myapp.example/app-map.txt
+  imp-aly app add myapp https://myapp.example/
 ${serviceLines}`)
 }
 

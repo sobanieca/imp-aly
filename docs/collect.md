@@ -49,9 +49,13 @@ one check fails:
 - `visit` is an id of 1 to 64 letters, digits, `-` or `_`.
 - `at` is a whole number of milliseconds since the epoch, in UTC. It is at most 1 hour before the
   time of the server and at most 1 hour after it.
-- `page` is a line of the app map. A path such as `/invoices/42` is not a pattern, so it fails.
+- `page` is in the `pages` of `app-analytics.json`. A path such as `/invoices/42` is not a pattern,
+  so it fails.
 - `zone` and `name` are namespaced names, such as `myapp.send`, of up to 128 characters. A name has
   two or more parts with a `.` between them. A part has only ASCII letters, digits, `-` and `_`.
+- The `zone` of a `seen` record is in the `zones` of `app-analytics.json`. The `zone` of a `used`
+  record is null or in `zones`.
+- The `name` of an `outcome` record is in the `outcomes` of `app-analytics.json`.
 - A segment value is null, a text, a number or a boolean. The server stores a number and a boolean
   as text. An empty text is null. The text has 1 to 64 ASCII letters, digits, `.`, `-` or `_`. For
   example, `pro`, `en-US`, `1.2.3`, `-1` and `true` pass. `1e+21`, `NaN`, `free trial` and `Krakow`
@@ -62,9 +66,10 @@ quote, a space, a control character or other Unicode text. So a value cannot cha
 terminal or a page that shows it, and it cannot change the layout of the data files.
 
 The server counts the rejected records of each app by reason. `imp-aly app show myapp` prints the
-counts. A record that your app sends and the server rejects is a bug in the sink, so check the
-counts after you deploy a change of the sink. `alySink` also logs a warning in the browser console
-when the server rejects records.
+counts. A record that your app sends and the server rejects is a bug in the sink, or a sign that the
+server has an old build file. Check the counts after each deploy. See
+[Update the build file after a deploy](apps.md#update-the-build-file-after-a-deploy). `alySink` also
+logs a warning in the browser console when the server rejects records.
 
 The day of a record is the UTC day of its `at`. One request can hold records of two days, for
 example a batch that the browser sends just after midnight UTC. Each record goes to its own day.
@@ -195,4 +200,4 @@ The check stops a script on another site from sending records to your server fro
 its visitors. Many browsers can come from many addresses, so the rate limit alone cannot stop them.
 
 **A client outside a browser can send any `Origin` header.** The check does not stop such a client.
-The app map, the record checks and the rate limit protect the endpoint from it.
+The build file, the record checks and the rate limit protect the endpoint from it.

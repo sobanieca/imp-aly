@@ -1,51 +1,85 @@
 # imp-aly - Apps
 
-The server accepts records only for a registered app. An app has a name, an app map and an optional
-list of segments.
+The server accepts records only for a registered app. An app has a name, the build file and an
+optional list of segments.
+
+## The build file
+
+When an app has a map, `imp build` writes `app-analytics.json` at the root of the build output. It
+is one JSON object with three lists:
+
+```json
+{
+  "pages": ["/", "/invoices", "/invoices/:id"],
+  "zones": ["myapp.invoice-list", "myapp.send"],
+  "outcomes": ["myapp.invoice-sent"]
+}
+```
+
+| List       | Content                                                           |
+| ---------- | ----------------------------------------------------------------- |
+| `pages`    | the route patterns, such as `/invoices/:id`                       |
+| `zones`    | the zone names: each name that the code gives to `zone({ name })` |
+| `outcomes` | the outcome names: each name that the code gives to `track(name)` |
+
+The server stores a record only when its `page` is in `pages`, its zone is in `zones` and its
+outcome name is in `outcomes`. A `used` record with a null zone needs no zone in the file. So a
+forged record cannot add a page, a zone or an outcome name that the app does not have.
+
+- `pages` has at least one route pattern. A pattern starts with `/`.
+- `zones` and `outcomes` can be empty, for an app with no zone or no outcome.
+- A zone name and an outcome name are namespaced names, such as `myapp.send`. See
+  [Collecting records](collect.md#the-checks).
+- An entry that occurs more than one time in a list counts once.
+- The file is at most 3 MiB, with at most 10,000 entries in each list.
 
 ## Register an app
 
 ```sh
-imp-aly app add myapp https://myapp.example/app-map.txt
-imp-aly app add myapp dist/app-map.txt --segments plan,role
+imp-aly app add myapp https://myapp.example/
+imp-aly app add myapp dist --segments plan,role
 ```
 
 - **The name** is 1 to 63 lowercase letters, digits and `-`, and starts with a letter or a digit.
   The app sends its records to `/collect/<name>`.
-- **The app map** is the `app-map.txt` file that `imp build` writes: one route pattern per line,
-  such as `/invoices/:id`. Give a URL or a file.
-  - With a URL, the server reads the map at once and again every 10 minutes. When a read fails, the
-    server keeps the last map and shows the error in `app ls`.
-  - With a file, the command uploads the text. The server keeps it until you upload a new one.
+- **The build file** comes from a URL or from a folder.
+  - A URL is the address of the folder where the build output is served, such as
+    `https://myapp.example/` or `https://myapp.example/app/`. The server reads `app-analytics.json`
+    in that folder at once, and again every 10 minutes. When a read fails, the server keeps the last
+    lists and shows the error in `app ls`.
+  - A folder is the build output on your machine, such as `dist`. The command reads
+    `app-analytics.json` in it and uploads it. The server keeps it until you upload a new one.
 - **The segments** are the extra fields that your sink adds to each record, such as `plan`. See
   [Segments](#segments).
 
 `app add` replaces an app of the same name. The counts of accepted and rejected records stay.
 
-With several servers, give all of them to each `app` command, so that each server has the same map
-and the same segments:
+With several servers, give all of them to each `app` command, so that each server has the same build
+file and the same segments:
 
 ```sh
-imp-aly app add myapp https://myapp.example/app-map.txt -s eu-1,eu-2,eu-3
+imp-aly app add myapp https://myapp.example/ -s eu-1,eu-2,eu-3
 imp-aly app refresh myapp -s eu-1,eu-2,eu-3
 imp-aly app ls -s eu-1,eu-2,eu-3
 ```
 
 See [Several servers](query.md#several-servers).
 
-When the map cannot be read, or a line of it does not start with `/`, the command fails and the
-server keeps the previous state.
+When the file cannot be read, or an entry of a list is not valid, the command fails and the server
+keeps the previous state. The error names the list and the index of the entry, such as `zones[3]`.
 
-## Update the map after a deploy
+## Update the build file after a deploy
 
-A new screen in your app is a new line in its map. Until the server knows the new line, it rejects
-the records of that screen. So update the map in the same pipeline that deploys the app:
+A new screen, a new zone or a new outcome in your app is a new entry in the build file. Until the
+server knows the new entry, it rejects the records of it. So update the file in the same pipeline
+that deploys the app:
 
 ```sh
 imp-aly app refresh myapp
 ```
 
-`refresh` reads the URL of the map again. For an uploaded map, run `app add` with the new file.
+`refresh` reads `app-analytics.json` at the URL again. For an uploaded file, run `app add` with the
+new build folder.
 
 ## Other commands
 
@@ -103,15 +137,25 @@ personal data, also when you hash it. Add groups, not ids.
 
 The commands call these endpoints. Each one needs a token, see [Security](security.md).
 
-| Endpoint                    | Body                                          | Answer                    |
-| --------------------------- | --------------------------------------------- | ------------------------- |
-| `GET /apps`                 |                                               | `{ "apps": [...] }`       |
-| `GET /apps/<name>`          |                                               | one app                   |
-| `PUT /apps/<name>`          | `{ "mapUrl": "...", "segments": ["plan"] }`   | the app                   |
-| `PUT /apps/<name>`          | `{ "map": "/\n/invoices\n", "segments": [] }` | the app                   |
-| `POST /apps/<name>/refresh` |                                               | the app                   |
-| `DELETE /apps/<name>`       |                                               | `{ "removed": "<name>" }` |
+| Endpoint                    | Body                                            | Answer                    |
+| --------------------------- | ----------------------------------------------- | ------------------------- |
+| `GET /apps`                 |                                                 | `{ "apps": [...] }`       |
+| `GET /apps/<name>`          |                                                 | one app                   |
+| `PUT /apps/<name>`          | `{ "appUrl": "...", "segments": ["plan"] }`     | the app                   |
+| `PUT /apps/<name>`          | `{ "build": "{\"pages\": [\"/\"], ...}", ... }` | the app                   |
+| `POST /apps/<name>/refresh` |                                                 | the app                   |
+| `DELETE /apps/<name>`       |                                                 | `{ "removed": "<name>" }` |
 
-An app in an answer has these fields: `name`, `mapUrl` (null for an uploaded map), `pages` (the
-number of lines of the map), `segments`, `createdAt`, `mapUpdatedAt`, `mapError`, `accepted`,
-`rejected` and `rejections` (the rejected records by reason, for up to 50 reasons).
+An upload gives `build`: the text of `app-analytics.json`. Give `appUrl` or `build`, not both.
+
+An app in an answer has these fields:
+
+- `name`
+- `appUrl`: the URL of the folder of the build, with a `/` at the end, or null for an uploaded file
+- `pages`, `zones` and `outcomes`: the lists of the build file, sorted
+- `segments`
+- `createdAt`
+- `buildUpdatedAt`: the time of the last successful read of the file
+- `buildError`: the error of the last read, or null
+- `accepted` and `rejected`: the counts of records
+- `rejections`: the rejected records by reason, for up to 50 reasons

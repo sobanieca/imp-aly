@@ -192,8 +192,8 @@ Stop the test server, and delete the folder.
 
 Copy these files after each change:
 
-- `apps.json` in the data folder. It holds the registered apps, their app maps and their segments.
-  To restore it, stop the server, copy the file back, and start the server.
+- `apps.json` in the data folder. It holds the registered apps, the lists of their build files and
+  their segments. To restore it, stop the server, copy the file back, and start the server.
 - The key file, `~/.secret/imp-aly-key` by default. Without the key, the commands cannot call the
   server. Keep the copy of the key in a safe place, because it gives access to the data.
 

@@ -8,10 +8,27 @@ import { DAYS, fill } from './fixtures.js'
 
 const KEY = 'test-key-0123456789'
 
-const MAP = '/\n/invoices\n/invoices/:id\n'
+const PAGES = ['/', '/invoices', '/invoices/:id']
 
-const start = async ({ dataDir: given, ...options } = {}) => {
+const buildText = (lists) =>
+  JSON.stringify({
+    pages: PAGES,
+    zones: ['myapp.list', 'myapp.send'],
+    outcomes: ['myapp.sent'],
+    ...lists,
+  })
+
+const BUILD = { build: buildText() }
+
+const BUILD_URL = 'https://myapp.example/app-analytics.json'
+
+const APP_URL = 'https://myapp.example/'
+
+const hostedFiles = () => ({ [BUILD_URL]: BUILD.build })
+
+const start = async ({ dataDir: given, files = hostedFiles(), ...options } = {}) => {
   logger.setQuiet(true)
+  const fetched = []
   const dataDir = given ?? (await temporaryDir())
   const server = await startServer({
     port: 0,
@@ -22,11 +39,10 @@ const start = async ({ dataDir: given, ...options } = {}) => {
     minFree: null,
     segmentMs: 30,
     quiet: true,
-    fetchMap: (url) => {
-      if (url === 'https://myapp.example/app-map.txt') {
-        return Promise.resolve(MAP.split('\n').filter(Boolean))
-      }
-      return Promise.reject(new Error('not found'))
+    fetchFile: (url) => {
+      fetched.push(url)
+      if (Object.hasOwn(files, url)) return Promise.resolve(files[url])
+      return Promise.reject(new Error(`GET ${url} answered 404`))
     },
     ...options,
   })
@@ -60,7 +76,7 @@ const start = async ({ dataDir: given, ...options } = {}) => {
     await server.shutdown()
     if (!keep) await Deno.remove(dataDir, { recursive: true })
   }
-  return { base, adminBase, call, send, admin, stop, dataDir }
+  return { base, adminBase, call, send, admin, stop, dataDir, files, fetched }
 }
 
 const record = (fields) => ({
@@ -74,9 +90,11 @@ Deno.test('collects valid records and answers queries', async () => {
   const { adminBase, call, send, admin, stop } = await start()
   try {
     assertEquals((await send(adminBase, 'GET', '/apps')).status, 401)
-    const added = await admin('PUT', '/apps/myapp', { map: MAP, segments: ['plan'] })
+    const added = await admin('PUT', '/apps/myapp', { ...BUILD, segments: ['plan'] })
     assertEquals(added.status, 200)
     assertEquals(added.body.pages.length, 3)
+    assertEquals(added.body.zones, ['myapp.list', 'myapp.send'])
+    assertEquals(added.body.outcomes, ['myapp.sent'])
 
     const posted = await call('POST', '/collect/myapp', [
       record({ type: 'page', plan: 'pro' }),
@@ -113,7 +131,9 @@ Deno.test('collects valid records and answers queries', async () => {
 
     const apps = await admin('GET', '/apps')
     assertEquals(apps.body.apps[0].accepted, 4)
-    assertEquals(apps.body.apps[0].rejections, { 'page is not on the app map': 1 })
+    assertEquals(apps.body.apps[0].rejections, {
+      'page is not in the pages of app-analytics.json': 1,
+    })
     const status = await admin('GET', '/status')
     assertEquals(status.status, 200)
   } finally {
@@ -124,7 +144,7 @@ Deno.test('collects valid records and answers queries', async () => {
 Deno.test('rejects malformed and oversized requests', async () => {
   const { adminBase, call, send, admin, stop } = await start()
   try {
-    await admin('PUT', '/apps/myapp', { map: MAP })
+    await admin('PUT', '/apps/myapp', BUILD)
     assertEquals((await call('POST', '/collect/other', [])).status, 404)
     assertEquals((await call('POST', '/collect/myapp', '{not json')).status, 400)
     assertEquals((await call('POST', '/collect/myapp', 'x'.repeat(70_000))).status, 413)
@@ -132,19 +152,27 @@ Deno.test('rejects malformed and oversized requests', async () => {
     assertEquals((await call('POST', '/collect/myapp', many)).body, { accepted: 150, rejected: 0 })
     assertEquals((await call('GET', '/collect/myapp')).status, 405)
     assertEquals((await call('GET', '/nothing')).status, 404)
-    assertEquals((await admin('PUT', '/apps/Bad_Name', { map: MAP })).status, 400)
-    assertEquals((await admin('PUT', '/apps/x', { map: 'no-slash' })).status, 422)
+    assertEquals((await admin('PUT', '/apps/Bad_Name', BUILD)).status, 400)
     assertEquals(
-      (await admin('PUT', '/apps/x', { mapUrl: 'https://nowhere.example/' })).status,
+      (await admin('PUT', '/apps/x', { build: buildText({ pages: ['no-slash'] }) })).status,
       422,
     )
-    assertEquals((await admin('PUT', '/apps/x', { map: MAP, segments: ['page'] })).status, 400)
-    assertEquals((await admin('PUT', '/apps/x', { map: MAP, segments: ['Page'] })).status, 400)
+    assertEquals((await admin('PUT', '/apps/x', { build: '{' })).status, 422)
+    assertEquals((await admin('PUT', '/apps/x', { build: { pages: PAGES } })).status, 400)
+    assertEquals((await admin('PUT', '/apps/x', { segments: [] })).status, 400)
+    assertEquals((await admin('PUT', '/apps/x', { ...BUILD, appUrl: APP_URL })).status, 400)
+    assertEquals((await admin('PUT', '/apps/x', { appUrl: 'myapp.example' })).status, 400)
+    assertEquals(
+      (await admin('PUT', '/apps/x', { appUrl: 'https://nowhere.example/' })).status,
+      422,
+    )
+    assertEquals((await admin('PUT', '/apps/x', { ...BUILD, segments: ['page'] })).status, 400)
+    assertEquals((await admin('PUT', '/apps/x', { ...BUILD, segments: ['Page'] })).status, 400)
     for (const segment of ['week', 'constructor', 'toString']) {
-      assertEquals((await admin('PUT', '/apps/x', { map: MAP, segments: [segment] })).status, 400)
+      assertEquals((await admin('PUT', '/apps/x', { ...BUILD, segments: [segment] })).status, 400)
     }
     assertEquals(
-      (await admin('PUT', '/apps/x', { map: MAP, segments: ['plan', 'Plan'] })).status,
+      (await admin('PUT', '/apps/x', { ...BUILD, segments: ['plan', 'Plan'] })).status,
       400,
     )
     assertEquals((await admin('POST', '/query', { app: 'myapp', measures: ['nope'] })).status, 400)
@@ -159,7 +187,7 @@ Deno.test('rejects malformed and oversized requests', async () => {
 })
 
 Deno.test('answers a CORS preflight and registers an app from a URL', async () => {
-  const { base, admin, stop } = await start()
+  const { base, admin, stop, fetched } = await start()
   try {
     const response = await fetch(`${base}/collect/myapp`, {
       method: 'OPTIONS',
@@ -168,11 +196,90 @@ Deno.test('answers a CORS preflight and registers an app from a URL', async () =
     await response.body?.cancel()
     assertEquals(response.status, 204)
     assertEquals(response.headers.get('access-control-allow-methods'), 'POST')
-    const added = await admin('PUT', '/apps/myapp', { mapUrl: 'https://myapp.example/app-map.txt' })
-    assertEquals(added.body.mapUrl, 'https://myapp.example/app-map.txt')
-    assertEquals((await admin('POST', '/apps/myapp/refresh')).body.mapError, null)
+    const added = await admin('PUT', '/apps/myapp', { appUrl: 'https://myapp.example' })
+    assertEquals(added.body.appUrl, APP_URL)
+    assertEquals(added.body.zones, ['myapp.list', 'myapp.send'])
+    assertEquals(added.body.outcomes, ['myapp.sent'])
+    assertEquals(fetched, [BUILD_URL])
+    assertEquals((await admin('POST', '/apps/myapp/refresh')).body.buildError, null)
+    assertEquals(fetched, [BUILD_URL, BUILD_URL])
     assertEquals((await admin('DELETE', '/apps/myapp')).status, 200)
     assertEquals((await admin('GET', '/apps')).body.apps, [])
+  } finally {
+    await stop()
+  }
+})
+
+Deno.test('a failed refresh keeps the last build file and records the error', async () => {
+  const { admin, call, stop, files } = await start()
+  try {
+    await admin('PUT', '/apps/myapp', { appUrl: APP_URL })
+    delete files[BUILD_URL]
+    const failed = await admin('POST', '/apps/myapp/refresh')
+    assertEquals(failed.body.buildError, `GET ${BUILD_URL} answered 404`)
+    assertEquals(failed.body.zones, ['myapp.list', 'myapp.send'])
+    assertEquals(failed.body.outcomes, ['myapp.sent'])
+    files[BUILD_URL] = buildText({ zones: ['myapp.new'], outcomes: ['myapp.sent', 'bad line'] })
+    const bad = await admin('POST', '/apps/myapp/refresh')
+    assertEquals(
+      bad.body.buildError,
+      'app-analytics.json outcomes[1] "bad line" is not an outcome name - a namespaced name, like myapp.sent',
+    )
+    assertEquals(bad.body.zones, ['myapp.list', 'myapp.send'])
+    const posted = await call('POST', '/collect/myapp', [
+      record({ type: 'seen', zone: 'myapp.send' }),
+      record({ type: 'seen', zone: 'myapp.new' }),
+    ])
+    assertEquals(posted.body, { accepted: 1, rejected: 1 })
+    files[BUILD_URL] = buildText({ zones: ['myapp.new'], outcomes: [] })
+    const fixed = await admin('POST', '/apps/myapp/refresh')
+    assertEquals([fixed.body.buildError, fixed.body.zones, fixed.body.outcomes], [
+      null,
+      ['myapp.new'],
+      [],
+    ])
+    const rejected = await admin('PUT', '/apps/other', {
+      build: buildText({ zones: ['myapp.send', 'noname'] }),
+    })
+    assertEquals(rejected.status, 422)
+    assertEquals(
+      rejected.body.error,
+      'app-analytics.json zones[1] "noname" is not a zone name - a namespaced name, like myapp.send',
+    )
+  } finally {
+    await stop()
+  }
+})
+
+Deno.test('rejects the zones and outcomes that are not in the build file', async () => {
+  const { admin, call, stop } = await start()
+  try {
+    await admin('PUT', '/apps/myapp', BUILD)
+    const posted = await call('POST', '/collect/myapp', [
+      record({ type: 'seen', zone: 'myapp.send' }),
+      record({ type: 'used', zone: 'myapp.list' }),
+      record({ type: 'used', zone: null }),
+      record({ type: 'outcome', name: 'myapp.sent' }),
+      record({ type: 'seen', zone: 'myapp.forged' }),
+      record({ type: 'used', zone: 'myapp.forged' }),
+      record({ type: 'outcome', name: 'myapp.forged' }),
+    ])
+    assertEquals(posted.body, { accepted: 4, rejected: 3 })
+    const shown = await admin('GET', '/apps/myapp')
+    assertEquals(shown.body.rejections, {
+      'zone is not in the zones of app-analytics.json': 2,
+      'name is not in the outcomes of app-analytics.json': 1,
+    })
+    const empty = await admin('PUT', '/apps/empty', {
+      build: buildText({ zones: [], outcomes: [] }),
+    })
+    assertEquals([empty.status, empty.body.zones, empty.body.outcomes], [200, [], []])
+    const none = await call('POST', '/collect/empty', [
+      record({ type: 'used', zone: null }),
+      record({ type: 'seen', zone: 'myapp.send' }),
+      record({ type: 'outcome', name: 'myapp.sent' }),
+    ])
+    assertEquals(none.body, { accepted: 1, rejected: 2 })
   } finally {
     await stop()
   }
@@ -181,7 +288,7 @@ Deno.test('answers a CORS preflight and registers an app from a URL', async () =
 Deno.test('the public port and the admin port serve separate endpoints', async () => {
   const { adminBase, call, send, admin, stop } = await start()
   try {
-    await admin('PUT', '/apps/myapp', { map: MAP })
+    await admin('PUT', '/apps/myapp', BUILD)
     const token = await createToken(KEY, { method: 'GET', path: '/status' })
     const onPublic = await call('GET', '/status', undefined, { authorization: `Bearer ${token}` })
     assertEquals(onPublic.status, 404)
@@ -205,7 +312,7 @@ Deno.test('the public port and the admin port serve separate endpoints', async (
 Deno.test('accepts records only from the allowed origins', async () => {
   const { base, call, admin, stop } = await start({ allowOrigins: ['https://myapp.example'] })
   try {
-    await admin('PUT', '/apps/myapp', { map: MAP })
+    await admin('PUT', '/apps/myapp', BUILD)
     const batch = [record({ type: 'error' })]
     const allowed = await call('POST', '/collect/myapp', batch, { origin: 'https://myapp.example' })
     assertEquals(allowed.status, 202)
@@ -235,7 +342,7 @@ Deno.test('drops requests of an address over the limit', async () => {
     limits: [{ name: '5s', ms: 5_000, limit: 10 }],
   })
   try {
-    await admin('PUT', '/apps/myapp', { map: MAP })
+    await admin('PUT', '/apps/myapp', BUILD)
     const batch = Array.from({ length: 5 }, () => record({ type: 'error' }))
     assertEquals((await call('POST', '/collect/other-ip', [])).status, 404)
     assertEquals((await call('POST', '/collect/myapp', batch.slice(1))).status, 202)
@@ -254,7 +361,7 @@ Deno.test('a batch above the smallest limit fails, and a refused batch costs one
     limits: [{ name: '5s', ms: 5_000, limit: 10 }, { name: '1m', ms: 60_000, limit: 50 }],
   })
   try {
-    await admin('PUT', '/apps/myapp', { map: MAP })
+    await admin('PUT', '/apps/myapp', BUILD)
     const batch = (count) => Array.from({ length: count }, () => record({ type: 'error' }))
     const large = await call('POST', '/collect/myapp', batch(11))
     assertEquals(large.status, 413)
@@ -270,7 +377,7 @@ Deno.test('a batch above the smallest limit fails, and a refused batch costs one
 Deno.test('answers 503 above the requests in progress', async () => {
   const { base, call, admin, stop } = await start({ maxRequests: 1 })
   try {
-    await admin('PUT', '/apps/myapp', { map: MAP })
+    await admin('PUT', '/apps/myapp', BUILD)
     let send
     const body = new ReadableStream({ start: (controller) => (send = controller) })
     const slow = fetch(`${base}/collect/myapp`, { method: 'POST', body, duplex: 'half' })
@@ -297,12 +404,15 @@ Deno.test('answers 503 above the requests in progress', async () => {
 
 Deno.test('the registry and the data survive a restart', async () => {
   const first = await start()
-  await first.admin('PUT', '/apps/myapp', { map: MAP })
+  await first.admin('PUT', '/apps/myapp', BUILD)
   await first.call('POST', '/collect/myapp', [record({ type: 'error' })])
   await first.stop({ keep: true })
   const second = await start({ dataDir: first.dataDir })
   try {
-    assertEquals((await second.admin('GET', '/apps')).body.apps.map((app) => app.name), ['myapp'])
+    assertEquals(
+      (await second.admin('GET', '/apps')).body.apps.map((app) => [app.name, app.zones]),
+      [['myapp', ['myapp.list', 'myapp.send']]],
+    )
     assertEquals(
       (await second.call('POST', '/collect/myapp', [record({ type: 'error' })])).status,
       202,
@@ -337,7 +447,7 @@ Deno.test('a second server on the same data folder fails', async () => {
 Deno.test('a record goes to the UTC day of its at', async () => {
   const { call, admin, stop, dataDir } = await start()
   try {
-    await admin('PUT', '/apps/myapp', { map: MAP })
+    await admin('PUT', '/apps/myapp', BUILD)
     const now = Date.now()
     const earlier = now - 50 * 60_000
     const later = now + 50 * 60_000
@@ -368,7 +478,7 @@ Deno.test('a record goes to the UTC day of its at', async () => {
 Deno.test('a token works only for its method, path and body', async () => {
   const { admin, stop } = await start()
   try {
-    await admin('PUT', '/apps/myapp', { map: MAP })
+    await admin('PUT', '/apps/myapp', BUILD)
     const query = { app: 'myapp' }
     assertEquals((await admin('POST', '/query', query)).status, 200)
     const otherPath = await admin('GET', '/apps', undefined, {

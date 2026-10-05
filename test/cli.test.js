@@ -1,7 +1,10 @@
 import { parseArgs, requireOnlyFlags } from '../src/args.js'
+import { app } from '../src/commands/app.js'
 import { readServeOptions, serviceArgs } from '../src/commands/server.js'
+import { logger } from '../src/logger.js'
+import { startServer } from '../src/server.js'
 import { quote, serviceProblems, unitFile } from '../src/service.js'
-import { assert, assertEquals, assertThrows } from './assert.js'
+import { assert, assertEquals, assertRejects, assertThrows, temporaryDir } from './assert.js'
 
 Deno.test('arguments parse into positionals and flags', () => {
   assertEquals(parseArgs(['--port', '2980', '-a', 'key', '--foreground']), {
@@ -156,4 +159,54 @@ Deno.test('unit arguments escape systemd specifiers and variables', () => {
   assertEquals(quote('15%'), '15%%')
   assertEquals(quote('/srv/$HOME'), '/srv/$$HOME')
   assertEquals(quote('a b"c'), '"a b\\"c"')
+})
+
+Deno.test('app add uploads the file of a build folder', async () => {
+  logger.setQuiet(true)
+  const key = 'cli-test-key-0123456789'
+  const dataDir = await temporaryDir()
+  const dist = await temporaryDir()
+  const server = await startServer({
+    port: 0,
+    adminPort: 0,
+    hostname: '127.0.0.1',
+    dataDir,
+    key,
+    minFree: null,
+    quiet: true,
+  })
+  const flags = { url: `http://127.0.0.1:${server.adminPort}`, auth: key }
+  const add = (source) => app({ positional: ['app', 'add', 'myapp', source], flags })
+  try {
+    await assertRejects(() => add(dist), /cannot read .*app-analytics.json/)
+    await Deno.writeTextFile(
+      `${dist}/app-analytics.json`,
+      JSON.stringify({ pages: ['/', '/invoices/:id'], zones: ['myapp.send'], outcomes: [] }),
+    )
+    await assertRejects(() => add(`${dist}/app-analytics.json`), /is not a folder/)
+    await add(dist)
+    const listed = []
+    const original = console.log
+    console.log = (text) => listed.push(text)
+    try {
+      await app({ positional: ['app', 'show', 'myapp'], flags })
+    } finally {
+      console.log = original
+    }
+    const shown = JSON.parse(listed[0])
+    assertEquals([shown.appUrl, shown.pages, shown.zones, shown.outcomes], [
+      null,
+      ['/', '/invoices/:id'],
+      ['myapp.send'],
+      [],
+    ])
+    await assertRejects(
+      () => app({ positional: ['app', 'refresh', 'myapp'], flags }),
+      /uploaded build and no appUrl/,
+    )
+  } finally {
+    await server.shutdown()
+    await Deno.remove(dataDir, { recursive: true })
+    await Deno.remove(dist, { recursive: true })
+  }
 })

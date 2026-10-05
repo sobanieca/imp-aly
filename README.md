@@ -3,12 +3,13 @@
 Website: https://sobanieca.github.io/imp-aly/
 
 A small analytics server for [imp](https://github.com/sobanieca/imp-ui) apps. Run it on your own
-VPS. It takes the records of `imp/analytics`, checks each one against the app map of your app,
+VPS. It takes the records of `imp/analytics`, checks each one against the build file of your app,
 stores them on the local disk in plain text column files, and answers queries.
 
 - One binary. No database and no runtime. The server has no dependency.
 - A synced write-ahead log before each answer, and a crash-safe column store behind it.
-- Records checked against `app-map.txt`, strict field rules, and a rate limit per address.
+- Records checked against `app-analytics.json` from `imp build`, strict field rules, and a rate
+  limit per address.
 - Retention by free disk space: the oldest days lose their records first and keep their daily
   summaries, so the history is as long as the disk allows.
 - Compressed backups of the daily summaries, which the server can restore and query.
@@ -21,7 +22,7 @@ imp-aly is not released yet. Until version `1.0.0`, any part of it can change.
 ```sh
 curl -fsSL https://sobanieca.github.io/imp-aly/install.sh | bash
 sudo imp-aly server --port 2980
-imp-aly app add myapp https://myapp.example/app-map.txt
+imp-aly app add myapp https://myapp.example/
 ```
 
 Then send the records from your app with the imp-aly sink of imp, `imp/analytics/aly`:

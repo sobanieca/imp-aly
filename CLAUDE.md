@@ -39,7 +39,7 @@ See `adr/plain-javascript-dependency-free-server.md` and `adr/local-console.md`.
 | `src/commands/`                        | `server`, `app`, `query`, `backup`, `restore`, `status`, `console`, `token`, `add`/`ls`/`use`/`rm`, `skill`, `help` |
 | `src/server.js`                        | `startServer()`: HTTP routes, workers, log, registry, limiter                                                       |
 | `src/records.js`                       | the checks of one imp record                                                                                        |
-| `src/apps.js`, `src/app-map.js`        | the app registry in `apps.json`, and reading `app-map.txt`                                                          |
+| `src/apps.js`, `src/app-build.js`      | the app registry in `apps.json`, and reading `app-analytics.json`                                                   |
 | `src/rate-limit.js`                    | the sliding windows per client address                                                                              |
 | `src/origins.js`                       | the allowed browser origins of the public endpoint                                                                  |
 | `src/wal.js`                           | the write-ahead log with group commit and parts                                                                     |

@@ -3,8 +3,9 @@
 ## Context
 
 The raw files of a day grow by one line per record. Most fields have few values: `type` has five,
-`page` has the lines of the app map. In record order these values alternate, so the files are large
-and a query parses every line. A finished day never changes, so it can take a better layout once.
+`page` has the route patterns of the app map. In record order these values alternate, so the files
+are large and a query parses every line. A finished day never changes, so it can take a better
+layout once.
 
 ## Decision
 

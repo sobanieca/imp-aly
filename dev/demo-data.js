@@ -70,6 +70,12 @@ const OUTCOMES = {
   '/account': [['shop.address-saved', 0.1]],
 }
 
+const namesOf = (lists) => [...new Set(Object.values(lists).flat().map(([name]) => name))].sort()
+
+export const DEMO_ZONES = namesOf(ZONES)
+
+export const DEMO_OUTCOMES = namesOf(OUTCOMES)
+
 const COUNTRIES = [
   ['PL', 30],
   ['DE', 20],

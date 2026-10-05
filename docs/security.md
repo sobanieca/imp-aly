@@ -2,10 +2,10 @@
 
 The server has a public part and a private part. Each part has its own port.
 
-| Part    | Port   | Endpoints                                           | Protection                         |
-| ------- | ------ | --------------------------------------------------- | ---------------------------------- |
-| public  | `2980` | `POST /collect/<app>`, `GET /`                      | app map, record checks, rate limit |
-| private | `2981` | `/apps`, `/query`, `/status`, `/backup`, `/restore` | a one-time token signed with a key |
+| Part    | Port   | Endpoints                                           | Protection                             |
+| ------- | ------ | --------------------------------------------------- | -------------------------------------- |
+| public  | `2980` | `POST /collect/<app>`, `GET /`                      | build files, record checks, rate limit |
+| private | `2981` | `/apps`, `/query`, `/status`, `/backup`, `/restore` | a one-time token signed with a key     |
 
 `--port` and `--admin-port` change the ports. A port answers `404` to the endpoints of the other
 part.
@@ -71,8 +71,9 @@ server through HTTPS when you call the API from another machine. See
 
 Anybody can send records to `/collect/<app>`. The server limits what a sender can do:
 
-- **The app map.** The server stores a record only when its `page` is a route pattern of the app. A
-  sender cannot fill the data with invented paths.
+- **The build file.** The server stores a record only when its `page`, its zone and its outcome name
+  are in the `pages`, `zones` and `outcomes` lists of `app-analytics.json`. A sender cannot fill the
+  data with invented pages, zones or outcomes.
 - **The record checks.** Each field has a type, a size and a set of allowed characters. A record
   with an unknown field fails. See [Collecting records](collect.md).
 - **Plain characters only.** A zone, an outcome name and a segment value hold only ASCII letters,

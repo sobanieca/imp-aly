@@ -19,14 +19,14 @@ status field. When a decision changes, replace its ADR. When a decision is dropp
 
 ## Collection
 
-| ADR                                                                 | Decision                                                 |
-| ------------------------------------------------------------------- | -------------------------------------------------------- |
-| [app-map-record-validation](app-map-record-validation.md)           | Records are checked against the app map and strict rules |
-| [per-address-sliding-rate-limit](per-address-sliding-rate-limit.md) | A rate limit per address, in four sliding windows        |
-| [in-flight-request-cap](in-flight-request-cap.md)                   | A cap on the requests in progress per port, then `503`   |
-| [collect-origin-allowlist](collect-origin-allowlist.md)             | The public endpoint can accept only the allowed origins  |
-| [utc-day-from-record-time](utc-day-from-record-time.md)             | The day of a record is the UTC day of its `at`           |
-| [write-ahead-log-group-commit](write-ahead-log-group-commit.md)     | Records go to a synced write-ahead log before the answer |
+| ADR                                                                 | Decision                                                    |
+| ------------------------------------------------------------------- | ----------------------------------------------------------- |
+| [build-file-record-validation](build-file-record-validation.md)     | Records are checked against the build file and strict rules |
+| [per-address-sliding-rate-limit](per-address-sliding-rate-limit.md) | A rate limit per address, in four sliding windows           |
+| [in-flight-request-cap](in-flight-request-cap.md)                   | A cap on the requests in progress per port, then `503`      |
+| [collect-origin-allowlist](collect-origin-allowlist.md)             | The public endpoint can accept only the allowed origins     |
+| [utc-day-from-record-time](utc-day-from-record-time.md)             | The day of a record is the UTC day of its `at`              |
+| [write-ahead-log-group-commit](write-ahead-log-group-commit.md)     | Records go to a synced write-ahead log before the answer    |
 
 ## Storage
 

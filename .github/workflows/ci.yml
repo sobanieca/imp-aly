@@ -100,12 +100,18 @@ jobs:
           test "$(./${{ matrix.asset }} --version)" = "${{ needs.version.outputs.version }}"
           ./${{ matrix.asset }} server --foreground -p 2980 -d "$RUNNER_TEMP/data" -a "$RUNNER_TEMP/key" &
           sleep 3
-          printf '/\n/invoices\n' > "$RUNNER_TEMP/app-map.txt"
-          ./${{ matrix.asset }} app add smoke "$RUNNER_TEMP/app-map.txt" -a "$RUNNER_TEMP/key"
-          curl -fsS -X POST http://127.0.0.1:2980/collect/smoke \
-            -d "{\"type\":\"error\",\"visit\":\"v1\",\"at\":$(date +%s)000,\"page\":\"/invoices\"}"
+          mkdir "$RUNNER_TEMP/build"
+          printf '{"pages":["/","/invoices"],"zones":["smoke.list"],"outcomes":["smoke.sent"]}' > "$RUNNER_TEMP/build/app-analytics.json"
+          ./${{ matrix.asset }} app add smoke "$RUNNER_TEMP/build" -a "$RUNNER_TEMP/key"
+          at="$(date +%s)000"
+          curl -fsS -X POST http://127.0.0.1:2980/collect/smoke -d "[
+            {\"type\":\"error\",\"visit\":\"v1\",\"at\":$at,\"page\":\"/invoices\"},
+            {\"type\":\"seen\",\"visit\":\"v1\",\"at\":$at,\"page\":\"/invoices\",\"zone\":\"smoke.list\"},
+            {\"type\":\"outcome\",\"visit\":\"v1\",\"at\":$at,\"page\":\"/invoices\",\"name\":\"smoke.sent\"},
+            {\"type\":\"outcome\",\"visit\":\"v1\",\"at\":$at,\"page\":\"/invoices\",\"name\":\"smoke.forged\"}
+          ]" | grep '"rejected":1'
           sleep 4
-          ./${{ matrix.asset }} query '{"app":"smoke"}' --json -a "$RUNNER_TEMP/key" | grep '"matched": 1'
+          ./${{ matrix.asset }} query '{"app":"smoke"}' --json -a "$RUNNER_TEMP/key" | grep '"matched": 3'
           export XDG_CONFIG_HOME="$RUNNER_TEMP/config"
           ./${{ matrix.asset }} add local http://127.0.0.1:2981 -a "$RUNNER_TEMP/key"
           ./${{ matrix.asset }} console --port 8010 &

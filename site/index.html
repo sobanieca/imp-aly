@@ -375,13 +375,14 @@
       border-radius: 8px;
       padding: 8px 10px;
       min-width: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
     }
     .tile .k {
       font-size: 11.5px;
+      line-height: 1.3;
       color: var(--muted);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
     }
     .tile .v {
       font-family: var(--mono);
@@ -540,7 +541,7 @@
       <section class="hero">
         <h1>Analytics for your imp apps, on a VPS that you own.</h1>
         <p
-          class="lead"><code class="name">imp-aly</code> is one small binary. It takes the records of <code>imp/analytics</code>, checks each one against the app map of your app, and stores them on the local disk. Then it answers your queries. No database, no third party, and the data stays on your machine.</p>
+          class="lead"><code class="name">imp-aly</code> is one small binary. It takes the records of <code>imp/analytics</code>, checks each one against the build file of your app, and stores them on the local disk. Then it answers your queries. No database, no third party, and the data stays on your machine.</p>
 
         <div class="map"
           aria-label="Diagram: the browsers of your users send records to the public port of the imp-aly server on your VPS. Your machine reads the numbers from the admin port with the key.">
@@ -621,7 +622,7 @@
         </div>
         <div class="point">
           <h3>Only correct records</h3>
-          <p>Each page must be a line of <code>app-map.txt</code>. Strict field rules and a rate limit per address stop junk and floods.</p>
+          <p>Each page, zone and outcome must be in the lists of <code>app-analytics.json</code> from <code>imp build</code>. Run <code>imp-aly app refresh</code> after each deploy. Strict field rules and a rate limit per address stop junk and floods.</p>
         </div>
         <div class="point">
           <h3>History as long as the disk</h3>
@@ -629,7 +630,7 @@
         </div>
         <div class="point">
           <h3>Fast queries</h3>
-          <p>Most queries read only the daily summaries. Group by page, type, zone, country or your own segments. Count records and visits.</p>
+          <p>Most queries read only the daily summaries. Group by page, type, zone, outcome, country or your own segments, and by day, week or month. Count records and visits.</p>
         </div>
         <div class="point">
           <h3>Viewed, and also used</h3>
@@ -659,7 +660,7 @@
   Admin:     http://203.0.113.10:2981
   Key:       </span><span class="hl">kD3xW9q1mZ8pR4tY7uH2cV6bN0aS5fGj</span>
 <span class="dim">$</span> imp-aly app add myapp \
-    https://myapp.example/app-map.txt</pre>
+    https://myapp.example/</pre>
         </div>
         <div class="col">
           <h3>Your machine <span>whenever</span></h3>
@@ -684,7 +685,7 @@ onAnalytics(alySink({
       <section class="read">
         <h2>Read the numbers</h2>
         <p
-          class="sub">Ask with a JSON query in the terminal, or open the console: a local web page with reports, charts, a query builder, and your apps, servers and backups. Both give the same numbers.</p>
+          class="sub">Ask with a JSON query in the terminal, or open the console: a local web page with reports of your apps, pages, zones, outcomes and errors, a query builder, and your apps, servers and backups. Both give the same numbers.</p>
         <div class="col">
           <h3>Terminal <span>imp-aly query</span></h3>
           <pre><span class="dim">$</span> imp-aly query '{"app": "myapp", "groupBy": ["page"],
@@ -714,7 +715,7 @@ onAnalytics(alySink({
               <div class="v good">80.0%</div>
             </div>
             <div class="tile">
-              <div class="k">Never reached</div>
+              <div class="k">Never reached or used</div>
               <div class="v">2</div>
             </div>
           </div>

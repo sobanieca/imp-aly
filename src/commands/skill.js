@@ -28,8 +28,9 @@ files of the user. Never ask for a key and never put a key in a command.
    Use \`-s <name>\` for another server, or \`-s eu,us\` to add up the answers of
    several servers.
 3. Run \`imp-aly app ls\` to see the registered apps. Run
-   \`imp-aly app show <name>\` to see the segments and the rejection counts of
-   one app.
+   \`imp-aly app show <name>\` to see the pages, the zones, the outcome names,
+   the segments and the rejection counts of one app. Use these values in
+   \`where\`.
 4. Query with a JSON object:
    \`imp-aly query '{"app": "myapp", "from": "2026-09-01", "to": "2026-09-30", "groupBy": ["page"], "measures": ["records", "visits"]}'\`.
    Add \`--json\` to get the answer as JSON.

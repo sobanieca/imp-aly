@@ -17,8 +17,8 @@ because retention keeps the current day and everything after it.
 hour before to 1 hour after the time of the server.**
 
 - One request can fill several days. The handler writes each record to the log with its own day.
-- The window is a check of the record, like the other checks, see `app-map-record-validation.md`. A
-  record outside it is rejected with the reason `at is more than 1 hour old` or
+- The window is a check of the record, like the other checks, see `build-file-record-validation.md`.
+  A record outside it is rejected with the reason `at is more than 1 hour old` or
   `at is more
   than 1 hour ahead`.
 - Because no record can be older than 1 hour, the storage worker seals a day 1 hour and 10 minutes

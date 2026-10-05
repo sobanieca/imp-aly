@@ -72,10 +72,10 @@ const runEach = async (targets, run) => {
 
 const appBody = (body) => {
   if (body === null || typeof body !== 'object' || Array.isArray(body)) {
-    throw new Error('the body is an object, like {"mapUrl": "https://myapp.example/app-map.txt"}')
+    throw new Error('the body is an object, like {"appUrl": "https://myapp.example/"}')
   }
   const result = {}
-  for (const key of ['mapUrl', 'map', 'segments']) {
+  for (const key of ['appUrl', 'build', 'segments']) {
     if (body[key] !== undefined) result[key] = body[key]
   }
   return result

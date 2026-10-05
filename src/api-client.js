@@ -105,7 +105,9 @@ const configWarnings = (app, answers) => {
     warnings.push(`the app ${app} is not registered on: ${names}`)
   }
   if (configs.size > 1) {
-    warnings.push(`the app ${app} has a different map or different segments on the servers`)
+    warnings.push(
+      `the app ${app} has different builds or different segments on the servers`,
+    )
   }
   return warnings
 }

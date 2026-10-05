@@ -199,7 +199,7 @@ together. Each server stores the visits that reach it. `imp-aly query` adds up t
 2. Register the app on every server with one command:
 
    ```sh
-   imp-aly app add myapp https://myapp.example/app-map.txt -s eu-1,eu-2,eu-3
+   imp-aly app add myapp https://myapp.example/ -s eu-1,eu-2,eu-3
    ```
 
 3. Put the URLs of all servers in the `servers` option of `alySink` in your app. The sink picks one
@@ -223,9 +223,9 @@ The numbers are the same as the numbers of one server that holds all the records
 - `records` and `visits` add up exactly.
 
 When a server does not answer, the command prints the rows of the other servers, then an error, and
-exits with code 1. The `servers` table shows the server with no numbers. When the app has a
-different app map or different segments on the servers, the command prints a warning. Register the
-app again on every server with the same command.
+exits with code 1. The `servers` table shows the server with no numbers. When the app has different
+builds or different segments on the servers, the command prints a warning. Register the app again on
+every server with the same command.
 
 ## The API
 
@@ -266,8 +266,8 @@ counts of all the servers, then it sorts the rows and applies `limit`:
 
 - `by` holds the values of the `groupBy` fields, in the same order.
 - `visits` is there when the query asks for `visits`.
-- `appConfig` is a short hash of the app map and the segments of the app on the server, or null when
-  the app is not registered.
+- `appConfig` is a short hash of the pages, the zones, the outcome names and the segments of the app
+  on the server, or null when the app is not registered.
 
 A server sends at most 100,000 groups. A query that makes more groups fails with `400`. Group by
 fewer fields, or use a shorter range.

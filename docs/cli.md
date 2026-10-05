@@ -3,7 +3,7 @@
 ```
 imp-aly server [options]              start the server
 imp-aly server --uninstall            remove the systemd service
-imp-aly app add <name> <map url|file> [--segments plan,role]
+imp-aly app add <name> <app url|build folder> [--segments plan,role]
 imp-aly app ls | show <name> | refresh <name> | rm <name>
 imp-aly query '<json>' | query <file.json> [--json]
 imp-aly backup <file> [--app <name>] [--from <day>] [--to <day>]

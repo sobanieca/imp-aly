@@ -18,7 +18,7 @@ Usage:
 
   imp-aly server [options]              start the server (on the VPS)
   imp-aly server --uninstall            remove the systemd service
-  imp-aly app add <name> <map url|file> [--segments plan,role]
+  imp-aly app add <name> <app url|build folder> [--segments plan,role]
   imp-aly app ls | show <name> | refresh <name> | rm <name>
   imp-aly query '<json>' | query <file.json> [--json]
   imp-aly backup <file> [--app <name>] [--from <day>] [--to <day>]
@@ -85,6 +85,17 @@ Client commands (app, query, backup, restore, status, token):
   --app <name>              backup: only this app (default: all)
   --from <day>, --to <day>  backup: only these days, as YYYY-MM-DD
 
+Apps:
+
+  imp-aly app add myapp https://myapp.example/      the server reads the file
+  imp-aly app add myapp dist --segments plan        upload the file of dist
+
+  imp build writes app-analytics.json at the root of the build output. The
+  server stores a record only when its page, zone and outcome name are in the
+  lists of this file. With a URL, the server reads the file in that folder at
+  once and again every 10 minutes. With a folder, the command uploads the file.
+  Run "app refresh" or "app add" after each deploy.
+
 Saved servers (on your machine):
 
   imp-aly add eu https://eu.analytics.example -a ~/.secret/imp-aly-eu
@@ -130,9 +141,10 @@ API:
   GET  /                    public: the name and the version
   GET  /status              key: the state of the server
   GET  /apps                key: the registered apps
-  PUT  /apps/<name>         key: {"mapUrl": "..."} or {"map": "..."}, optional "segments"
+  PUT  /apps/<name>         key: {"appUrl": "..."} or {"build": "<app-analytics.json>"},
+                            optional "segments"
   GET  /apps/<name>         key: one app with its rejection counts
-  POST /apps/<name>/refresh key: read the app map again
+  POST /apps/<name>/refresh key: read app-analytics.json again
   DELETE /apps/<name>       key: stop accepting records of the app
   POST /query               key: a query, answers the counts per group (docs/query.md)
   GET  /backup              key: the daily summaries as .tar.gz, ?app=&from=&to=

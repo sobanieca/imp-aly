@@ -37,7 +37,7 @@ must cost almost nothing per request. Its memory must stay the same when many ad
 - One address cannot store more than 200,000 records a day.
 - The memory of the limit stays at about 50 MB, also when millions of addresses send.
 - A sender with more than 400,000 addresses can pass the limit, because the server forgets them. The
-  cap on requests in progress, the app map, the checks and the disk retention still hold. A larger
-  attack needs a filter in front of the server.
+  cap on requests in progress, the build file, the checks and the disk retention still hold. A
+  larger attack needs a filter in front of the server.
 - A client that connects directly cannot escape the limit with a false header.
 - A restart clears the counts.

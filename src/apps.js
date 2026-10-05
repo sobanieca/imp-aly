@@ -1,4 +1,4 @@
-import { fetchAppMap, parseAppMap } from './app-map.js'
+import { BUILD_FILE, fetchBuild, fetchText, folderUrl, parseBuild } from './app-build.js'
 import { readJson, writeJsonAtomic } from './fs-utils.js'
 import { isAppName, MAX_SEGMENTS, RESERVED_NAMES, SEGMENT_NAME_PATTERN } from './names.js'
 import { join } from './paths.js'
@@ -11,15 +11,6 @@ export class AppError extends Error {
 }
 
 const REJECTION_KINDS_LIMIT = 50
-
-const isHttpUrl = (value) => {
-  try {
-    const url = new URL(value)
-    return url.protocol === 'http:' || url.protocol === 'https:'
-  } catch {
-    return false
-  }
-}
 
 export const validateSegments = (segments) => {
   if (segments === undefined) return []
@@ -45,37 +36,78 @@ export const validateSegments = (segments) => {
   return [...segments]
 }
 
+const sorted = (values) => [...values].sort()
+
 export const appConfig = async (app) => {
   if (!app) return null
-  const text = JSON.stringify({ pages: [...app.pages].sort(), segments: [...app.segments].sort() })
+  const text = JSON.stringify({
+    pages: sorted(app.pages),
+    zones: sorted(app.zones),
+    outcomes: sorted(app.outcomes),
+    segments: sorted(app.segments),
+  })
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))
   return [...new Uint8Array(digest)].slice(0, 8).map((byte) => byte.toString(16).padStart(2, '0'))
     .join('')
 }
 
 const toStored = (app) => ({
-  mapUrl: app.mapUrl,
-  pages: [...app.pages],
+  appUrl: app.appUrl,
+  pages: sorted(app.pages),
+  zones: sorted(app.zones),
+  outcomes: sorted(app.outcomes),
   segments: app.segments,
   createdAt: app.createdAt,
-  mapUpdatedAt: app.mapUpdatedAt,
-  mapError: app.mapError,
+  buildUpdatedAt: app.buildUpdatedAt,
+  buildError: app.buildError,
 })
 
 const fromStored = (name, stored) => ({
   name,
-  mapUrl: stored.mapUrl ?? null,
+  appUrl: stored.appUrl ?? null,
   pages: new Set(stored.pages ?? []),
+  zones: new Set(stored.zones ?? []),
+  outcomes: new Set(stored.outcomes ?? []),
   segments: stored.segments ?? [],
   createdAt: stored.createdAt ?? null,
-  mapUpdatedAt: stored.mapUpdatedAt ?? null,
-  mapError: stored.mapError ?? null,
+  buildUpdatedAt: stored.buildUpdatedAt ?? null,
+  buildError: stored.buildError ?? null,
   accepted: 0,
   rejected: 0,
   rejections: {},
 })
 
-export const openApps = async ({ dataDir, fetchMap = fetchAppMap, now = Date.now }) => {
+const UPLOAD_HINT = `an upload gives build: the text of ${BUILD_FILE}`
+
+const readSource = async (body, fetchFile) => {
+  const hasUrl = body.appUrl !== undefined
+  const uploaded = body.build !== undefined
+  if (hasUrl && uploaded) {
+    throw new AppError('give appUrl (a URL) or the uploaded build, not both')
+  }
+  if (hasUrl) {
+    const appUrl = typeof body.appUrl === 'string' ? folderUrl(body.appUrl) : null
+    if (!appUrl) {
+      throw new AppError(
+        'appUrl is the http or https URL of the folder of the build, like https://myapp.example/',
+      )
+    }
+    try {
+      return { appUrl, ...(await fetchBuild(appUrl, fetchFile)) }
+    } catch (error) {
+      throw new AppError(`the build could not be read: ${error.message}`, 422)
+    }
+  }
+  if (!uploaded) throw new AppError(`give appUrl, or ${UPLOAD_HINT}`)
+  if (typeof body.build !== 'string') throw new AppError(UPLOAD_HINT)
+  try {
+    return { appUrl: null, ...parseBuild(body.build) }
+  } catch (error) {
+    throw new AppError(error.message, 422)
+  }
+}
+
+export const openApps = async ({ dataDir, fetchFile = fetchText, now = Date.now }) => {
   const path = join(dataDir, 'apps.json')
   const stored = await readJson(path, { apps: {} })
   const apps = new Map()
@@ -95,12 +127,14 @@ export const openApps = async ({ dataDir, fetchMap = fetchAppMap, now = Date.now
 
   const describe = (app) => ({
     name: app.name,
-    mapUrl: app.mapUrl,
-    pages: [...app.pages].sort(),
+    appUrl: app.appUrl,
+    pages: sorted(app.pages),
+    zones: sorted(app.zones),
+    outcomes: sorted(app.outcomes),
     segments: app.segments,
     createdAt: app.createdAt,
-    mapUpdatedAt: app.mapUpdatedAt,
-    mapError: app.mapError,
+    buildUpdatedAt: app.buildUpdatedAt,
+    buildError: app.buildError,
     accepted: app.accepted,
     rejected: app.rejected,
     rejections: app.rejections,
@@ -110,6 +144,22 @@ export const openApps = async ({ dataDir, fetchMap = fetchAppMap, now = Date.now
     const app = apps.get(name)
     if (!app) throw new AppError(`no app "${name}" is registered`, 404)
     return app
+  }
+
+  const reread = async (app) => {
+    try {
+      const build = await fetchBuild(app.appUrl, fetchFile)
+      if (apps.get(app.name) !== app) return false
+      app.pages = new Set(build.pages)
+      app.zones = new Set(build.zones)
+      app.outcomes = new Set(build.outcomes)
+      app.buildUpdatedAt = new Date(now()).toISOString()
+      app.buildError = null
+    } catch (error) {
+      if (apps.get(app.name) !== app) return false
+      app.buildError = error.message
+    }
+    return true
   }
 
   return {
@@ -126,46 +176,21 @@ export const openApps = async ({ dataDir, fetchMap = fetchAppMap, now = Date.now
         )
       }
       if (body === null || typeof body !== 'object' || Array.isArray(body)) {
-        throw new AppError(
-          'the body is an object, like {"mapUrl": "https://myapp.example/app-map.txt"}',
-        )
+        throw new AppError('the body is an object, like {"appUrl": "https://myapp.example/"}')
       }
       const unknown = Object.keys(body).filter((key) =>
-        !['mapUrl', 'map', 'segments'].includes(key)
+        !['appUrl', 'build', 'segments'].includes(key)
       )
       if (unknown.length) throw new AppError(`unknown fields: ${unknown.join(', ')}`)
-      const hasUrl = body.mapUrl !== undefined
-      const hasMap = body.map !== undefined
-      if (hasUrl === hasMap) {
-        throw new AppError('give the app map as mapUrl (a URL) or as map (the text), not both')
-      }
       const segments = validateSegments(body.segments)
-      let pages
-      if (hasUrl) {
-        if (typeof body.mapUrl !== 'string' || !isHttpUrl(body.mapUrl)) {
-          throw new AppError('mapUrl is an http or https URL')
-        }
-        try {
-          pages = await fetchMap(body.mapUrl)
-        } catch (error) {
-          throw new AppError(`the app map could not be read: ${error.message}`, 422)
-        }
-      } else {
-        if (typeof body.map !== 'string') throw new AppError('map is the text of app-map.txt')
-        try {
-          pages = parseAppMap(body.map)
-        } catch (error) {
-          throw new AppError(error.message, 422)
-        }
-      }
+      const source = await readSource(body, fetchFile)
       const previous = apps.get(name)
       const app = fromStored(name, {
-        mapUrl: hasUrl ? body.mapUrl : null,
-        pages,
+        ...source,
         segments,
         createdAt: previous?.createdAt ?? new Date(now()).toISOString(),
-        mapUpdatedAt: new Date(now()).toISOString(),
-        mapError: null,
+        buildUpdatedAt: new Date(now()).toISOString(),
+        buildError: null,
       })
       if (previous) {
         app.accepted = previous.accepted
@@ -185,34 +210,14 @@ export const openApps = async ({ dataDir, fetchMap = fetchAppMap, now = Date.now
 
     refresh: async (name) => {
       const app = requireApp(name)
-      if (!app.mapUrl) throw new AppError(`app "${name}" has an uploaded map and no mapUrl`)
-      try {
-        const pages = await fetchMap(app.mapUrl)
-        if (apps.get(name) !== app) return describe(app)
-        app.pages = new Set(pages)
-        app.mapUpdatedAt = new Date(now()).toISOString()
-        app.mapError = null
-      } catch (error) {
-        if (apps.get(name) !== app) return describe(app)
-        app.mapError = error.message
-      }
-      await save()
+      if (!app.appUrl) throw new AppError(`app "${name}" has an uploaded build and no appUrl`)
+      if (await reread(app)) await save()
       return describe(app)
     },
 
     refreshAll: async () => {
       for (const app of [...apps.values()]) {
-        if (!app.mapUrl) continue
-        try {
-          const pages = await fetchMap(app.mapUrl)
-          if (apps.get(app.name) !== app) continue
-          app.pages = new Set(pages)
-          app.mapUpdatedAt = new Date(now()).toISOString()
-          app.mapError = null
-        } catch (error) {
-          if (apps.get(app.name) !== app) continue
-          app.mapError = error.message
-        }
+        if (app.appUrl) await reread(app)
       }
       await save()
     },

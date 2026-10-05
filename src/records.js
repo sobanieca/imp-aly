@@ -77,11 +77,14 @@ export const validateRecord = (input, app, country = null, now = Date.now()) => 
   if (input.at < now - MAX_RECORD_AGE_MS) return { problem: 'at is more than 1 hour old' }
   if (input.at > now + MAX_RECORD_AHEAD_MS) return { problem: 'at is more than 1 hour ahead' }
   if (typeof input.page !== 'string' || !app.pages.has(input.page)) {
-    return { problem: 'page is not on the app map' }
+    return { problem: 'page is not in the pages of app-analytics.json' }
   }
   const record = { type, visit: input.visit, at: input.at, page: input.page }
   if (type === 'seen') {
     if (!isName(input.zone)) return { problem: 'zone is not a namespaced name' }
+    if (!app.zones.has(input.zone)) {
+      return { problem: 'zone is not in the zones of app-analytics.json' }
+    }
     record.zone = input.zone
   }
   if (type === 'used') {
@@ -89,10 +92,16 @@ export const validateRecord = (input, app, country = null, now = Date.now()) => 
     if (input.zone !== null && !isName(input.zone)) {
       return { problem: 'zone is not a namespaced name or null' }
     }
+    if (input.zone !== null && !app.zones.has(input.zone)) {
+      return { problem: 'zone is not in the zones of app-analytics.json' }
+    }
     if (input.zone !== null) record.zone = input.zone
   }
   if (type === 'outcome') {
     if (!isName(input.name)) return { problem: 'name is not a namespaced name' }
+    if (!app.outcomes.has(input.name)) {
+      return { problem: 'name is not in the outcomes of app-analytics.json' }
+    }
     record.name = input.name
   }
   if (country !== null) record.country = country

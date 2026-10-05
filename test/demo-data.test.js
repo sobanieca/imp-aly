@@ -1,11 +1,24 @@
 import { validateRecord } from '../src/records.js'
-import { createRandom, DEMO_APP, DEMO_MAP, DEMO_SEGMENTS, seedLines } from '../dev/demo-data.js'
+import {
+  createRandom,
+  DEMO_APP,
+  DEMO_MAP,
+  DEMO_OUTCOMES,
+  DEMO_SEGMENTS,
+  DEMO_ZONES,
+  seedLines,
+} from '../dev/demo-data.js'
 import { assert, assertEquals } from './assert.js'
 
 Deno.test('the demo data is valid records of every day, up to the current time', () => {
   const now = Date.parse('2026-10-03T12:00:00Z')
   const lines = seedLines({ random: createRandom(42), now, days: 3 })
-  const app = { pages: new Set(DEMO_MAP), segments: DEMO_SEGMENTS }
+  const app = {
+    pages: new Set(DEMO_MAP),
+    zones: new Set(DEMO_ZONES),
+    outcomes: new Set(DEMO_OUTCOMES),
+    segments: DEMO_SEGMENTS,
+  }
   const days = new Set()
   for (const line of lines) {
     const [name, day, { country, ...record }] = JSON.parse(line)

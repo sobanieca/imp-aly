@@ -38,34 +38,39 @@ const reportFailures = (title, failedServers) => {
   }
 }
 
+const BUILD_FILE = 'app-analytics.json'
+
 const sourceFields = (source, setFiles) => {
   if (source === 'url') {
     return textField({
-      field: 'mapUrl',
-      label: 'URL of app-map.txt',
+      field: 'appUrl',
+      label: 'URL of the app',
       type: 'url',
       required: true,
-      placeholder: 'https://myapp.example/app-map.txt',
-      help: 'The server reads the map again every 10 minutes.',
+      placeholder: 'https://myapp.example/',
+      help:
+        `The folder of the build. The server reads ${BUILD_FILE} there, and again every 10 minutes.`,
     })
   }
   if (source === 'file') {
     return fileUpload({
       field: 'files',
-      label: 'app-map.txt',
-      accept: '.txt,text/plain',
+      label: `File of the build (${BUILD_FILE})`,
+      accept: '.json,application/json',
       required: true,
       onFiles: setFiles,
-      help: 'imp build writes this file next to the app.',
+      help: `imp build writes ${BUILD_FILE} next to the app.`,
     })
   }
   return textField({
-    field: 'map',
-    label: 'Route patterns',
-    rows: 6,
+    field: 'build',
+    label: `Text of ${BUILD_FILE}`,
+    rows: 10,
     required: true,
-    placeholder: '/\n/invoices\n/invoices/:id',
-    help: 'One route pattern on each line.',
+    placeholder:
+      '{\n  "pages": ["/", "/invoices/:id"],\n  "zones": ["myapp.send"],\n  "outcomes": []\n}',
+    help:
+      'The route patterns in "pages", and the zone and outcome names in "zones" and "outcomes".',
   })
 }
 
@@ -77,12 +82,18 @@ const registerForm = component('aly-register-form', {
     const source = initState(self, 'aly.register.source', 'url')
     return form(
       {
-        initialValues: { name: '', mapUrl: '', map: '', files: [], segments: [] },
+        initialValues: {
+          name: '',
+          appUrl: '',
+          build: '',
+          files: [],
+          segments: [],
+        },
         onSubmit: async (values) => {
           const body = { segments: values.segments }
-          if (source.get() === 'url') body.mapUrl = values.mapUrl
-          else if (source.get() === 'file') body.map = await files[0].text()
-          else body.map = values.map
+          if (source.get() === 'url') body.appUrl = values.appUrl
+          else if (source.get() === 'file') body.build = (await files[0]?.text()) ?? ''
+          else body.build = values.build ?? ''
           let answer
           try {
             answer = await api.put(`/apps/${encodeURIComponent(values.name)}`, {
@@ -96,7 +107,8 @@ const registerForm = component('aly-register-form', {
           notify({
             kind: 'success',
             title: `Registered ${values.name}`,
-            description: `${first.pages.length} pages. Send records to /collect/${values.name}.`,
+            description:
+              `${first.pages.length} pages, ${first.zones.length} zones, ${first.outcomes.length} outcomes. Send records to /collect/${values.name}.`,
           })
           reportFailures(`${values.name} is not registered on every server`, answer.failedServers)
           onDone()
@@ -110,7 +122,7 @@ const registerForm = component('aly-register-form', {
         validate: (value) =>
           APP_NAME.test(value ?? '') ? null : 'Use 1 to 63 lowercase letters, digits and "-".',
       }),
-      segmented({ label: 'The app map comes from', value: source, options: SOURCES }),
+      segmented({ label: 'The build comes from', value: source, options: SOURCES }),
       source.view((value) => sourceFields(value, (chosen) => (files = chosen))),
       comboBox({
         field: 'segments',
@@ -138,15 +150,20 @@ const appDetails = (entries) =>
       stack(
         { gap: 3 },
         entries.length > 1 ? text({ weight: 'bold' }, entry.server) : null,
-        entry.mapError
-          ? notice({ kind: 'error', title: 'The server cannot read the app map' }, entry.mapError)
+        entry.buildError
+          ? notice(
+            { kind: 'error', title: 'The server cannot read the build' },
+            entry.buildError,
+          )
           : null,
         descriptionList({
           items: [
             { term: 'Pages', details: formatCount(entry.pages.length) },
+            { term: 'Zones', details: formatCount(entry.zones.length) },
+            { term: 'Outcomes', details: formatCount(entry.outcomes.length) },
             { term: 'Segments', details: entry.segments.join(', ') || '-' },
-            { term: 'App map', details: entry.mapUrl ?? 'uploaded' },
-            { term: 'Map read at', details: formatDateTime(entry.mapUpdatedAt) },
+            { term: 'Files of the build', details: entry.appUrl ?? 'uploaded' },
+            { term: 'Files read at', details: formatDateTime(entry.buildUpdatedAt) },
             { term: 'Registered at', details: formatDateTime(entry.createdAt) },
             { term: 'Accepted records', details: formatCount(entry.accepted) },
             { term: 'Rejected records', details: formatCount(entry.rejected) },
@@ -201,20 +218,20 @@ export const registryScreen = component('aly-registry', {
         const answer = await api.post(`/apps/${encodeURIComponent(name)}/refresh`, {
           query: query(),
         })
-        const errors = answer.apps.filter((entry) => entry.mapError)
+        const errors = answer.apps.filter((entry) => entry.buildError)
         if (errors.length) {
           notify({
             kind: 'error',
-            title: `The map of ${name} could not be read`,
-            description: errors.map((entry) => `${entry.server}: ${entry.mapError}`).join(' '),
+            title: `The files of ${name} could not be read`,
+            description: errors.map((entry) => `${entry.server}: ${entry.buildError}`).join(' '),
             duration: 0,
           })
-        } else notify({ kind: 'success', title: `Read the map of ${name} again` })
-        reportFailures(`The map of ${name} was not read on every server`, answer.failedServers)
+        } else notify({ kind: 'success', title: `Read the files of ${name} again` })
+        reportFailures(`The files of ${name} were not read on every server`, answer.failedServers)
       } catch (error) {
         notify({
           kind: 'error',
-          title: `The map of ${name} was not read`,
+          title: `The files of ${name} were not read`,
           description: messageOf(error),
         })
       }
@@ -278,6 +295,22 @@ export const registryScreen = component('aly-registry', {
                 render: (row) => formatCount(row.pages.length),
               },
               {
+                key: 'zones',
+                label: 'Zones',
+                align: 'end',
+                sortable: true,
+                sortValue: (row) => row.zones.length,
+                render: (row) => formatCount(row.zones.length),
+              },
+              {
+                key: 'outcomes',
+                label: 'Outcomes',
+                align: 'end',
+                sortable: true,
+                sortValue: (row) => row.outcomes.length,
+                render: (row) => formatCount(row.outcomes.length),
+              },
+              {
                 key: 'segments',
                 label: 'Segments',
                 render: (row) => row.segments.join(', ') || '-',
@@ -297,12 +330,12 @@ export const registryScreen = component('aly-registry', {
                 render: (row) => formatCount(row.rejected),
               },
               {
-                key: 'mapError',
-                label: 'Map',
+                key: 'buildError',
+                label: 'Files',
                 render: (row) =>
-                  row.mapError
+                  row.buildError
                     ? tag({ color: 'red', dot: true }, 'Cannot read')
-                    : tag({ color: 'green', dot: true }, row.mapUrl ? 'From URL' : 'Uploaded'),
+                    : tag({ color: 'green', dot: true }, row.appUrl ? 'From URL' : 'Uploaded'),
               },
               {
                 key: 'actions',
@@ -315,8 +348,8 @@ export const registryScreen = component('aly-registry', {
                       { id: 'show', label: 'Details', onClick: () => show(row.name) },
                       {
                         id: 'refresh',
-                        label: 'Read the map again',
-                        disabled: !row.mapUrl,
+                        label: 'Read the files again',
+                        disabled: !row.appUrl,
                         onClick: () => refresh(row.name),
                       },
                       { id: 'remove', label: 'Remove', onClick: () => ask(row.name) },
@@ -339,7 +372,7 @@ export const registryScreen = component('aly-registry', {
           { horizontalAlign: 'justify', verticalAlign: 'top', wrap: true },
           screenHeader(
             'Registered apps',
-            'The apps that the servers accept records for. Each app has an app map and segments.',
+            'The apps that the servers accept records for. Each app has its build file and segments.',
           ),
           button(
             { variant: 'primary', events: { click: () => adding.set(true) } },

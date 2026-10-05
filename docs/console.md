@@ -82,7 +82,7 @@ The change shows as a word and a colour, such as "up 8%" or "down 3%". "new" mea
 period has no record.
 
 A report shows a notice when a server does not answer, when the query skips days, or when the app
-has a different app map or different segments on the servers. See [Queries](query.md#the-answer).
+has different builds or different segments on the servers. See [Queries](query.md#the-answer).
 
 ## Reports
 
@@ -215,12 +215,12 @@ storage of the browser. A saved query runs again with a click.
 
 ## Manage
 
-| Page            | What you can do                                                                                                                                                                    |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Explore         | run any query of the app. See [Explore](#explore).                                                                                                                                 |
-| Registered apps | see the apps of the servers in the bar. Register an app from a URL, a file or text, with segments. See the reasons of the rejected records. Read the app map again. Remove an app. |
-| Servers         | see the saved servers, and the state of each one: the version, the free disk space and the problems of the storage. Save a server. Make a server the default. Remove a server.     |
-| Backup          | download a backup of one server, of one app or all apps, and of some days or all days. Restore a backup into a server.                                                             |
+| Page            | What you can do                                                                                                                                                                               |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Explore         | run any query of the app. See [Explore](#explore).                                                                                                                                            |
+| Registered apps | see the apps of the servers in the bar. Register an app from a URL, the build file or text, with segments. See the reasons of the rejected records. Read the build file again. Remove an app. |
+| Servers         | see the saved servers, and the state of each one: the version, the free disk space and the problems of the storage. Save a server. Make a server the default. Remove a server.                |
+| Backup          | download a backup of one server, of one app or all apps, and of some days or all days. Restore a backup into a server.                                                                        |
 
 "Register" registers the app on each server of the bar, like `imp-aly app add -s a,b`. See
 [Apps](apps.md).
@@ -236,21 +236,21 @@ A backup downloads as `imp-aly-backup-<server>-<day>.tar.gz`. It is the same fil
 The page calls a JSON API on the same port. You do not need it, but you can call it with `curl` on
 the same machine. A change must carry the header `Origin: http://localhost:8010`.
 
-| Request                            | What it does                                           |
-| ---------------------------------- | ------------------------------------------------------ |
-| `GET /api/servers`                 | the saved servers and the default, without the keys    |
-| `POST /api/servers`                | `{"name", "url", "auth"}`: save a server, like `add`   |
-| `POST /api/servers/<name>/default` | make the server the default, like `use`                |
-| `DELETE /api/servers/<name>`       | remove the saved server, like `rm`                     |
-| `GET /api/status?server=<name>`    | the state of one server, like `status`                 |
-| `GET /api/apps?servers=a,b`        | the apps of the servers, like `app ls`                 |
-| `GET /api/apps/<name>?servers=a,b` | one app on each server, like `app show`                |
-| `PUT /api/apps/<name>?servers=a,b` | `{"mapUrl"}` or `{"map"}`, and `"segments"`: `app add` |
-| `POST /api/apps/<name>/refresh`    | read the app map again, like `app refresh`             |
-| `DELETE /api/apps/<name>`          | remove the app, like `app rm`                          |
-| `POST /api/query?servers=a,b`      | a query, like `query --json`, with `warnings`          |
-| `GET /api/backup?server=<name>`    | a backup, with `app`, `from` and `to`, like `backup`   |
-| `POST /api/restore?server=<name>`  | the backup file as the body, like `restore`            |
+| Request                            | What it does                                             |
+| ---------------------------------- | -------------------------------------------------------- |
+| `GET /api/servers`                 | the saved servers and the default, without the keys      |
+| `POST /api/servers`                | `{"name", "url", "auth"}`: save a server, like `add`     |
+| `POST /api/servers/<name>/default` | make the server the default, like `use`                  |
+| `DELETE /api/servers/<name>`       | remove the saved server, like `rm`                       |
+| `GET /api/status?server=<name>`    | the state of one server, like `status`                   |
+| `GET /api/apps?servers=a,b`        | the apps of the servers, like `app ls`                   |
+| `GET /api/apps/<name>?servers=a,b` | one app on each server, like `app show`                  |
+| `PUT /api/apps/<name>?servers=a,b` | `{"appUrl"}` or `{"build"}`, and `"segments"`: `app add` |
+| `POST /api/apps/<name>/refresh`    | read the build file again, like `app refresh`            |
+| `DELETE /api/apps/<name>`          | remove the app, like `app rm`                            |
+| `POST /api/query?servers=a,b`      | a query, like `query --json`, with `warnings`            |
+| `GET /api/backup?server=<name>`    | a backup, with `app`, `from` and `to`, like `backup`     |
+| `POST /api/restore?server=<name>`  | the backup file as the body, like `restore`              |
 
 Without `servers` or `server`, a request goes to the default server. With several servers, the
 answer lists the servers that failed in `failedServers`.

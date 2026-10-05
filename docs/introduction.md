@@ -43,9 +43,12 @@ the key can register apps and run queries.
 
 - **App** - one imp app that you register on the server, such as `myapp`. The server keeps the data
   of each app apart. The app sends its records to `/collect/<app>`.
-- **App map** - the file `app-map.txt` that `imp build` writes. It has one line for each screen of
-  the app, such as `/invoices/:id`. The server accepts a record only when its page is a line of the
-  app map.
+- **Build file** - the file `app-analytics.json` that `imp build` writes at the root of the build
+  output. It has three lists: `pages` with the route patterns, `zones` with the zone names, and
+  `outcomes` with the outcome names. The server accepts a page, a zone or an outcome name only when
+  it is in its list.
+- **App map** - the `pages` of the build file. It has one entry for each screen of the app, such as
+  `/invoices/:id`.
 - **Record** - one fact about the use of the app, as a small JSON object. For example: "visit `a1b2`
   opened the page `/invoices` at 10:42:07".
 - **Record type** - the kind of fact. There are five types:
@@ -60,8 +63,9 @@ the key can register apps and run queries.
 - **Page** - the screen of a record, as its pattern from the app map, such as `/invoices/:id`. It is
   never the real path, such as `/invoices/42`.
 - **Zone** - a named part of a screen, such as `myapp.invoice-list`. The `seen` and `used` records
-  use it.
-- **Name** - the name of the task of an `outcome` record, such as `myapp.send`.
+  use it. It is in the `zones` of the build file.
+- **Name** - the name of the task of an `outcome` record, such as `myapp.send`. It is in the
+  `outcomes` of the build file.
 - **at** - the time of a record, in milliseconds since 1970, in UTC.
 - **Segment** - an extra field that your sink adds to each record, to describe a group of users.
   Examples are the plan, the role or the language. You declare the segments of an app when you
@@ -76,9 +80,9 @@ the key can register apps and run queries.
 
 - **Collect endpoint** - `POST /collect/<app>`, the only public address for records. It needs no
   key.
-- **Checks** - the rules that each record must obey: a known type, a page from the app map, an `at`
-  of at most 1 hour from the server time, no unknown field, and more. The server drops a record that
-  fails a check, and counts it by reason.
+- **Checks** - the rules that each record must obey: a known type, a page, a zone and an outcome
+  name from the build file, an `at` of at most 1 hour from the server time, no unknown field, and
+  more. The server drops a record that fails a check, and counts it by reason.
 - **Rate limit** - the maximum number of records that one client address can send in 5 seconds, 1
   minute, 1 hour and 24 hours. Above the limit, the server answers `429` and stores nothing.
 
@@ -142,8 +146,9 @@ the key can register apps and run queries.
 
 ## How it works, step by step
 
-1. **You register an app.** You give the server a name and the app map:
-   `imp-aly app add myapp https://myapp.example/app-map.txt`. You can also declare segments.
+1. **You register an app.** You give the server a name and the URL of the build:
+   `imp-aly app add myapp https://myapp.example/`. The server reads the build file there. You can
+   also declare segments.
 2. **The app sends records.** The sink of the app collects the records and sends them in a batch to
    `/collect/myapp`.
 3. **The server checks the records.** It checks the rate limit of the client address, then each
@@ -165,7 +170,7 @@ the key can register apps and run queries.
 
 - [Getting started](getting-started.md) - install the server, register an app, send records
 - [Collecting records](collect.md) - the public endpoint, the checks and the rate limit
-- [Apps](apps.md) - the registry, the app map and the segments
+- [Apps](apps.md) - the registry, the build file and the segments
 - [Queries](query.md) - the query API, and queries of several servers
 - [Storage](storage.md) - the data folder, sealing and retention in detail
 - [Backup](backup.md) - save the daily summaries, restore them, and keep them safe

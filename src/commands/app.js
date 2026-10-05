@@ -1,10 +1,12 @@
 import { requireOnlyFlags } from '../args.js'
 import { eachServer, resolveTargets } from '../api-client.js'
+import { BUILD_FILE } from '../app-build.js'
 import { logger } from '../logger.js'
+import { join } from '../paths.js'
 import { formatTable } from '../table.js'
 
 const USAGE = `use one of:
-  imp-aly app add <name> <app-map url or file> [--segments plan,role]
+  imp-aly app add <name> <app url or build folder> [--segments plan,role]
   imp-aly app ls
   imp-aly app show <name>
   imp-aly app refresh <name>
@@ -13,9 +15,9 @@ const USAGE = `use one of:
 const isUrl = (value) => /^https?:\/\//i.test(value)
 
 const summary = (app) =>
-  `${app.name}: ${app.pages.length} pages, segments ${
+  `${app.name}: ${app.pages.length} pages, ${app.zones.length} zones, ${app.outcomes.length} outcomes, segments ${
     app.segments.length ? app.segments.join(', ') : '-'
-  }, map ${app.mapUrl ?? 'uploaded'}`
+  }, build ${app.appUrl ?? 'uploaded'}`
 
 const onEachServer = async (targets, run) => {
   const { results, failed } = await eachServer(targets, run)
@@ -34,26 +36,39 @@ const onEachServer = async (targets, run) => {
   }
 }
 
-const readBody = async (map, segments) => {
-  if (isUrl(map)) return { mapUrl: map, segments }
-  const text = await Deno.readTextFile(map).catch((error) => {
-    throw new Error(`cannot read the app map ${map}: ${error.message}`)
+const readBuildFolder = async (folder) => {
+  const info = await Deno.stat(folder).catch((error) => {
+    throw new Error(`cannot read the build folder ${folder}: ${error.message}`)
   })
-  return { map: text, segments }
+  if (!info.isDirectory) {
+    throw new Error(
+      `${folder} is not a folder - give the build folder that holds ${BUILD_FILE}`,
+    )
+  }
+  const path = join(folder, BUILD_FILE)
+  const build = await Deno.readTextFile(path).catch((error) => {
+    throw new Error(`cannot read ${path}: ${error.message}`)
+  })
+  return { build }
+}
+
+const readBody = async (source, segments) => {
+  if (isUrl(source)) return { appUrl: source, segments }
+  return { ...(await readBuildFolder(source)), segments }
 }
 
 export const app = async ({ positional, flags }) => {
-  const [, action, name, map, ...rest] = positional
+  const [, action, name, source, ...rest] = positional
   const targets = resolveTargets(flags)
   const many = targets.length > 1
   const prefix = (server) => (many ? `${server}: ` : '')
   if (action === 'add') {
     requireOnlyFlags(flags, ['auth', 'url', 'server', 'segments'], 'app add')
-    if (!name || !map || rest.length) throw new Error(USAGE)
+    if (!name || !source || rest.length) throw new Error(USAGE)
     const segments = flags.segments
       ? flags.segments.split(',').map((segment) => segment.trim()).filter(Boolean)
       : []
-    const body = await readBody(map, segments)
+    const body = await readBody(source, segments)
     const { results, finish } = await onEachServer(
       targets,
       (call) => call('PUT', `/apps/${encodeURIComponent(name)}`, body),
@@ -74,19 +89,32 @@ export const app = async ({ positional, flags }) => {
     if (flags.json) console.log(JSON.stringify(apps, null, 2))
     else if (!apps.length) logger.plain('No app is registered.')
     else {
-      const columns = ['name', 'pages', 'segments', 'accepted', 'rejected', 'map', 'mapError']
+      const columns = [
+        'name',
+        'pages',
+        'zones',
+        'outcomes',
+        'segments',
+        'accepted',
+        'rejected',
+        'build',
+        'buildError',
+      ]
       logger.plain(formatTable(
         many ? ['server', ...columns] : columns,
         apps.map((entry) => ({
           ...entry,
+          pages: entry.pages.length,
+          zones: entry.zones.length,
+          outcomes: entry.outcomes.length,
           segments: entry.segments.join(',') || null,
-          map: entry.mapUrl ?? 'uploaded',
+          build: entry.appUrl ?? 'uploaded',
         })),
       ))
     }
     return finish()
   }
-  if (!name || map) throw new Error(USAGE)
+  if (!name || source) throw new Error(USAGE)
   const path = `/apps/${encodeURIComponent(name)}`
   if (action === 'show') {
     const { results, finish } = await onEachServer(targets, (call) => call('GET', path))
@@ -99,8 +127,8 @@ export const app = async ({ positional, flags }) => {
   if (action === 'refresh') {
     const { results, finish } = await onEachServer(targets, async (call) => {
       const result = await call('POST', `${path}/refresh`)
-      if (result.mapError) {
-        throw new Error(`the map of ${name} could not be read: ${result.mapError}`)
+      if (result.buildError) {
+        throw new Error(`the build of ${name} could not be read: ${result.buildError}`)
       }
       return result
     })

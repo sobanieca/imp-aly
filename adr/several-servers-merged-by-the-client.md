@@ -29,7 +29,7 @@ and adds up the counts of each group.**
   splits the visits of a fixture over two data folders and checks this for every query.
 - A server that fails does not stop the query. The client prints the result of the other servers,
   lists the failed server, and exits with code 1.
-- The answer of a server has a hash of the app map and the segments. The client warns when the
+- The answer of a server has a hash of the build file and the segments. The client warns when the
   hashes differ. `app` takes a list of servers, so one command registers the app on all of them.
 - **imp-aly does not count returning users, and it will not.** A returning user needs an id that
   lives longer than one document load, in a cookie or in `localStorage`. This is a deliberate

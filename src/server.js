@@ -35,7 +35,7 @@ export const DEFAULT_MAX_REQUESTS = 1_024
 
 const BUSY_RETRY_SECONDS = '5'
 
-const ADMIN_MAX_BYTES = 2_097_152
+const ADMIN_MAX_BYTES = 4_194_304
 
 const RESTORE_MAX_BYTES = 4_294_967_296
 
@@ -43,7 +43,7 @@ const QUERY_TIMEOUT_MS = 120_000
 
 const MAX_QUEUED_QUERIES = 16
 
-const MAP_REFRESH_MS = 600_000
+const BUILD_REFRESH_MS = 600_000
 
 const WORKER_RESTART_MS = 5_000
 
@@ -320,9 +320,9 @@ export const startServer = async ({
   segmentMs,
   sealDelayMs,
   maintenanceMs,
-  mapRefreshMs = MAP_REFRESH_MS,
+  buildRefreshMs = BUILD_REFRESH_MS,
   queryTimeoutMs = QUERY_TIMEOUT_MS,
-  fetchMap,
+  fetchFile,
   log = logger,
   debug = false,
   quiet = false,
@@ -345,7 +345,7 @@ export const startServer = async ({
 
   try {
     await removeIfExists(uploadDir, { recursive: true })
-    const apps = await openApps({ dataDir, ...(fetchMap ? { fetchMap } : {}) })
+    const apps = await openApps({ dataDir, ...(fetchFile ? { fetchFile } : {}) })
     let storage = null
     const wal = await openWal({
       dir: join(dataDir, 'wal'),
@@ -377,11 +377,11 @@ export const startServer = async ({
       try {
         await apps.refreshAll()
       } catch (error) {
-        log.error(`App map refresh failed: ${error.message}`)
+        log.error(`The refresh of the build file failed: ${error.message}`)
       } finally {
         refreshing = false
       }
-    }, mapRefreshMs)
+    }, buildRefreshMs)
     cleanups.push(() => clearInterval(refreshTimer))
 
     const collect = async (request, clients, name, headers) => {

@@ -2,7 +2,7 @@
 
 imp-aly is a small server that stores the analytics records of imp apps. You run it on your own VPS.
 It accepts the records that the `imp/analytics` sink of your app sends, checks each record against
-the app map of your app, and stores the records on the local disk. You read the numbers back with
+the build file of your app, and stores the records on the local disk. You read the numbers back with
 queries.
 
 For the key words and an overview of how the server works, read the [Introduction](introduction.md).
@@ -95,18 +95,20 @@ in the foreground keeps the old one and logs an error.
 
 ## Register an app
 
-The server accepts records only for an app that you register. Give the app a name and its app map.
-`imp build` writes the app map to `app-map.txt` at the root of the build output:
+The server accepts records only for an app that you register. Give the app a name and the file of
+its build. `imp build` writes `app-analytics.json` at the root of the build output, with the route
+patterns, the zone names and the outcome names of the app. Give the URL of the folder where the
+build is served:
 
 ```sh
-imp-aly app add myapp https://myapp.example/app-map.txt
+imp-aly app add myapp https://myapp.example/
 ```
 
-The server reads the map at once and again every 10 minutes. You can also upload the file, for
-example from your deploy pipeline:
+The server reads the file at once and again every 10 minutes. You can also upload the file of the
+build folder, for example from your deploy pipeline:
 
 ```sh
-imp-aly app add myapp dist/app-map.txt
+imp-aly app add myapp dist
 ```
 
 See [Apps](apps.md) for segments and for the other app commands.
@@ -135,8 +137,8 @@ browser console. The
 [Analytics](https://github.com/sobanieca/imp-ui/blob/main/docs/analytics.md#imp-aly) page of imp
 gives all the options.
 
-The server accepts the records exactly as imp makes them. It drops a record whose `page` is not a
-line of the app map.
+The server accepts the records exactly as imp makes them. It drops a record whose `page`, zone or
+outcome name is not in the build file.
 
 ## Read the numbers
 
@@ -187,7 +189,7 @@ apps, the servers and the backups. See [Console](console.md).
 ## Next
 
 - [Collecting records](collect.md) - the public endpoint, the checks and the rate limit
-- [Apps](apps.md) - the registry, the app map and the segments
+- [Apps](apps.md) - the registry, the build file and the segments
 - [Queries](query.md) - the query API
 - [Storage](storage.md) - how the server stores the records and removes old ones
 - [Backup](backup.md) - save the daily summaries, restore them, and keep them safe

@@ -30,6 +30,6 @@ answers `403` to a request to `/collect/<app>` with another `Origin` header.**
 ## Consequences
 
 - A script on another site cannot add records through the browsers of its visitors.
-- A client outside a browser can send any `Origin` header. The app map, the record checks and the
+- A client outside a browser can send any `Origin` header. The build file, the record checks and the
   rate limit still protect the endpoint from it.
 - Each new site of an app needs a change of the option and a restart of the server.

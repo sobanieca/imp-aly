@@ -1,7 +1,14 @@
 import { normalizeCountry, validateRecord } from '../src/records.js'
 import { assert, assertEquals } from './assert.js'
 
-const app = { pages: new Set(['/', '/invoices/:id']), segments: ['plan'] }
+const LONG_NAME = `myapp.${'x'.repeat(122)}`
+
+const app = {
+  pages: new Set(['/', '/invoices/:id']),
+  zones: new Set(['myapp.send', 'my_app.Zone-2.a']),
+  outcomes: new Set(['myapp.sent', LONG_NAME]),
+  segments: ['plan'],
+}
 
 const NOW = 1759300006100
 
@@ -37,8 +44,7 @@ Deno.test('keeps segment values and names of plain characters', () => {
   for (const value of ['en-US', '1.2.3', 'free_trial', -1, 0.5, true]) {
     assertEquals(check({ type: 'error', ...base, plan: value }).record.plan, String(value))
   }
-  const name = `myapp.${'x'.repeat(122)}`
-  assertEquals(check({ type: 'outcome', ...base, name }).record.name, name)
+  assertEquals(check({ type: 'outcome', ...base, name: LONG_NAME }).record.name, LONG_NAME)
   assertEquals(
     check({ type: 'seen', ...base, zone: 'my_app.Zone-2.a' }).record.zone,
     'my_app.Zone-2.a',
@@ -117,6 +123,44 @@ Deno.test('rejects malformed records', () => {
     const result = check(input)
     assert(result.problem && !result.record, `accepted ${JSON.stringify(input)}`)
   }
+})
+
+Deno.test('accepts only the zones and the outcomes of app-analytics.json', () => {
+  assertEquals(check({ type: 'used', ...base, zone: 'myapp.send' }).record.zone, 'myapp.send')
+  assertEquals(check({ type: 'used', ...base, zone: null }).problem, undefined)
+  assertEquals(
+    check({ type: 'seen', ...base, zone: 'myapp.forged' }).problem,
+    'zone is not in the zones of app-analytics.json',
+  )
+  assertEquals(
+    check({ type: 'used', ...base, zone: 'myapp.forged' }).problem,
+    'zone is not in the zones of app-analytics.json',
+  )
+  assertEquals(
+    check({ type: 'outcome', ...base, name: 'myapp.forged' }).problem,
+    'name is not in the outcomes of app-analytics.json',
+  )
+  assertEquals(
+    check({ type: 'outcome', ...base, name: 'myapp.send' }).problem,
+    'name is not in the outcomes of app-analytics.json',
+  )
+  assertEquals(
+    check({ type: 'seen', ...base, zone: 'nonamespace' }).problem,
+    'zone is not a namespaced name',
+  )
+  assertEquals(
+    check({ type: 'error', ...base, page: '/off-the-map' }).problem,
+    'page is not in the pages of app-analytics.json',
+  )
+  const empty = { ...app, zones: new Set(), outcomes: new Set() }
+  assertEquals(
+    validateRecord({ type: 'used', ...base, zone: null }, empty, null, NOW).problem,
+    undefined,
+  )
+  assertEquals(
+    validateRecord({ type: 'seen', ...base, zone: 'myapp.send' }, empty, null, NOW).problem,
+    'zone is not in the zones of app-analytics.json',
+  )
 })
 
 Deno.test('normalizes the country header', () => {

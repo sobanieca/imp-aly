@@ -11,7 +11,9 @@ import {
   createRandom,
   DEMO_APP,
   DEMO_MAP,
+  DEMO_OUTCOMES,
   DEMO_SEGMENTS,
+  DEMO_ZONES,
   seedLines,
   visitRecords,
 } from './demo-data.js'
@@ -52,7 +54,10 @@ addServer({ name: 'demo', url: adminUrl, auth: key }, serversFile)
 await callServer({ label: 'demo', server: 'demo', url: adminUrl, auth: key }, {
   method: 'PUT',
   path: `/apps/${DEMO_APP}`,
-  body: { map: DEMO_MAP.join('\n'), segments: DEMO_SEGMENTS },
+  body: {
+    build: JSON.stringify({ pages: DEMO_MAP, zones: DEMO_ZONES, outcomes: DEMO_OUTCOMES }),
+    segments: DEMO_SEGMENTS,
+  },
 })
 
 let sent = 0

@@ -20,7 +20,7 @@ folder is record N.**
   earlier record. So every file of a folder always has the same number of lines.
 - No value can hold a line break, a tab or another control character. The record checks enforce this
   before a record reaches the log: zones, names, segment values and countries take only ASCII
-  letters, digits and a few signs, see `app-map-record-validation.md`.
+  letters, digits and a few signs, see `build-file-record-validation.md`.
 - A query reads only the files of the fields that it names. It marks the matching lines of each
   filter in a selection vector, combines the vectors, and counts.
 

@@ -8,7 +8,13 @@ import { assert, assertEquals, assertRejects, temporaryDir, waitFor } from './as
 
 const KEY = 'console-test-key-0123456789'
 
-const MAP = '/\n/invoices\n/invoices/:id\n'
+const BUILD = {
+  build: JSON.stringify({
+    pages: ['/', '/invoices', '/invoices/:id'],
+    zones: ['myapp.send'],
+    outcomes: [],
+  }),
+}
 
 const writeUi = async () => {
   const uiDir = await temporaryDir()
@@ -78,11 +84,13 @@ Deno.test('the console registers an app, queries it and removes it through a sav
     assertEquals(servers.body.servers, [{ name: 'one', url: backend.url, key: 'saved key' }])
     assert(!JSON.stringify(servers.body).includes(KEY), 'the key must not leave the console')
 
-    const added = await call('PUT', '/api/apps/myapp', { map: MAP, segments: ['plan'], extra: 1 })
+    const added = await call('PUT', '/api/apps/myapp', { ...BUILD, segments: ['plan'], extra: 1 })
     assertEquals(added.status, 200)
     assertEquals(added.body.apps.map(({ server, name, pages }) => [server, name, pages]), [
       ['one', 'myapp', ['/', '/invoices', '/invoices/:id']],
     ])
+    assertEquals(added.body.apps[0].zones, ['myapp.send'])
+    assertEquals(added.body.apps[0].outcomes, [])
     const listed = await call('GET', '/api/apps')
     assertEquals(listed.body.apps.map(({ name, segments }) => [name, segments]), [
       ['myapp', ['plan']],
@@ -127,7 +135,7 @@ Deno.test('the console adds up the answers of several servers and names a server
   try {
     addServer({ name: 'two', url: second.url, auth: KEY }, serversFile)
     addServer({ name: 'down', url: 'http://127.0.0.1:9', auth: KEY }, serversFile)
-    const added = await call('PUT', '/api/apps/myapp?servers=one,two,down', { map: MAP })
+    const added = await call('PUT', '/api/apps/myapp?servers=one,two,down', BUILD)
     assertEquals(added.body.apps.map(({ server }) => server), ['one', 'two'])
     assertEquals(added.body.failedServers.map(({ server }) => server), ['down'])
 
