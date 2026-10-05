@@ -11,6 +11,12 @@ export const SERVICE_USER = 'imp-aly'
 
 export const SERVICE_DATA_DIR = '/var/lib/imp-aly'
 
+export const UPDATE_NAME = 'imp-aly-update'
+
+export const UPDATE_SERVICE_PATH = `/etc/systemd/system/${UPDATE_NAME}.service`
+
+export const UPDATE_TIMER_PATH = `/etc/systemd/system/${UPDATE_NAME}.timer`
+
 export const CREDENTIALS = { key: 'key', tlsCert: 'tls-cert', tlsKey: 'tls-key' }
 
 const HOME_PREFIXES = ['/root/', '/home/', '/run/user/']
@@ -18,6 +24,10 @@ const HOME_PREFIXES = ['/root/', '/home/', '/run/user/']
 const PRIVILEGED_PORTS = 1024
 
 const START_TIMEOUT_MS = 5_000
+
+const HEALTH_MS = 15_000
+
+const HEALTH_POLL_MS = 500
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -72,9 +82,11 @@ export const serviceBlocker = () => {
   return ''
 }
 
+export const isCompiled = () => !/(^|\/)deno$/.test(Deno.execPath())
+
 export const selfCommand = () => {
   const executable = Deno.execPath()
-  if (!/(^|\/)deno$/.test(executable)) return [executable]
+  if (isCompiled()) return [executable]
   return [executable, 'run', '--allow-all', Deno.mainModule]
 }
 
@@ -133,6 +145,42 @@ AmbientCapabilities=${capabilities}
 WantedBy=multi-user.target
 `
 }
+
+export const updateServiceFile = () => {
+  const command = selfCommand()
+  return `[Unit]
+Description=imp-aly update to the newest compatible version
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=${[...command, 'update'].map(quote).join(' ')}
+StateDirectory=${UPDATE_NAME}
+ReadWritePaths=${quote(dirname(command[0]))}
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+NoNewPrivileges=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+`
+}
+
+export const updateTimerFile = () =>
+  `[Unit]
+Description=Daily check for a new imp-aly version
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=6h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+`
 
 const run = async (command, args) => {
   try {
@@ -240,12 +288,42 @@ const prepareDataDir = async (dataDir) => {
   }
 }
 
-const readUnit = async () => {
+const readText = async (path) => {
   try {
-    return await Deno.readTextFile(UNIT_PATH)
+    return await Deno.readTextFile(path)
   } catch {
     return null
   }
+}
+
+const readUnit = () => readText(UNIT_PATH)
+
+export const isServiceInstalled = async () => (await readUnit()) !== null
+
+const syncFile = async (path, wanted) => {
+  const current = await readText(path)
+  if (current === wanted) return false
+  if (wanted === null) {
+    await Deno.remove(path)
+    logger.info(`Removed ${path}`)
+  } else {
+    await Deno.writeTextFile(path, wanted, { mode: 0o644 })
+    logger.info(`${current ? 'Updated' : 'Wrote'} ${path}`)
+  }
+  return true
+}
+
+const ensureUpdateTimer = async (enabled) => {
+  const timer = `${UPDATE_NAME}.timer`
+  if (!enabled && (await readText(UPDATE_TIMER_PATH)) !== null) {
+    await runSystemctl('disable', '--now', timer)
+  }
+  const changed = [
+    await syncFile(UPDATE_SERVICE_PATH, enabled ? updateServiceFile() : null),
+    await syncFile(UPDATE_TIMER_PATH, enabled ? updateTimerFile() : null),
+  ].some(Boolean)
+  if (changed) await systemctl('daemon-reload')
+  if (enabled) await systemctl('enable', '--now', timer)
 }
 
 export const isActive = async () => (await runSystemctl('is-active', SERVICE_NAME)).out === 'active'
@@ -265,6 +343,12 @@ const waitUntilActive = async () => {
 export const ensureService = async (options) => {
   const problems = serviceProblems(options)
   if (problems.length) throw new Error(problems.join('\n'))
+  const state = await ensureServerUnit(options)
+  await ensureUpdateTimer(options.autoUpdate)
+  return state
+}
+
+const ensureServerUnit = async (options) => {
   const wanted = unitFile(options)
   const current = await readUnit()
   if (current === wanted && (await isActive())) return 'running'
@@ -290,7 +374,34 @@ export const ensureService = async (options) => {
   return state
 }
 
+const showService = async () => {
+  const { out } = await runSystemctl(
+    'show',
+    SERVICE_NAME,
+    '--property=ActiveState,MainPID,NRestarts',
+  )
+  return Object.fromEntries(out.split('\n').map((line) => line.split('=')))
+}
+
+export const restartService = async () => {
+  await systemctl('restart', SERVICE_NAME)
+  const first = await showService()
+  const start = Date.now()
+  while (Date.now() - start < HEALTH_MS) {
+    const now = await showService()
+    if (
+      now.ActiveState !== 'active' || now.MainPID !== first.MainPID ||
+      now.NRestarts !== first.NRestarts
+    ) {
+      return false
+    }
+    await sleep(HEALTH_POLL_MS)
+  }
+  return true
+}
+
 export const uninstallService = async () => {
+  await ensureUpdateTimer(false)
   const result = await runSystemctl('disable', '--now', SERVICE_NAME)
   if (result.code !== 0) logger.warn(result.err)
   try {

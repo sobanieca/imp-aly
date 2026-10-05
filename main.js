@@ -10,6 +10,7 @@ import { add, ls, rm, use } from './src/commands/servers.js'
 import { skill } from './src/commands/skill.js'
 import { status } from './src/commands/status.js'
 import { token } from './src/commands/token.js'
+import { update } from './src/commands/update.js'
 import { version } from './src/commands/version.js'
 import { logger } from './src/logger.js'
 
@@ -27,6 +28,7 @@ const COMMANDS = {
   skill,
   status,
   token,
+  update,
   use,
   version,
 }
