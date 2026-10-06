@@ -41,7 +41,9 @@ const TILE_STYLES = `
     font-weight: var(--imp-font-weight-bold, 600);
     line-height: var(--imp-line-height-tight, 1.2);
     font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
   }
+  .value.name { font-size: var(--imp-font-size-lg, 1.125rem); }
   @media (forced-colors: active) {
     .tile { border-color: CanvasText; }
   }
@@ -49,11 +51,11 @@ const TILE_STYLES = `
 
 export const statTile = component('aly-stat-tile', {
   styles: TILE_STYLES,
-  setup: (self, { label, value, hint }) =>
+  setup: (self, { label, value, hint, name = false }) =>
     div(
       { class: 'tile' },
       div({ class: 'label' }, label),
-      div({ class: 'value' }, value),
+      div({ class: ['value', name ? 'name' : null] }, value),
       hint ? div({ class: 'hint' }, hint) : null,
     ),
 })

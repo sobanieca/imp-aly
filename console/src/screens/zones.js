@@ -114,6 +114,7 @@ const zonesReport = component('aly-zones-report', {
         }),
         statTile({
           label: 'Most used zone',
+          name: true,
           value: topZone ? topZone[0] : '-',
           hint: topZone ? `${formatCount(topZone[1])} uses` : null,
         }),

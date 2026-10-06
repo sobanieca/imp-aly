@@ -104,6 +104,7 @@ const outcomesReport = component('aly-outcomes-report', {
         }),
         statTile({
           label: 'Most reached outcome',
+          name: true,
           value: current.rows[0] ? labelOf(current.rows[0].name) : '-',
           hint: current.rows[0] ? `${formatCount(current.rows[0].records)} times` : null,
         }),

@@ -97,6 +97,7 @@ const appsReport = component('aly-apps-report', {
         }),
         statTile({
           label: 'Most visited app',
+          name: true,
           value: top?.visits ? top.app : '-',
           hint: top?.visits ? `${formatCount(top.visits)} visits` : null,
         }),
