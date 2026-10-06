@@ -13,8 +13,8 @@ shows an answer in a frame can also mislead a user.
 
 - The server adds the headers as the last step of each request, also to `429`, `503` and error
   answers, to the preflight and to the backup stream.
-- The headers do not change the CORS headers of the public endpoint. A `fetch` or `sendBeacon` from
-  an imp app works as before.
+- The headers do not change the CORS headers of either port. A `fetch` or `sendBeacon` from an imp
+  app, and a call of the console page to the admin port, work as before.
 
 ## Consequences
 

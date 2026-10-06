@@ -7,12 +7,23 @@ import { card, descriptionList, emptyState, tag } from 'imp/std/display'
 import { notice, notify, progress, skeleton } from 'imp/std/feedback'
 import { form, FormError, submitForm, textField } from 'imp/std/inputs'
 import { dialog, flex, stack } from 'imp/std/layout'
-import { luPlus } from 'imp/icons'
+import { luPlus, luServer } from 'imp/icons'
 import { messageOf } from '../lib/api.js'
+import { statusOf } from '../lib/client.js'
 import { formatBytes, formatCount, formatDateTime } from '../lib/format.js'
+import { parseServerUrl, removeServer, saveServer, SERVER_NAME, useServer } from '../lib/vault.js'
 import { columns, page, reportCard, screenHeader } from '../parts/report.js'
 
-const SERVER_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$/
+const linkedServer = () => {
+  const params = new URLSearchParams(location.hash.slice(1))
+  if (!params.has('url')) return null
+  history.replaceState(history.state, '', `${location.pathname}${location.search}`)
+  return {
+    name: params.get('name') ?? '',
+    url: params.get('url') ?? '',
+    key: params.get('key') ?? '',
+  }
+}
 
 const storageNotices = (storage) =>
   [
@@ -51,7 +62,7 @@ const serverStatus = component('aly-server-status', {
   loading: () => card(skeleton({ lines: 6 })),
   setup: async (self, { name, label }) => {
     const api = useHttpClient(self, 'aly.api')
-    const status = await api.get('/status', { query: { server: name } })
+    const status = await statusOf(api, name)
     const { storage } = status
     return reportCard(
       {
@@ -91,23 +102,44 @@ const serverStatus = component('aly-server-status', {
     ),
 })
 
-const addForm = component('aly-add-server-form', {
-  setup: (self, { onDone }) => {
+const urlProblem = (value) => {
+  try {
+    parseServerUrl(value)
+    return null
+  } catch (error) {
+    return error.message
+  }
+}
+
+const serverForm = component('aly-server-form', {
+  setup: (self, { initial, editing, onDone }) => {
     const api = useHttpClient(self, 'aly.api')
     return form(
       {
-        initialValues: { name: '', url: '', auth: '' },
+        initialValues: initial,
         onSubmit: async (values) => {
+          let saved
           try {
-            await api.post('/servers', { body: values })
+            saved = await saveServer(values)
           } catch (error) {
             throw new FormError(messageOf(error), { cause: error })
           }
-          notify({
-            kind: 'success',
-            title: `Saved the server ${values.name}`,
-            description: 'It is the default server now.',
-          })
+          try {
+            const status = await statusOf(api, saved.name)
+            notify({
+              kind: 'success',
+              title: `Saved the server ${saved.name}`,
+              description:
+                `It answers with imp-aly ${status.version}, and it is the active server now.`,
+            })
+          } catch (error) {
+            notify({
+              kind: 'warning',
+              title: `Saved the server ${saved.name}, but it did not answer`,
+              description: messageOf(error),
+              duration: 0,
+            })
+          }
           onDone()
         },
       },
@@ -115,6 +147,7 @@ const addForm = component('aly-add-server-form', {
         field: 'name',
         label: 'Name',
         required: true,
+        readonly: editing,
         placeholder: 'eu-1',
         validate: (value) =>
           SERVER_NAME.test(value ?? '')
@@ -127,38 +160,55 @@ const addForm = component('aly-add-server-form', {
         type: 'url',
         required: true,
         placeholder: 'https://analytics.myapp.example:2981',
+        validate: urlProblem,
       }),
       textField({
-        field: 'auth',
+        field: 'key',
         label: 'Key',
         type: 'password',
-        help:
-          'The key, or the path of a file with the key. Empty: ~/.secret/imp-aly-key. The console saves a path, not the key in the file.',
+        autocomplete: 'off',
+        required: !editing,
+        help: editing
+          ? 'Empty: keep the saved key.'
+          : 'The key of the server, from ~/.secret/imp-aly-key on the server. This browser keeps it, and no script can read it back.',
       }),
       flex(button({ variant: 'primary', events: { click: submitForm } }, 'Save the server')),
     )
   },
 })
 
+const EMPTY_SERVER = { name: '', url: '', key: '' }
+
 export const serversScreen = component('aly-servers', {
   setup: (self) => {
-    const api = useHttpClient(self, 'aly.api')
     const catalog = useState(self, 'aly.catalog')
     const revision = useState(self, 'aly.revision')
-    const adding = initState(self, 'aly.servers.adding', false)
+    const scopeServers = useState(self, 'aly.scope.servers')
+    const linked = linkedServer()
+    const editing = initState(self, 'aly.servers.editing', linked ? { initial: linked } : null)
+    const formOpen = initState(self, 'aly.servers.formOpen', linked !== null)
     const removing = initState(self, 'aly.servers.removing', null)
     const removeOpen = initState(self, 'aly.servers.removeOpen', false)
-    const reload = () => revision.set((value) => value + 1)
     const saved = computed([catalog], (value) => value?.servers ?? null)
+    const reload = () => {
+      scopeServers.set((names) => names.filter((name) => name !== removing.get()))
+      revision.set((value) => value + 1)
+    }
+    const openForm = (value) => {
+      editing.set(value)
+      formOpen.set(true)
+    }
+    const add = () => openForm({ initial: EMPTY_SERVER })
 
-    const makeDefault = async (name) => {
+    const makeActive = async (name) => {
       try {
-        await api.post(`/servers/${encodeURIComponent(name)}/default`)
-        notify({ kind: 'success', title: `${name} is the default server now` })
+        await useServer(name)
+        if (scopeServers.get().length) scopeServers.set([])
+        notify({ kind: 'success', title: `${name} is the active server now` })
       } catch (error) {
         notify({
           kind: 'error',
-          title: 'The default server did not change',
+          title: 'The active server did not change',
           description: messageOf(error),
         })
       }
@@ -168,7 +218,7 @@ export const serversScreen = component('aly-servers', {
     const remove = async () => {
       const name = removing.get()
       try {
-        await api.delete(`/servers/${encodeURIComponent(name)}`)
+        await removeServer(name)
         notify({ kind: 'success', title: `Removed the server ${name}` })
       } catch (error) {
         notify({ kind: 'error', title: `${name} was not removed`, description: messageOf(error) })
@@ -182,18 +232,16 @@ export const serversScreen = component('aly-servers', {
       if (!store.servers.length) {
         return emptyState(
           {
-            title: 'No server is saved',
+            icon: luServer,
+            title: 'No server is added',
             description:
-              `The console uses the local server, ${store.localUrl}, with the key in ~/.secret/imp-aly-key.`,
+              'Add the URL of the admin port of an imp-aly server, and its key. Add more servers to switch between them, or to add up their numbers.',
           },
-          button(
-            { variant: 'primary', events: { click: () => adding.set(true) } },
-            'Save a server',
-          ),
+          button({ variant: 'primary', events: { click: add } }, 'Add a server'),
         )
       }
       return table({
-        label: 'Saved servers',
+        label: 'Servers',
         rowKey: 'name',
         rows: store.servers,
         columns: [
@@ -206,12 +254,11 @@ export const serversScreen = component('aly-servers', {
                 ? flex(
                   { gap: 2, verticalAlign: 'center' },
                   row.name,
-                  tag({ color: 'blue', size: 'sm' }, 'default'),
+                  tag({ color: 'blue', size: 'sm' }, 'active'),
                 )
                 : row.name,
           },
           { key: 'url', label: 'URL' },
-          { key: 'key', label: 'Key' },
           {
             key: 'actions',
             label: 'Actions',
@@ -221,10 +268,16 @@ export const serversScreen = component('aly-servers', {
                 label: `Actions for ${row.name}`,
                 items: [
                   {
-                    id: 'default',
-                    label: 'Make it the default',
+                    id: 'active',
+                    label: 'Make it the active server',
                     disabled: row.name === store.default,
-                    onClick: () => makeDefault(row.name),
+                    onClick: () => makeActive(row.name),
+                  },
+                  {
+                    id: 'edit',
+                    label: 'Change the URL or the key',
+                    onClick: () =>
+                      openForm({ initial: { name: row.name, url: row.url, key: '' }, edit: true }),
                   },
                   {
                     id: 'remove',
@@ -241,38 +294,44 @@ export const serversScreen = component('aly-servers', {
       })
     }
 
-    const statuses = (store) => {
-      if (!store) return null
-      const targets = store.servers.length
-        ? store.servers.map(({ name, url }) => ({ name, label: name, url }))
-        : [{ name: undefined, label: 'Local server', url: store.localUrl }]
-      return columns(...targets.map((target) => serverStatus(target)))
-    }
+    const statuses = (store) =>
+      store?.servers.length
+        ? columns(...store.servers.map(({ name }) => serverStatus({ name, label: name })))
+        : null
 
     return page(
       stack(
         { gap: 5 },
         flex(
-          { horizontalAlign: 'justify', verticalAlign: 'top', wrap: true },
-          screenHeader(
-            'Servers',
-            'The servers that this machine saved, with their keys. The list is the same as in imp-aly ls.',
-          ),
-          button(
-            { variant: 'primary', events: { click: () => adding.set(true) } },
-            icon(luPlus),
-            'Save a server',
-          ),
+          { horizontalAlign: 'justify', verticalAlign: 'center', wrap: true },
+          screenHeader({
+            title: 'Servers',
+            description:
+              'The servers of this browser. The reports ask the active server, or the servers that you choose in the bar.',
+          }),
+          button({ variant: 'primary', events: { click: add } }, icon(luPlus), 'Add a server'),
         ),
-        reportCard({ title: 'Saved servers' }, saved.view(serverTable)),
+        reportCard({ title: 'Servers' }, saved.view(serverTable)),
         saved.view(statuses),
+        notice(
+          { kind: 'info', title: 'The keys stay in this browser' },
+          'The browser keeps each key in a form that no script can read back. The page signs a one-time token for each call, so the key never goes over the network. Anybody who can open this page on this device can use the servers. Lock the device.',
+        ),
         dialog(
-          { title: 'Save a server', open: adding },
-          adding.view((open) =>
-            open
-              ? addForm({
+          {
+            title: computed(
+              [editing],
+              (value) => (value?.edit ? `Change ${value.initial.name}` : 'Add a server'),
+            ),
+            open: formOpen,
+          },
+          editing.view((value) =>
+            value
+              ? serverForm({
+                initial: value.initial,
+                editing: value.edit === true,
                 onDone: () => {
-                  adding.set(false)
+                  formOpen.set(false)
                   reload()
                 },
               })
@@ -287,7 +346,7 @@ export const serversScreen = component('aly-servers', {
           stack(
             { gap: 4 },
             text(
-              'The console and the CLI forget the server. The server and its data do not change.',
+              'This browser forgets the server and its key. The server and its data do not change.',
             ),
             flex(
               { horizontalAlign: 'end' },

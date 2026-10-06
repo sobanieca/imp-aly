@@ -23,6 +23,21 @@ export const APP_TERMS = [
   CHANGE,
 ]
 
+export const OVERVIEW_TERMS = [
+  VISIT,
+  [
+    'Visits of a range',
+    'The visits of each day, added up. A tab that stays open past midnight UTC counts once on each day.',
+  ],
+  ['Page views', 'How many times people opened a page of the app.'],
+  [
+    'Visits with an outcome',
+    'The visits that reached one outcome or more, divided by the visits with a page view.',
+  ],
+  ['Errors per 100 views', 'The errors, divided by the page views, times 100.'],
+  CHANGE,
+]
+
 export const PAGE_TERMS = [
   ['Views', 'How many times people opened the page. Each opening is one page view.'],
   [

@@ -3,6 +3,7 @@ import { app } from './src/commands/app.js'
 import { backup } from './src/commands/backup.js'
 import { consoleCommand } from './src/commands/console.js'
 import { help } from './src/commands/help.js'
+import { key } from './src/commands/key.js'
 import { query } from './src/commands/query.js'
 import { restore } from './src/commands/restore.js'
 import { server } from './src/commands/server.js'
@@ -20,6 +21,7 @@ const COMMANDS = {
   backup,
   console: consoleCommand,
   help,
+  key,
   ls,
   query,
   restore,

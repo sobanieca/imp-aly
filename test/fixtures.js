@@ -1,4 +1,5 @@
-import { finalizeQuery, runQuery } from '../src/query.js'
+import { finalizeQuery } from '../src/query-core.js'
+import { runQuery } from '../src/query.js'
 import { applySegment } from '../src/storage.js'
 import { temporaryDir } from './assert.js'
 

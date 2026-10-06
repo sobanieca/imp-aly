@@ -76,3 +76,42 @@ Deno.test('the timer closes a segment with data', async () => {
   await wal.close()
   await Deno.remove(dir, { recursive: true })
 })
+
+Deno.test('a part that cannot be renamed keeps its records and closes later', async () => {
+  const dir = await temporaryDir()
+  const blocker = `${dir}/${segmentFileName(1, 'log')}`
+  await Deno.mkdir(blocker)
+  const errors = []
+  const log = { error: (message) => errors.push(message) }
+  const wal = await openWal({ dir, segmentMs: 60_000, segmentBytes: 2, now: () => 0, log })
+  await wal.append('a\n')
+  await wal.append('b\n')
+  assertEquals(errors.length, 2)
+  assertEquals(await Deno.readTextFile(`${dir}/${segmentFileName(1, 'open')}`), 'a\nb\n')
+  await Deno.remove(blocker)
+  await wal.append('c\n')
+  await wal.close()
+  const segments = await listClosedSegments(dir)
+  assertEquals(segments.map((segment) => segment.id), [1])
+  assertEquals(await Deno.readTextFile(segments[0].path), 'a\nb\nc\n')
+  await Deno.remove(dir, { recursive: true })
+})
+
+Deno.test('a part that cannot be renamed at close is stored at the next start', async () => {
+  const dir = await temporaryDir()
+  const blocker = `${dir}/${segmentFileName(1, 'log')}`
+  await Deno.mkdir(blocker)
+  const errors = []
+  const log = { error: (message) => errors.push(message) }
+  const wal = await openWal({ dir, segmentMs: 60_000, now: () => 0, log })
+  await wal.append('a\n')
+  await wal.close()
+  assertEquals(errors.length, 1)
+  await Deno.remove(blocker)
+  const next = await openWal({ dir, segmentMs: 60_000, now: () => 0 })
+  await next.close()
+  const segments = await listClosedSegments(dir)
+  assertEquals(segments.map((segment) => segment.id), [1])
+  assertEquals(await Deno.readTextFile(segments[0].path), 'a\n')
+  await Deno.remove(dir, { recursive: true })
+})

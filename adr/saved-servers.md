@@ -34,3 +34,5 @@ client commands take `-s <name>` and call the default server when no server is g
 - On a VPS with saved servers, a command without options calls the default saved server, not the
   local server. Use `--url http://127.0.0.1:2981` there.
 - The URL of a saved server is the URL of its admin port, not of its public port.
+- The console page keeps its own list of servers in the browser, see `console-web-app.md`. The saved
+  servers of the CLI do not appear in it.

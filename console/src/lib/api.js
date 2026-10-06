@@ -1,14 +1,10 @@
+import { queryServers } from './client.js'
 import { previousRange } from './days.js'
 
 export const messageOf = (error) => error?.body?.error ?? error?.message ?? String(error)
 
-export const serversParam = (servers) => (servers?.length ? servers.join(',') : undefined)
-
 export const runQuery = (api, scope, query) =>
-  api.post('/query', {
-    query: { servers: serversParam(scope.servers) },
-    body: { app: scope.app, from: scope.from, to: scope.to, ...query },
-  })
+  queryServers(api, scope.servers, { app: scope.app, from: scope.from, to: scope.to, ...query })
 
 export const previousScope = (scope) => ({ ...scope, ...previousRange(scope.from, scope.to) })
 
@@ -33,8 +29,10 @@ export const problemsOf = (answers) => {
   }
 }
 
-export const downloadText = (name, text, type) => {
-  const url = URL.createObjectURL(new Blob([text], { type }))
+export const downloadText = (name, text, type) => downloadBlob(name, new Blob([text], { type }))
+
+export const downloadBlob = (name, blob) => {
+  const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = url
   anchor.download = name

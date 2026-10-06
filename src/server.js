@@ -1,5 +1,5 @@
 import { appConfig, AppError, openApps } from './apps.js'
-import { createTokenVerifier, EMPTY_BODY_HASH } from './auth.js'
+import { createTokenVerifier, EMPTY_BODY_HASH } from './token.js'
 import { BackupError, createBackupStream, parseBackupOptions } from './backup.js'
 import { checkDataFormat, DATA_FORMAT } from './data-format.js'
 import { dayOf } from './days.js'
@@ -11,7 +11,7 @@ import { createOriginCheck } from './origins.js'
 import { isAppName } from './names.js'
 import { join } from './paths.js'
 import { createSha256, sha256Hex } from './sha256.js'
-import { parseQuery, QueryError } from './query.js'
+import { parseQuery, QueryError } from './query-core.js'
 import {
   clientAddress,
   clientKeys,
@@ -58,6 +58,18 @@ const PREFLIGHT_HEADERS = {
   'access-control-max-age': '86400',
 }
 
+const ADMIN_CORS_HEADERS = {
+  'access-control-allow-origin': '*',
+  'access-control-expose-headers': 'content-disposition',
+}
+
+const ADMIN_PREFLIGHT_HEADERS = {
+  ...ADMIN_CORS_HEADERS,
+  'access-control-allow-methods': 'GET, POST, PUT, DELETE',
+  'access-control-allow-headers': 'authorization, content-type',
+  'access-control-max-age': '86400',
+}
+
 const SECURITY_HEADERS = {
   'x-content-type-options': 'nosniff',
   'content-security-policy': "default-src 'none'; frame-ancestors 'none'",
@@ -71,8 +83,10 @@ const json = (status, body, headers = {}) =>
     headers: { 'content-type': 'application/json', ...headers },
   })
 
-const secure = (response) => {
-  for (const [name, value] of Object.entries(SECURITY_HEADERS)) response.headers.set(name, value)
+const secure = (response, headers = {}) => {
+  for (const [name, value] of Object.entries({ ...headers, ...SECURITY_HEADERS })) {
+    response.headers.set(name, value)
+  }
   return response
 }
 
@@ -353,6 +367,7 @@ export const startServer = async ({
       dir: join(dataDir, 'wal'),
       ...(segmentMs ? { segmentMs } : {}),
       onSegment: () => storage?.wake(),
+      log,
     })
     cleanups.push(() => wal.close())
     storage = createStorageRunner({
@@ -369,7 +384,7 @@ export const startServer = async ({
     cleanups.push(() => queries.close())
     const limiter = createRateLimiter({ limits, ...(maxClients ? { maxClients } : {}) })
     const batchLimit = maxBatch(limits)
-    const verifyToken = createTokenVerifier(key)
+    let verifyToken = createTokenVerifier(key)
     const inFlight = { public: { count: 0 }, admin: { count: 0 } }
 
     let refreshing = false
@@ -520,6 +535,9 @@ export const startServer = async ({
 
     const adminRoute = (request, url) => {
       const path = url.pathname
+      if (request.method === 'OPTIONS') {
+        return new Response(null, { status: 204, headers: ADMIN_PREFLIGHT_HEADERS })
+      }
       if (path === '/' && request.method === 'GET') return versionResponse()
       if (ADMIN_PATHS.includes(path) || path.startsWith('/apps/')) return admin(request, url)
       throw new HttpError(404, `${request.method} ${path} is not an endpoint`)
@@ -529,7 +547,7 @@ export const startServer = async ({
       const url = new URL(request.url)
       const origin = route === publicRoute && url.pathname.startsWith('/collect/')
         ? checkOrigin(request.headers.get('origin'))
-        : { allowed: true, headers: {} }
+        : { allowed: true, headers: route === adminRoute ? ADMIN_CORS_HEADERS : {} }
       const { headers } = origin
       if (counter.count >= maxRequests) {
         await request.body?.cancel().catch(() => {})
@@ -553,7 +571,7 @@ export const startServer = async ({
       }
       counter.count++
       try {
-        return secure(await route(request, url, clients, origin))
+        return secure(await route(request, url, clients, origin), headers)
       } catch (error) {
         if (
           error instanceof HttpError || error instanceof AppError ||
@@ -645,6 +663,10 @@ export const startServer = async ({
       hostname: addresses[0].hostname,
       adminPort: addresses[1].port,
       adminHostname: addresses[1].hostname,
+      setKey: (next) => {
+        if (!next) throw new Error('the server needs a key')
+        verifyToken = createTokenVerifier(next)
+      },
       shutdown: () => {
         stopped ??= (async () => {
           await cleanup()

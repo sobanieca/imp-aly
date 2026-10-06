@@ -4,6 +4,7 @@
 imp-aly server [options]              start the server
 imp-aly server --uninstall            remove the systemd service
 imp-aly update [--check]              install the newest compatible version
+imp-aly key rotate [-a <file>]        change the key, and the server does not stop
 imp-aly app add <name> <app url|build folder> [--segments plan,role]
 imp-aly app ls | show <name> | refresh <name> | rm <name>
 imp-aly query '<json>' | query <file.json> [--json]
@@ -96,6 +97,18 @@ The command refuses a data folder in `/root`, a binary in `/root` or `/home`, an
 with spaces or special signs. The service user must be able to reach the data folder. When it
 cannot, the command stops and removes the folders that it created.
 
+## Change the key
+
+```sh
+sudo imp-aly key rotate    # the service: a new key, loaded without a stop
+imp-aly key rotate         # the key file of a server in the foreground
+```
+
+The command makes a new key, writes it to the key file and prints it. The service loads it at once,
+and refuses the old key from then on. A server in the foreground loads it on `SIGHUP` or when it
+starts again. `-a <file>` names another key file for a server in the foreground. See
+[Security](security.md#change-the-key).
+
 ## Client commands
 
 The commands `app`, `query`, `backup`, `restore` and `status` take these options:
@@ -172,9 +185,11 @@ The command keeps the list in `~/.config/imp-aly/servers.json`, with access for 
 
 ## Console
 
-`imp-aly console` starts a web page on your machine, at `http://localhost:8010`. It shows the
-reports of your apps in charts, and it does the work of the client commands. It uses the saved
-servers and their keys. `--port <port>` changes the port. See [Console](console.md).
+`imp-aly console` serves the console web app on your machine, at `http://localhost:8010`. It shows
+the reports of your apps in charts, and it does the work of the client commands. Add the servers and
+their keys in the page. The page does not use the saved servers of the CLI. `--port <port>` changes
+the port. The same app is at `https://sobanieca.github.io/imp-aly/console/`, ready to install on a
+phone. See [Console](console.md).
 
 ## AI agents
 

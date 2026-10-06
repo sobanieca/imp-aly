@@ -85,7 +85,7 @@ A page on HTTPS cannot send records to a server on plain HTTP. Use one of these 
   address of each visitor and not the address of the proxy. When the proxy runs on another machine,
   also give `--trusted-proxy <proxy address>`. See [Collecting records](collect.md#behind-a-proxy).
   To call the admin port over HTTPS, give it its own host in the proxy, and limit that host to your
-  addresses.
+  addresses. The console on a phone calls this host too.
 - Give the server a certificate: `--tls-cert fullchain.pem --tls-key privkey.pem`. Both ports then
   serve HTTPS.
 
@@ -178,15 +178,14 @@ accepts each token once. See [Security](security.md).
 
 ## See the numbers in the console
 
-On the machine with the saved servers, run:
+Open `https://sobanieca.github.io/imp-aly/console/` on your phone or your computer, and install it
+from the menu of the browser. Or run `imp-aly console` and open `http://localhost:8010`. In
+**Servers**, add the URL of the admin port and the key. The installed console needs HTTPS on the
+admin port, see [Serve HTTPS](#serve-https).
 
-```sh
-imp-aly console
-```
-
-Open `http://localhost:8010` in a browser. The console shows the visits of your apps, and the pages,
-zones, outcomes and errors of each app, in charts. It also has a query builder, and pages for the
-apps, the servers and the backups. See [Console](console.md).
+The console shows the visits of your apps, and the pages, zones, outcomes and errors of each app, in
+charts. It also has a query builder, and pages for the apps, the servers and the backups. See
+[Console](console.md).
 
 ## Next
 
@@ -195,7 +194,7 @@ apps, the servers and the backups. See [Console](console.md).
 - [Queries](query.md) - the query API
 - [Storage](storage.md) - how the server stores the records and removes old ones
 - [Backup](backup.md) - save the daily summaries, restore them, and keep them safe
-- [Console](console.md) - the web page with charts, a query builder, apps, servers and backups
+- [Console](console.md) - the web app with charts, a query builder, apps, servers and backups
 - [Security](security.md) - the key, the tokens and the limits
 - [Updates](update.md) - the daily update, and how to control it
 - [CLI](cli.md) - every command and option

@@ -25,7 +25,8 @@ answers `403` to a request to `/collect/<app>` with another `Origin` header.**
 - Without the option, the endpoint answers `access-control-allow-origin: *` and accepts every
   origin.
 - The option is one list for the server, not one list for each app.
-- The private endpoints send no CORS headers, so a browser page cannot read their answers.
+- The option does not apply to the admin port. The admin port allows every origin, because a
+  one-time token protects each call. See `one-time-token-admin-api.md`.
 
 ## Consequences
 

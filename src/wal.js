@@ -48,6 +48,7 @@ export const openWal = async ({
   segmentBytes = DEFAULT_SEGMENT_BYTES,
   onSegment = () => {},
   now = Date.now,
+  log = null,
 }) => {
   await Deno.mkdir(dir, { recursive: true })
   let lastId = await readAppliedSegment(dir)
@@ -64,6 +65,7 @@ export const openWal = async ({
   let file = null
   let fileId = 0
   let size = 0
+  let broken = false
   let pending = []
   let flushQueued = false
   let closed = false
@@ -84,31 +86,32 @@ export const openWal = async ({
       truncate: true,
     })
     size = 0
+    broken = false
   }
 
-  const closeSegment = async ({ broken = false } = {}) => {
+  const closeSegment = async () => {
     if (!file) return
-    const current = file
-    file = null
-    current.close()
     const openPath = join(dir, segmentFileName(fileId, 'open'))
+    const stored = broken || size > 0
     if (broken) {
-      const validBytes = size
-      size = 0
-      await Deno.rename(openPath, join(dir, segmentFileName(fileId, 'log', validBytes)))
-      onSegment(fileId)
-      return
-    }
-    if (size === 0) {
+      await Deno.rename(openPath, join(dir, segmentFileName(fileId, 'log', size)))
+    } else if (stored) {
+      await Deno.rename(openPath, join(dir, segmentFileName(fileId, 'log')))
+    } else {
       await Deno.remove(openPath)
-      return
     }
-    await Deno.rename(openPath, join(dir, segmentFileName(fileId, 'log')))
+    file.close()
+    file = null
     size = 0
-    onSegment(fileId)
+    broken = false
+    if (stored) onSegment(fileId)
   }
+
+  const warnClose = (error) =>
+    log?.error(`Cannot close log part ${fileId}, the server tries again later: ${error.message}`)
 
   const writeBatch = async (text) => {
+    if (broken) await closeSegment()
     if (!file) await openSegment()
     const bytes = encoder.encode(text)
     const start = size
@@ -117,12 +120,13 @@ export const openWal = async ({
       await file.syncData()
       size += bytes.length
     } catch (error) {
-      const reverted = await file.truncate(start).then(() => true, () => false)
-      size = start
-      await closeSegment({ broken: !reverted }).catch(() => {})
+      broken = await file.truncate(start)
+        .then(() => file.seek(start, Deno.SeekMode.Start))
+        .then(() => false, () => true)
+      await closeSegment().catch(warnClose)
       throw error
     }
-    if (size >= segmentBytes) await closeSegment()
+    if (size >= segmentBytes) await closeSegment().catch(warnClose)
   }
 
   const flushPending = async () => {
@@ -139,7 +143,7 @@ export const openWal = async ({
   }
 
   const timer = setInterval(() => {
-    if (file && size > 0) enqueue(closeSegment).catch(() => {})
+    if (file && (size > 0 || broken)) enqueue(closeSegment).catch(warnClose)
   }, segmentMs)
 
   return {
@@ -158,7 +162,11 @@ export const openWal = async ({
       closed = true
       clearInterval(timer)
       await enqueue(flushPending)
-      await enqueue(closeSegment)
+      await enqueue(closeSegment).catch((error) => {
+        log?.error(`Cannot close log part ${fileId}, the next start stores it: ${error.message}`)
+        file?.close()
+        file = null
+      })
     },
   }
 }

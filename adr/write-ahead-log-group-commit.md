@@ -23,6 +23,10 @@ separate worker moves the log into the column files later.**
   too, the server closes the part as `<id>-<size>.log`. The worker reads only the first `<size>`
   bytes. So the records before the failed write are stored, and records that a client got `503` for
   are not.
+- The server renames a part before it closes the file. When the rename fails, the part stays open
+  and the server logs an error. The timer, or the next full part, tries the rename again. A part cut
+  back after a failed write takes no new records until it has its `.log` name. So a part with
+  records never stays behind as `.open` while the server writes later parts.
 - At start, the server renames a leftover `.open` part to `.log`. A torn last line after a crash is
   not valid JSON, and the worker skips it.
 - Part ids grow for ever. The id of a new part is the current time in milliseconds, or one more than

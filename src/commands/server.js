@@ -1,5 +1,6 @@
 import { parsePort, parsePositiveInteger, requireOnlyFlags } from '../args.js'
-import { findKey, findOrCreateKey } from '../auth.js'
+import { findKey, findOrCreateKey, NEW_KEY_FILE, readKeyFile, takeNewKey } from '../auth.js'
+import { join } from '../paths.js'
 import { logger } from '../logger.js'
 import { formatHost, getLocalAddresses } from '../net.js'
 import { parseOrigins } from '../origins.js'
@@ -192,6 +193,24 @@ Register an app (on this machine, or anywhere with --url <admin address> and -a)
 ${serviceLines}`)
 }
 
+const KEY_CHANGED = 'The key changed. The server refuses tokens signed with the old key.'
+
+const readNewKey = ({ server, dataDir, keyPath }) => {
+  if (!keyPath) return takeNewKey(dataDir, server.setKey)
+  const key = readKeyFile(keyPath)
+  if (key) server.setKey(key)
+  return key
+}
+
+const reloadKey = (place) => {
+  try {
+    if (readNewKey(place)) logger.info(KEY_CHANGED)
+    else logger.warn(`SIGHUP: ${place.keyPath ?? join(place.dataDir, NEW_KEY_FILE)} has no key`)
+  } catch (error) {
+    logger.error(`SIGHUP: the key did not change (${error.message})`)
+  }
+}
+
 const run = async ({ options, key, keyPath, debug, service = false }) => {
   let stop = null
   const server = await startServer({
@@ -239,6 +258,9 @@ const run = async ({ options, key, keyPath, debug, service = false }) => {
   }
   Deno.addSignalListener('SIGINT', stop)
   Deno.addSignalListener('SIGTERM', stop)
+  if (Deno.build.os !== 'windows') {
+    Deno.addSignalListener('SIGHUP', () => reloadKey({ server, dataDir: options.dataDir, keyPath }))
+  }
   await new Promise(() => {})
 }
 
@@ -251,8 +273,11 @@ export const server = async ({ positional, flags }) => {
   const options = readServeOptions(flags)
   const debug = Boolean(flags.debug)
   if (isInsideService()) {
-    const key = findKey(credentialPath(CREDENTIALS.key))
     const inService = { ...options, dataDir: options.dataDir ?? SERVICE_DATA_DIR }
+    let key = findKey(credentialPath(CREDENTIALS.key))
+    takeNewKey(inService.dataDir, (next) => {
+      key = next
+    })
     return await run({ options: inService, key, keyPath: null, debug, service: true })
   }
   const { key, path: keyPath } = findOrCreateKey(flags.auth)

@@ -9,7 +9,8 @@ import { notify } from 'imp/std/feedback'
 import { codeEditor, comboBox, form, select, submitForm, textField } from 'imp/std/inputs'
 import { flex, stack, tabs } from 'imp/std/layout'
 import { luPlay, luPlus, luSave, luSearch, luTrash2, luX } from 'imp/icons'
-import { downloadText, problemsOf, runQuery, serversParam } from '../lib/api.js'
+import { downloadText, problemsOf, runQuery } from '../lib/api.js'
+import { queryServers } from '../lib/client.js'
 import { segmentsOf } from '../lib/catalog.js'
 import { formatCount, measureLabel } from '../lib/format.js'
 import { BASE_DIMENSIONS, MEASURES, TIME_FIELDS } from '../lib/measures.js'
@@ -349,20 +350,18 @@ export const exploreScreen = component('aly-explore', {
       if (!cache.has(key)) {
         cache.set(
           key,
-          api.post('/query', {
-            query: { servers: serversParam(current.servers) },
-            body: {
-              app: current.app,
-              from: current.from,
-              to: current.to,
-              groupBy: [field],
-              limit: 300,
+          queryServers(api, current.servers, {
+            app: current.app,
+            from: current.from,
+            to: current.to,
+            groupBy: [field],
+            limit: 300,
+          }, { signal }).then((answer) => answer.rows.map((row) => labelOf(row[field]))).catch(
+            (error) => {
+              cache.delete(key)
+              throw error
             },
-            signal,
-          }).then((answer) => answer.rows.map((row) => labelOf(row[field]))).catch((error) => {
-            cache.delete(key)
-            throw error
-          }),
+          ),
         )
       }
       const found = await cache.get(key)
@@ -411,11 +410,13 @@ export const exploreScreen = component('aly-explore', {
     return page(
       stack(
         { gap: 5 },
-        screenHeader(
-          'Explore',
-          'Build any query of the app. The servers, the app and the days come from the bar.',
-          EXPLORE_TERMS,
-        ),
+        screenHeader({
+          title: 'Explore',
+          description:
+            'Build any query of the app. The servers, the app and the days come from the bar.',
+          terms: EXPLORE_TERMS,
+          period: true,
+        }),
         scopeBar(),
         reportCard(
           {

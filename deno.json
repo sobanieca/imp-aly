@@ -1,14 +1,11 @@
 {
   "version": "0.1.0",
   "license": "MIT",
-  "imports": {
-    "hono": "jsr:@hono/hono@4.13.12"
-  },
   "tasks": {
     "start": "deno task console:build && deno run -A dev/start.js",
     "server": "deno run -A main.js server --foreground",
     "console": "deno task console:build && deno run -A main.js console",
-    "console:build": "cd console && imp build",
+    "console:build": "cd console && imp build --pwa",
     "test": "deno test -A test/",
     "compile": "deno task console:build && deno compile -A --include src/storage-worker.js --include src/query-worker.js --include console/dist -o imp-aly main.js",
     "check": "deno fmt && deno lint && deno task test && cd console && imp fmt && imp lint && imp test --unit"

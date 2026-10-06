@@ -1,5 +1,5 @@
 import { isSummaryOnlyDay, sealDay, writeSummaryDay } from '../src/column-store.js'
-import { parseQuery } from '../src/query.js'
+import { parseQuery } from '../src/query-core.js'
 import { applySegment } from '../src/storage.js'
 import { enforceRetention, minFreeBytes, parseDf, parseMinFree } from '../src/retention.js'
 import { assert, assertEquals, assertThrows, temporaryDir } from './assert.js'

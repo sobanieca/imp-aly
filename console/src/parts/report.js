@@ -2,16 +2,16 @@ import { component } from 'imp'
 import { div, span } from 'imp/html'
 import { navigate } from 'imp/router'
 import { computed, initState, useState } from 'imp/state'
-import { button, heading, text } from 'imp/std'
+import { button, heading, icon, text } from 'imp/std'
 import { chart } from 'imp/std/data'
 import { card, descriptionList, emptyState, tag } from 'imp/std/display'
 import { loader, notice, skeleton } from 'imp/std/feedback'
-import { stack } from 'imp/std/layout'
-import { luBox, luCalendarX } from 'imp/icons'
+import { dialog, flex, stack } from 'imp/std/layout'
+import { luBox, luCalendarX, luCircleQuestionMark, luServer } from 'imp/icons'
 import { app } from '../app-map.js'
 import { messageOf } from '../lib/api.js'
 import { mapPagesOf, segmentsOf } from '../lib/catalog.js'
-import { bucketLabel } from '../lib/days.js'
+import { barNote, barOf, bucketLabel, dayCount, previousRange } from '../lib/days.js'
 import { formatCount } from '../lib/format.js'
 import { activeFilters } from '../lib/reports.js'
 import { useScope } from '../lib/scope.js'
@@ -26,6 +26,7 @@ const TILE_STYLES = `
     padding: var(--imp-space-4, 16px);
     background-color: var(--imp-color-surface, #ffffff);
     border: var(--imp-border-width, 1px) solid var(--imp-color-border, #cbd5e1);
+    border-block-start: 2px solid var(--imp-color-primary, #2563eb);
     border-radius: var(--imp-radius-container, 10px);
     box-shadow: var(--imp-shadow-sm, 0 1px 2px rgb(15 23 42 / 10%));
     color: var(--imp-color-text, #0f172a);
@@ -35,10 +36,19 @@ const TILE_STYLES = `
     color: var(--imp-color-secondary, #475569);
     font-size: var(--imp-font-size-sm, 0.875rem);
   }
+  .label {
+    font-family: var(--imp-font-family-mono, ui-monospace, monospace);
+    font-size: 0.75rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
   .value {
-    margin-block: var(--imp-space-1, 4px);
+    margin-block: var(--imp-space-2, 8px) var(--imp-space-1, 4px);
+    color: var(--imp-color-heading, var(--imp-color-text, #0f172a));
+    font-family: var(--imp-font-family-mono, ui-monospace, monospace);
     font-size: var(--imp-font-size-2xl, 1.5rem);
     font-weight: var(--imp-font-weight-bold, 600);
+    letter-spacing: -0.02em;
     line-height: var(--imp-line-height-tight, 1.2);
     font-variant-numeric: tabular-nums;
     overflow-wrap: anywhere;
@@ -116,22 +126,54 @@ export const reportCard = ({ title, description, actions }, ...content) =>
     ),
   )
 
-const termsCard = (terms) =>
-  card(
-    { padding: 'sm', label: 'What the numbers mean', header: 'What the numbers mean' },
-    descriptionList({
-      columns: 2,
-      layout: 'vertical',
-      items: terms.map(([term, details]) => ({ term, details })),
-    }),
-  )
+const rangeNote = (value) => {
+  if (!value?.start || !value?.end) return ''
+  const before = previousRange(value.start, value.end)
+  return `${barNote(barOf(value.start, value.end))} A change compares with the ${
+    formatCount(dayCount(value.start, value.end))
+  } days before, ${before.from} to ${before.to}.`
+}
 
-export const screenHeader = (title, description, terms = []) =>
-  stack(
-    { gap: 4 },
-    stack({ gap: 1 }, heading({ level: 1 }, title), text({ tone: 'secondary' }, description)),
-    terms.length ? termsCard(terms) : null,
-  )
+export const screenHeader = component('aly-screen-header', {
+  styles: `
+    :host { display: block; }
+    h1 { margin: 0; }
+  `,
+  setup: (self, { title, description, terms = [], period = false }) => {
+    const open = initState(self, 'aly.help.open', false)
+    const range = period ? useState(self, 'aly.scope.range') : null
+    const help = dialog(
+      { title, open },
+      stack(
+        { gap: 4 },
+        text(description),
+        range ? text({ tone: 'secondary', size: 'sm' }, range.text(rangeNote)) : null,
+        terms.length
+          ? descriptionList({
+            layout: 'vertical',
+            items: terms.map(([term, details]) => ({ term, details })),
+          })
+          : null,
+      ),
+    )
+    help.style.setProperty('--imp-dialog-inline-size', '40rem')
+    return flex(
+      { verticalAlign: 'center', gap: 2 },
+      heading({ level: 1 }, title),
+      button(
+        {
+          variant: 'ghost',
+          square: true,
+          size: 'sm',
+          label: `About ${title}`,
+          events: { click: () => open.set(true) },
+        },
+        icon(luCircleQuestionMark),
+      ),
+      help,
+    )
+  },
+})
 
 export const reportLoading = () => stack({ gap: 4 }, skeleton({ lines: 2 }), skeleton({ lines: 6 }))
 
@@ -182,6 +224,20 @@ export const noApp = (catalog) =>
     if (value === undefined) return loader({ label: 'Loading the apps' })
     if (value.error) {
       return notice({ kind: 'error', title: 'The apps did not load' }, value.error)
+    }
+    if (!value.servers?.servers.length) {
+      return emptyState(
+        {
+          icon: luServer,
+          title: 'No server is added',
+          description:
+            'Add the URL of the admin port of your imp-aly server, and its key. This browser keeps both.',
+        },
+        button(
+          { variant: 'primary', events: { click: () => navigate(app.console.servers.href()) } },
+          'Add a server',
+        ),
+      )
     }
     return emptyState(
       {
@@ -236,8 +292,8 @@ export const reportScreen = (
   return page(
     stack(
       { gap: 5 },
-      screenHeader(title, description, terms),
-      scopeBar({ note: true }),
+      screenHeader({ title, description, terms, period: true }),
+      scopeBar(),
       fields.length
         ? div(
           computed([scope, meta], (current, info) => ({ current, info })).view((

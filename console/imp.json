@@ -1,4 +1,15 @@
 {
   "version": "0.1.0",
-  "map": "src/app-map.js"
+  "map": "src/app-map.js",
+  "pwa": {
+    "name": "imp-aly console",
+    "shortName": "imp-aly",
+    "themeColor": "#0b1018",
+    "backgroundColor": "#0b1018",
+    "display": "standalone",
+    "icon": "assets/icon.svg"
+  },
+  "environments": {
+    "pages": "env/pages.json"
+  }
 }

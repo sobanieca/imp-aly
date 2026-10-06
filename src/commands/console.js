@@ -12,7 +12,7 @@ export const consoleCommand = async ({ positional, flags }) => {
   logger.plain('')
   logger.plain(`To open the console, go to ${running.url}`)
   logger.plain('')
-  logger.plain('The console uses the saved servers and their keys. Press Ctrl+C to stop it.')
+  logger.plain('Add your servers and their keys in the page. Press Ctrl+C to stop the console.')
   const stop = async () => {
     await running.shutdown()
     Deno.exit(0)

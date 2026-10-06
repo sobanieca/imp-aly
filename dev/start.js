@@ -4,7 +4,6 @@ import { generateKey } from '../src/auth.js'
 import { startConsole } from '../src/console.js'
 import { logger } from '../src/logger.js'
 import { startServer } from '../src/server.js'
-import { addServer } from '../src/servers.js'
 import { applySegment } from '../src/storage.js'
 import { version } from '../src/version.js'
 import {
@@ -30,7 +29,6 @@ const port = flags.port === undefined ? undefined : parsePort(flags.port)
 
 const root = await Deno.makeTempDir({ prefix: 'imp-aly-start-' })
 const dataDir = `${root}/data`
-const serversFile = `${root}/config/imp-aly/servers.json`
 await Deno.mkdir(dataDir)
 
 const random = createRandom(42)
@@ -50,7 +48,6 @@ const server = await startServer({
 })
 const adminUrl = `http://127.0.0.1:${server.adminPort}`
 const collectUrl = `http://127.0.0.1:${server.port}/collect/${DEMO_APP}`
-addServer({ name: 'demo', url: adminUrl, auth: key }, serversFile)
 await callServer({ label: 'demo', server: 'demo', url: adminUrl, auth: key }, {
   method: 'PUT',
   path: `/apps/${DEMO_APP}`,
@@ -83,7 +80,7 @@ const timer = setInterval(sendVisit, VISIT_EVERY_MS)
 
 let running
 try {
-  running = await startConsole({ port, serversFile })
+  running = await startConsole({ port })
 } catch (error) {
   clearInterval(timer)
   await server.shutdown()
@@ -94,13 +91,15 @@ try {
 console.log(`
 imp-aly ${version} - demo
 
-  Server:   ${adminUrl} (admin), saved as "demo" in a temporary list
+  Server:   ${adminUrl} (admin)
+  Key:      ${key}
   Collect:  ${collectUrl}
   Data:     ${lines.length} records of the app "${DEMO_APP}" in ${DAYS + 1} days,
             and a new visit every ${VISIT_EVERY_MS / 1000} seconds
   Folder:   ${root}
 
-To open the console, go to ${running.url}
+To open the console with the demo server, go to
+${running.url}/servers#${new URLSearchParams({ name: 'demo', url: adminUrl, key })}
 
 Press Ctrl+C to stop. The demo removes its folder.
 `)

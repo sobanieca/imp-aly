@@ -22,7 +22,8 @@ shows the systemd service.**
   service is `/var/lib/imp-aly`.
 - The key file and the TLS files stay owned by root. The unit names them with `LoadCredential=`, and
   the server reads the copies from `$CREDENTIALS_DIRECTORY`. So the service user never reads a file
-  of root, and the key is not in the unit file.
+  of root, and the key is not in the unit file. A new key reaches the running service in the data
+  folder, see `key-rotation.md`.
 - The unit limits the service: `ProtectSystem=strict` with `ReadWritePaths=` for the data folder,
   `ProtectHome`, `PrivateTmp`, `PrivateDevices`, `NoNewPrivileges`, the kernel protections, and an
   empty capability set, or only `CAP_NET_BIND_SERVICE` for a port below 1024. `UMask=0077` keeps new

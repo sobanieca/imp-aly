@@ -3,7 +3,7 @@ import { app } from '../src/commands/app.js'
 import { readServeOptions, serviceArgs } from '../src/commands/server.js'
 import { logger } from '../src/logger.js'
 import { startServer } from '../src/server.js'
-import { quote, serviceProblems, unitFile } from '../src/service.js'
+import { quote, serviceProblems, unitFile, unitSettings, unquote } from '../src/service.js'
 import { assert, assertEquals, assertRejects, assertThrows, temporaryDir } from './assert.js'
 
 Deno.test('arguments parse into positionals and flags', () => {
@@ -209,4 +209,21 @@ Deno.test('app add uploads the file of a build folder', async () => {
     await Deno.remove(dataDir, { recursive: true })
     await Deno.remove(dist, { recursive: true })
   }
+})
+
+Deno.test('the key rotation reads the key file and the data folder from the unit file', () => {
+  for (const value of ['/var/lib/imp-aly', '/srv/my data', '/srv/15%', '/srv/$HOME', '/a"b\\c']) {
+    assertEquals(unquote(quote(value)), value)
+  }
+  const unit = unitFile({
+    args: ['server', '--data', '/srv/my data'],
+    dataDir: '/srv/my data',
+    ports: [2980, 2981],
+    keyPath: '/root/.secret/imp-aly-key',
+  })
+  assertEquals(unitSettings(unit), {
+    keyPath: '/root/.secret/imp-aly-key',
+    dataDir: '/srv/my data',
+  })
+  assertThrows(() => unitSettings('[Service]\n'), /no key file or no data folder/)
 })

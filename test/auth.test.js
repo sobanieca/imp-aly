@@ -1,14 +1,27 @@
 import {
+  findOrCreateKey,
+  generateKey,
+  NEW_KEY_FILE,
+  resolveKey,
+  takeNewKey,
+  writeKeyFile,
+} from '../src/auth.js'
+import {
   createToken,
   createTokenVerifier,
   EMPTY_BODY_HASH,
-  findOrCreateKey,
-  generateKey,
+  importSigningKey,
   requestTarget,
-  resolveKey,
   safeEqual,
-} from '../src/auth.js'
+} from '../src/token.js'
 import { assert, assertEquals, assertThrows, temporaryDir } from './assert.js'
+
+Deno.test('a token signed with a non-extractable key passes the check of the text key', async () => {
+  const key = generateKey()
+  const verify = createTokenVerifier(key)
+  const token = await createToken(await importSigningKey(key), { method: 'POST', path: '/query' })
+  assertEquals((await verify(token, { method: 'POST', target: '/query' })).problem, '')
+})
 
 Deno.test('a token works once', async () => {
   const key = generateKey()
@@ -60,5 +73,30 @@ Deno.test('the server saves a key as text only when the key file is empty', asyn
     await Deno.mkdir(`${dir}/locked`, { mode: 0o500 })
     assertThrows(() => findOrCreateKey('new-key-value', `${dir}/locked/key`), /cannot save the key/)
   }
+  await Deno.remove(dir, { recursive: true })
+})
+
+Deno.test('a new key replaces the key file with owner access, and a handed over key is taken once', async () => {
+  const dir = await temporaryDir()
+  const path = `${dir}/key`
+  await Deno.writeTextFile(`${path}.tmp`, 'left over', { mode: 0o644 })
+  writeKeyFile(path, 'first-key-value')
+  writeKeyFile(path, 'second-key-value')
+  assertEquals(await Deno.readTextFile(path), 'second-key-value\n')
+  assertEquals((await Deno.stat(path)).mode & 0o777, 0o600)
+  assertThrows(() => Deno.statSync(`${path}.tmp`))
+
+  const taken = []
+  assertEquals(takeNewKey(dir, (key) => taken.push(key)), '')
+  writeKeyFile(`${dir}/${NEW_KEY_FILE}`, 'handed-over-key')
+  assertEquals(takeNewKey(dir, (key) => taken.push(key)), 'handed-over-key')
+  assertEquals(takeNewKey(dir, (key) => taken.push(key)), '')
+  assertEquals(taken, ['handed-over-key'])
+  writeKeyFile(`${dir}/${NEW_KEY_FILE}`, 'kept-key')
+  assertThrows(() =>
+    takeNewKey(dir, () => {
+      throw new Error('refused')
+    }), /refused/)
+  assertEquals(await Deno.readTextFile(`${dir}/${NEW_KEY_FILE}`), 'kept-key\n')
   await Deno.remove(dir, { recursive: true })
 })

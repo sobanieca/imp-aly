@@ -1,4 +1,4 @@
-import { createToken, EMPTY_BODY_HASH } from '../src/auth.js'
+import { createToken, EMPTY_BODY_HASH } from '../src/token.js'
 import { sealDay } from '../src/column-store.js'
 import { logger } from '../src/logger.js'
 import { startServer } from '../src/server.js'
@@ -76,7 +76,18 @@ const start = async ({ dataDir: given, files = hostedFiles(), ...options } = {})
     await server.shutdown()
     if (!keep) await Deno.remove(dataDir, { recursive: true })
   }
-  return { base, adminBase, call, send, admin, stop, dataDir, files, fetched }
+  return {
+    base,
+    adminBase,
+    call,
+    send,
+    admin,
+    stop,
+    dataDir,
+    files,
+    fetched,
+    setKey: server.setKey,
+  }
 }
 
 const record = (fields) => ({
@@ -183,6 +194,33 @@ Deno.test('rejects malformed and oversized requests', async () => {
     assertEquals([first.status, replay.status], [200, 401])
   } finally {
     await stop()
+  }
+})
+
+Deno.test('a new key works at once and the old key stops, while the server runs', async () => {
+  const server = await start()
+  const status = async (key) => {
+    const token = await createToken(key, { method: 'GET', path: '/status' })
+    return (await server.send(server.adminBase, 'GET', '/status', undefined, {
+      authorization: `Bearer ${token}`,
+    })).status
+  }
+  try {
+    assertEquals(await status(KEY), 200)
+    server.setKey('next-key-0123456789')
+    assertEquals(await status(KEY), 401)
+    assertEquals(await status('next-key-0123456789'), 200)
+    assertEquals((await server.call('POST', '/collect/other', [])).status, 404)
+    let problem = null
+    try {
+      server.setKey('')
+    } catch (error) {
+      problem = error.message
+    }
+    assertEquals(problem, 'the server needs a key')
+    assertEquals(await status('next-key-0123456789'), 200)
+  } finally {
+    await server.stop()
   }
 })
 
@@ -558,5 +596,32 @@ Deno.test('a backup of one server restores into another', async () => {
   } finally {
     await source.stop()
     await target.stop()
+  }
+})
+
+Deno.test('the admin port lets a page of any origin call it with a signed token', async () => {
+  const { adminBase, send, admin, stop } = await start()
+  try {
+    const preflight = await fetch(`${adminBase}/query`, {
+      method: 'OPTIONS',
+      headers: {
+        origin: 'https://console.example',
+        'access-control-request-method': 'POST',
+        'access-control-request-headers': 'authorization, content-type',
+      },
+    })
+    await preflight.body?.cancel()
+    assertEquals(preflight.status, 204)
+    assertEquals(preflight.headers.get('access-control-allow-origin'), '*')
+    assert(preflight.headers.get('access-control-allow-headers').includes('authorization'))
+    assert(preflight.headers.get('access-control-allow-methods').includes('DELETE'))
+    const status = await admin('GET', '/status')
+    assertEquals(status.status, 200)
+    assertEquals(status.headers.get('access-control-allow-origin'), '*')
+    const refused = await send(adminBase, 'GET', '/apps')
+    assertEquals(refused.status, 401)
+    assertEquals(refused.headers.get('access-control-allow-origin'), '*')
+  } finally {
+    await stop()
   }
 })

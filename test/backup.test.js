@@ -1,6 +1,6 @@
 import { isSummaryOnlyDay, readGenerations, sealDay, writeSummaryDay } from '../src/column-store.js'
 import { countBackup, createBackupStream, restoreBackup } from '../src/backup.js'
-import { parseQuery } from '../src/query.js'
+import { parseQuery } from '../src/query-core.js'
 import { applySegment } from '../src/storage.js'
 import { tarEnd, tarEntry } from '../src/tar.js'
 import { assert, assertEquals, assertRejects, temporaryDir } from './assert.js'

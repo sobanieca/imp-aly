@@ -16,7 +16,8 @@ import {
 } from 'imp/std/inputs'
 import { dialog, drawer, flex, stack } from 'imp/std/layout'
 import { luPlus } from 'imp/icons'
-import { messageOf, serversParam } from '../lib/api.js'
+import { messageOf } from '../lib/api.js'
+import { appOnServers } from '../lib/client.js'
 import { formatCount, formatDateTime } from '../lib/format.js'
 import { page, reportCard, screenHeader, wide } from '../parts/report.js'
 import { scopeBar } from '../parts/scope-bar.js'
@@ -96,10 +97,13 @@ const registerForm = component('aly-register-form', {
           else body.build = values.build ?? ''
           let answer
           try {
-            answer = await api.put(`/apps/${encodeURIComponent(values.name)}`, {
-              query: { servers: serversParam(servers.get()) },
+            answer = await appOnServers(
+              api,
+              servers.get(),
+              'PUT',
+              `/apps/${encodeURIComponent(values.name)}`,
               body,
-            })
+            )
           } catch (error) {
             throw new FormError(messageOf(error), { cause: error })
           }
@@ -136,7 +140,7 @@ const registerForm = component('aly-register-form', {
         { size: 'sm', tone: 'secondary' },
         servers.get().length
           ? `The console registers the app on: ${servers.get().join(', ')}.`
-          : 'The console registers the app on the default server.',
+          : 'The console registers the app on the active server.',
       ),
       flex(button({ variant: 'primary', events: { click: submitForm } }, 'Register')),
     )
@@ -211,13 +215,15 @@ export const registryScreen = component('aly-registry', {
       removeOpen.set(true)
     }
     const reload = () => revision.set((value) => value + 1)
-    const query = () => ({ servers: serversParam(servers.get()) })
 
     const refresh = async (name) => {
       try {
-        const answer = await api.post(`/apps/${encodeURIComponent(name)}/refresh`, {
-          query: query(),
-        })
+        const answer = await appOnServers(
+          api,
+          servers.get(),
+          'POST',
+          `/apps/${encodeURIComponent(name)}/refresh`,
+        )
         const errors = answer.apps.filter((entry) => entry.buildError)
         if (errors.length) {
           notify({
@@ -242,7 +248,12 @@ export const registryScreen = component('aly-registry', {
       const name = removing.get()
       busy.set(true)
       try {
-        const answer = await api.delete(`/apps/${encodeURIComponent(name)}`, { query: query() })
+        const answer = await appOnServers(
+          api,
+          servers.get(),
+          'DELETE',
+          `/apps/${encodeURIComponent(name)}`,
+        )
         notify({
           kind: 'success',
           title: `Removed ${name}`,
@@ -369,11 +380,12 @@ export const registryScreen = component('aly-registry', {
       stack(
         { gap: 5 },
         flex(
-          { horizontalAlign: 'justify', verticalAlign: 'top', wrap: true },
-          screenHeader(
-            'Registered apps',
-            'The apps that the servers accept records for. Each app has its build file and segments.',
-          ),
+          { horizontalAlign: 'justify', verticalAlign: 'center', wrap: true },
+          screenHeader({
+            title: 'Registered apps',
+            description:
+              'The apps that the servers accept records for. Each app has its build file and segments.',
+          }),
           button(
             { variant: 'primary', events: { click: () => adding.set(true) } },
             icon(luPlus),

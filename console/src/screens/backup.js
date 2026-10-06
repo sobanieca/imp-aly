@@ -6,24 +6,18 @@ import { table } from 'imp/std/data'
 import { notice, notify } from 'imp/std/feedback'
 import { datePicker, fileUpload, form, FormError, select, submitForm } from 'imp/std/inputs'
 import { flex, stack } from 'imp/std/layout'
-import { messageOf } from '../lib/api.js'
+import { downloadBlob, messageOf } from '../lib/api.js'
+import { downloadBackup, restoreBackup } from '../lib/client.js'
 import { todayUtc } from '../lib/days.js'
-import { columns, page, reportCard, screenHeader } from '../parts/report.js'
+import { columns, noApp, page, reportCard, screenHeader } from '../parts/report.js'
 
 const serverOptions = (catalog) => {
   const saved = catalog?.servers?.servers ?? []
   return saved.map(({ name }) => name)
 }
 
-const serverField = (catalog) => {
-  const options = serverOptions(catalog)
-  return options.length
-    ? select({ field: 'server', label: 'Server', options, required: true })
-    : text(
-      { size: 'sm', tone: 'secondary' },
-      `Server: ${catalog?.servers?.localUrl ?? 'the local server'}`,
-    )
-}
+const serverField = (catalog) =>
+  select({ field: 'server', label: 'Server', options: serverOptions(catalog), required: true })
 
 const backupForm = component('aly-backup-form', {
   setup: (self, catalog) => {
@@ -37,23 +31,18 @@ const backupForm = component('aly-backup-form', {
           days: undefined,
         },
         onSubmit: async (values) => {
-          const query = new URLSearchParams()
-          if (values.server) query.set('server', values.server)
+          let backup
           try {
-            await api.get('/status', { query: { server: values.server } })
+            backup = await downloadBackup(api, values.server, {
+              app: values.app,
+              from: values.days?.start,
+              to: values.days?.end,
+            })
           } catch (error) {
             throw new FormError(messageOf(error), { cause: error })
           }
-          if (values.app) query.set('app', values.app)
-          if (values.days) {
-            query.set('from', values.days.start)
-            query.set('to', values.days.end)
-          }
-          const anchor = document.createElement('a')
-          anchor.href = `/api/backup${query.size ? `?${query}` : ''}`
-          anchor.download = ''
-          anchor.click()
-          notify({ kind: 'info', title: 'The download of the backup started' })
+          downloadBlob(backup.fileName, backup.blob)
+          notify({ kind: 'success', title: `Downloaded ${backup.fileName}` })
         },
       },
       serverField(catalog),
@@ -80,12 +69,8 @@ const restoreForm = component('aly-restore-form', {
         initialValues: { server: catalog?.servers?.default || undefined, files: [] },
         onSubmit: async (values) => {
           try {
-            const answer = await api.post('/restore', {
-              query: { server: values.server },
-              body: files[0],
-              headers: { 'content-type': 'application/gzip' },
-            })
-            result.set({ server: values.server ?? 'the local server', ...answer })
+            const answer = await restoreBackup(api, values.server, files[0])
+            result.set(answer)
             notify({
               kind: 'success',
               title: `Restored ${answer.restored.length} days`,
@@ -137,37 +122,41 @@ export const backupScreen = component('aly-backup', {
   setup: (self) => {
     const catalog = useState(self, 'aly.catalog')
     const result = initState(self, 'aly.backup.result', null)
-    const ready = computed([catalog], (value) => value !== undefined)
+    const ready = computed([catalog], (value) => {
+      if (value === undefined) return 'loading'
+      return value.servers?.servers.length ? 'ready' : 'empty'
+    })
     return page(
       stack(
         { gap: 5 },
-        screenHeader(
-          'Backup',
-          'A backup holds the daily summaries of the sealed days. A restore puts them into a server.',
-        ),
-        ready.view((loaded) =>
-          loaded
-            ? columns(
-              reportCard(
-                {
-                  title: 'Download a backup',
-                  description:
-                    'The server seals a day at 01:10 UTC of the next day. The current day is not in the backup.',
-                },
-                backupForm(catalog.get()),
-              ),
-              reportCard(
-                {
-                  title: 'Restore a backup',
-                  description:
-                    'The server adds the days that it does not hold. It does not replace a day that it holds.',
-                },
-                restoreForm(catalog.get()),
-                result.view(restoreResult),
-              ),
-            )
-            : text({ tone: 'secondary' }, 'Loading...')
-        ),
+        screenHeader({
+          title: 'Backup',
+          description:
+            'A backup holds the daily summaries of the sealed days. A restore puts them into a server.',
+        }),
+        ready.view((state) => {
+          if (state === 'loading') return text({ tone: 'secondary' }, 'Loading...')
+          if (state === 'empty') return noApp(catalog)
+          return columns(
+            reportCard(
+              {
+                title: 'Download a backup',
+                description:
+                  'The server seals a day at 01:10 UTC of the next day. The current day is not in the backup.',
+              },
+              backupForm(catalog.get()),
+            ),
+            reportCard(
+              {
+                title: 'Restore a backup',
+                description:
+                  'The server adds the days that it does not hold. It does not replace a day that it holds.',
+              },
+              restoreForm(catalog.get()),
+              result.view(restoreResult),
+            ),
+          )
+        }),
         notice(
           { kind: 'info', title: 'A backup does not hold the app registry and the key' },
           'Copy apps.json from the data folder and the key file yourself.',

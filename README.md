@@ -45,8 +45,9 @@ And read the numbers:
 imp-aly query '{"app": "myapp", "groupBy": ["page", "type"], "measures": ["records", "visits"]}'
 ```
 
-Or open the console, a local web page with charts, a query builder, and the apps, servers and
-backups:
+Or open the console, a web app with charts, a query builder, and the apps, servers and backups.
+Install it on your phone from https://sobanieca.github.io/imp-aly/console/, add your servers with
+their keys, and switch between them. Or serve it on your machine:
 
 ```sh
 imp-aly console

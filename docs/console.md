@@ -1,8 +1,16 @@
 # imp-aly - Console
 
-The console is a web page for imp-aly. It runs on your machine. It shows the numbers of your apps in
-charts and tables, and it does the work of the client commands: queries, apps, servers, backups and
-restores.
+The console is a web app for imp-aly. It shows the numbers of your apps in charts and tables, and it
+does the work of the client commands: queries, apps, backups and restores. It calls your servers
+directly from the browser. You can install it on a phone or on a computer.
+
+Open it in one of two ways:
+
+- **On the web**, at `https://sobanieca.github.io/imp-aly/console/`. Click **Install the app** at
+  the bottom of the menu. On a phone, the button is in the navigation drawer. The installed console
+  opens like an app, and it starts also without a network.
+- **On your machine**, with `imp-aly console`. The binary serves the same page on
+  `http://localhost:8010`.
 
 ```sh
 imp-aly console
@@ -13,45 +21,80 @@ imp-aly 0.1.0 - console
 
 To open the console, go to http://localhost:8010
 
-The console uses the saved servers and their keys. Press Ctrl+C to stop it.
+Add your servers and their keys in the page. Press Ctrl+C to stop the console.
 ```
-
-Open the address in a browser. The console runs until you stop it with Ctrl+C.
 
 | Option          | Value                       | Default |
 | --------------- | --------------------------- | ------- |
 | `--port <port>` | the port of the console     | `8010`  |
 | `--debug`       | log more, in the foreground |         |
 
-## What the console uses
+The browser shows **Install the app** only when it can install the page. Chrome and Edge show their
+install dialog. Safari on an iPhone or an iPad has no such dialog, so the button tells you to tap
+Share, then "Add to Home Screen". The button does not show in the installed console.
 
-The console calls the servers as the client commands do:
+Installation needs a secure page. GitHub Pages serves the console on `https`, so you need no
+certificate for the page. A browser treats `http://localhost` as secure too. A page on another
+`http` address cannot install, and cannot sign the tokens.
 
-- It reads the saved servers of `imp-aly add`, with their keys. Without a saved server, it calls the
-  local server, `http://127.0.0.1:2981`, with the key in `~/.secret/imp-aly-key`. See
-  [CLI](cli.md#saved-servers).
-- It signs a one-time token for each call to a server. The key stays in the console. The page in the
-  browser never gets the key.
-- It adds up the answers of several servers in the same way as `imp-aly query -s a,b`. So the
-  numbers of the console and of the CLI are the same.
+## Add your servers
 
-The console keeps no data. Each report sends queries to the servers. The page keeps your choices in
-the storage of the browser: the servers, the app, the days, the query of Explore and the saved
-queries.
+The console starts with no server. Open **Servers** and click **Add a server**:
 
-**Anybody who can connect to the port of the console can use your keys.** The console listens on the
-local addresses of the machine only, `127.0.0.1` and `::1`. Do not forward the port to other
-machines or to the internet.
+| Field                 | Value                                                                       |
+| --------------------- | --------------------------------------------------------------------------- |
+| Name                  | a name for the server, such as `eu-1`                                       |
+| URL of the admin port | the address of the admin port, such as `https://analytics.example.com:2981` |
+| Key                   | the key of the server, from `~/.secret/imp-aly-key` on the server           |
 
-The console also refuses:
+The console asks the server for its state at once, and tells you when the server does not answer. A
+saved server becomes the active server. To change the URL or the key, use "Change the URL or the
+key" in the menu of the server. An empty key keeps the saved key.
 
-- a request that names another host than `localhost`, `127.0.0.1` or `[::1]` with the port of the
-  console,
-- a request to the API from a page of another site,
-- a change, such as a new app or a removed server, that does not come from the page of the console.
+To fill the form from a link, open `/servers#name=<name>&url=<url>&key=<key>`. Encode each value for
+a URL. The console removes the values from the address and from the history of the browser at once.
+Do not send such a link in a chat or in an email, because it holds the key.
 
-To use the console of another machine, forward the port with SSH, such as
-`ssh -L 8010:127.0.0.1:8010 my-machine`, and run `imp-aly console` on that machine.
+### Switch between servers
+
+The menu under the logo shows the active server. Choose another server there to switch. On a phone,
+the menu is in the navigation drawer. "Make it the active server" on the Servers page does the same.
+
+To add up the numbers of several servers, choose them in "Servers" in the bar of a report. See
+[The bar](#the-bar).
+
+### What the console needs from a server
+
+- **HTTPS on the admin port, for the installed console.** A browser does not let a page on `https`
+  call a server on `http`. The console on `http://localhost` can call a server on `http`. A server
+  on `127.0.0.1` works from both. See [Security](security.md).
+- **An admin port that the device can reach.** The admin port answers the console from every web
+  address. The one-time token protects each call. To limit who can connect, use a firewall or a VPN.
+- **A clock that agrees with the device to within 60 seconds.** Each token is valid for 60 seconds.
+
+## How the console keeps your keys
+
+- The console keeps each server in the storage of the browser, on this device only. It keeps the key
+  in a form that the browser can sign with, but that no script can read back. So nobody can copy the
+  key out of the console, and the console cannot show it to you again.
+- The console signs a one-time token for each call to a server, like the CLI. The key never goes
+  over the network.
+- The console asks the browser to keep its storage. A browser that clears the data of the site also
+  removes the servers. Add them again with their keys.
+- The console and the CLI keep separate lists. A server that you saved with `imp-aly add` is not in
+  the console.
+
+**Anybody who can open the console on your device can use your servers.** Lock the device. Remove a
+server from the console of a device that you give away.
+
+The console keeps no data on a server. Each report sends queries to the servers. It adds up the
+answers of several servers in the same way as `imp-aly query -s a,b`. So the numbers of the console
+and of the CLI are the same. The page keeps your choices in the storage of the browser: the servers
+of the bar, the app, the days, the query of Explore and the saved queries.
+
+The local console, `imp-aly console`, listens on the local addresses of the machine only,
+`127.0.0.1` and `::1`. It refuses a request that names another host than `localhost`, `127.0.0.1` or
+`[::1]` with its port. It serves only the files of the page.
 
 ## The bar
 
@@ -59,11 +102,14 @@ The reports and Explore have a bar at the top:
 
 | Control         | What it does                                                                           |
 | --------------- | -------------------------------------------------------------------------------------- |
-| Servers         | the saved servers to ask. Empty means the default server. More servers add up.         |
-| App             | the app of the report. The Apps report has no app control, because it shows all apps.  |
+| Servers         | the servers to ask. Empty means the active server. More servers add up.                |
+| App             | the app of the report. Overview has no app control.                                    |
 | Period          | the last 30 days, 3 months, 6 months, 1 year or 5 years. The last day is today.        |
 | From - to (UTC) | any range of days. A day is a UTC day, as in the queries.                              |
 | Run again       | sends the queries again, and reads the apps again. Use it to see new records of today. |
+
+The bar shows Servers only when the console has two or more servers. It shows App only when the
+servers have two or more registered apps.
 
 The length of the range sets the size of one bar in the charts:
 
@@ -73,7 +119,7 @@ The length of the range sets the size of one bar in the charts:
 | 46 to 200 days     | one week. A week starts on Monday, in UTC. |
 | more than 200 days | one month                                  |
 
-A note under the bar tells the size of one bar. The first and the last bar can hold a part of a week
+The help of a screen tells the size of one bar. The first and the last bar can hold a part of a week
 or a month only.
 
 Each total of a report has a change. The change compares the total with the previous period. The
@@ -88,14 +134,15 @@ has different builds or different segments on the servers. See [Queries](query.m
 
 | Report   | What it shows                                                                                    |
 | -------- | ------------------------------------------------------------------------------------------------ |
-| Apps     | the visits of each registered app, their change and their share of all visits                    |
+| Overview | the visits, page views, outcomes and errors of the app, or the visits of each app                |
 | Pages    | how often each page was viewed and used, and the pages that people reach but do not use          |
 | Zones    | how often each zone was seen and used on each page, and the zones that people see but do not use |
 | Outcomes | how often the visits reached each outcome, and the share of the visits with an outcome           |
 | Errors   | the pages with the most errors, and the errors per 100 page views                                |
 
-Each report, and Explore, starts with "What the numbers mean". This panel tells what each measure,
-column and flag of the report counts. So you can read a report without this page.
+Each screen has a help button with a question mark next to its title. The help tells what the screen
+shows, and what each measure, column and flag of the report counts. So you can read a report without
+this page.
 
 A chart of a report shows one column per bar. The column stacks the 10 items with the highest total,
 and puts all other items into "Other". Move the pointer over a column to see the counts.
@@ -106,12 +153,17 @@ of the segment in the range. "Clear the filters" removes all the filters.
 The current day is not sealed. So a report always reads its records, and a long day can make the
 report slower. See [Storage](storage.md).
 
-### Apps
+### Overview
 
-The chart shows the visits of each app, one on top of the other. Choose the apps on the chart in
-"Apps on the chart". Empty means all apps. The table shows each app with its visits, the visits of
-the previous period, the change and the share of all visits. The tiles show the visits of all apps,
-the most visited app and the app with the highest growth.
+With one registered app, Overview shows the app. The tiles show the visits, the page views, the
+share of the visits with an outcome and the errors per 100 page views. The chart shows the visits.
+The tables show the 5 pages with the most views and the 5 outcomes with the highest count.
+
+With two or more apps, Overview shows all apps. The chart shows the visits of each app, one on top
+of the other. Choose the apps on the chart in "Apps on the chart". Empty means all apps. The table
+shows each app with its visits, the visits of the previous period, the change and the share of all
+visits. The tiles show the visits of all apps, the most visited app and the app with the highest
+growth.
 
 ### Pages
 
@@ -219,38 +271,11 @@ storage of the browser. A saved query runs again with a click.
 | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Explore         | run any query of the app. See [Explore](#explore).                                                                                                                                            |
 | Registered apps | see the apps of the servers in the bar. Register an app from a URL, the build file or text, with segments. See the reasons of the rejected records. Read the build file again. Remove an app. |
-| Servers         | see the saved servers, and the state of each one: the version, the free disk space and the problems of the storage. Save a server. Make a server the default. Remove a server.                |
+| Servers         | see the servers of the console, and the state of each one: the version, the free disk space and the problems of the storage. Add, change, switch and remove a server.                         |
 | Backup          | download a backup of one server, of one app or all apps, and of some days or all days. Restore a backup into a server.                                                                        |
 
 "Register" registers the app on each server of the bar, like `imp-aly app add -s a,b`. See
 [Apps](apps.md).
 
-"Save a server" changes the same list as `imp-aly add`. A key that you type is saved as it is. A
-path of a key file is saved as a path. See [CLI](cli.md#saved-servers).
-
 A backup downloads as `imp-aly-backup-<server>-<day>.tar.gz`. It is the same file as the file of
 `imp-aly backup`. See [Backup](backup.md).
-
-## The API of the console
-
-The page calls a JSON API on the same port. You do not need it, but you can call it with `curl` on
-the same machine. A change must carry the header `Origin: http://localhost:8010`.
-
-| Request                            | What it does                                             |
-| ---------------------------------- | -------------------------------------------------------- |
-| `GET /api/servers`                 | the saved servers and the default, without the keys      |
-| `POST /api/servers`                | `{"name", "url", "auth"}`: save a server, like `add`     |
-| `POST /api/servers/<name>/default` | make the server the default, like `use`                  |
-| `DELETE /api/servers/<name>`       | remove the saved server, like `rm`                       |
-| `GET /api/status?server=<name>`    | the state of one server, like `status`                   |
-| `GET /api/apps?servers=a,b`        | the apps of the servers, like `app ls`                   |
-| `GET /api/apps/<name>?servers=a,b` | one app on each server, like `app show`                  |
-| `PUT /api/apps/<name>?servers=a,b` | `{"appUrl"}` or `{"build"}`, and `"segments"`: `app add` |
-| `POST /api/apps/<name>/refresh`    | read the build file again, like `app refresh`            |
-| `DELETE /api/apps/<name>`          | remove the app, like `app rm`                            |
-| `POST /api/query?servers=a,b`      | a query, like `query --json`, with `warnings`            |
-| `GET /api/backup?server=<name>`    | a backup, with `app`, `from` and `to`, like `backup`     |
-| `POST /api/restore?server=<name>`  | the backup file as the body, like `restore`              |
-
-Without `servers` or `server`, a request goes to the default server. With several servers, the
-answer lists the servers that failed in `failedServers`.

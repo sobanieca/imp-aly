@@ -164,6 +164,32 @@
       height: 18px;
       fill: currentColor;
     }
+    .gh.primary {
+      color: #ffffff;
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+    .gh.primary:hover {
+      filter: brightness(1.08);
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 4px;
+    }
+    .actions .gh {
+      font-size: 16px;
+      padding: 11px 18px;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) .gh.primary {
+        color: #131218;
+      }
+    }
+    :root[data-theme="dark"] .gh.primary {
+      color: #131218;
+    }
     @media (max-width: 520px) {
       .gh.docs {
         display: none;
@@ -530,6 +556,7 @@
           <a class="gh docs"
             href="https://github.com/sobanieca/imp-aly/blob/main/docs/introduction.md"
             target="_blank" rel="noopener">Docs</a>
+          <a class="gh primary" href="console/">Console</a>
           <a class="gh" href="https://github.com/sobanieca/imp-aly"
             target="_blank" rel="noopener">
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
@@ -542,6 +569,12 @@
         <h1>Analytics for your imp apps, on a VPS that you own.</h1>
         <p
           class="lead"><code class="name">imp-aly</code> is one small binary. It takes the records of <code>imp/analytics</code>, checks each one against the build file of your app, and stores them on the local disk. Then it answers your queries. No database, no third party, and the data stays on your machine.</p>
+        <div class="actions">
+          <a class="gh primary" href="console/">Open the console</a>
+          <a class="gh"
+            href="https://github.com/sobanieca/imp-aly/blob/main/docs/getting-started.md"
+            target="_blank" rel="noopener">Get started</a>
+        </div>
 
         <div class="map"
           aria-label="Diagram: the browsers of your users send records to the public port of the imp-aly server on your VPS. Your machine reads the numbers from the admin port with the key.">
@@ -663,15 +696,16 @@
     https://myapp.example/</pre>
         </div>
         <div class="col">
-          <h3>Your machine <span>whenever</span></h3>
-          <pre><span class="dim">$</span> curl -fsSL sobanieca.github.io/imp-aly/install.sh | bash
-<span class="dim">$</span> imp-aly add vps http://203.0.113.10:2981 \
-    -a ~/.secret/imp-aly-key
-<span class="dim">$</span> imp-aly console
-<span class="dim">  To open the console, go to</span> <span class="hl">http://localhost:8010</span></pre>
+          <h3>Your phone <span>whenever</span></h3>
+          <pre><span class="dim">Open</span> <a class="hl" href="console/">sobanieca.github.io/imp-aly/console</a>
+<span class="dim">Menu -></span> Install the app
+<span class="dim">Servers -></span> Add a server
+  https://aly.myapp.example:2981
+  <span class="dim">and the key</span></pre>
         </div>
         <div class="col wide">
-          <h3>Your app <span>main.js</span></h3>
+          <h3>Your imp app <a href="https://github.com/sobanieca/imp-ui"
+              target="_blank" rel="noopener">(imp-ui)</a> <span>main.js</span></h3>
           <pre><span class="dim">import</span> { onAnalytics } <span class="dim">from</span> <span class="hl">'imp/analytics'</span>
 <span class="dim">import</span> { alySink } <span class="dim">from</span> <span class="hl">'imp/analytics/aly'</span>
 
@@ -685,7 +719,7 @@ onAnalytics(alySink({
       <section class="read">
         <h2>Read the numbers</h2>
         <p
-          class="sub">Ask with a JSON query in the terminal, or open the console: a local web page with reports of your apps, pages, zones, outcomes and errors, a query builder, and your apps, servers and backups. Both give the same numbers.</p>
+          class="sub">Ask with a JSON query in the terminal, or open <a href="console/">the console</a>: a web app for your phone or your computer, with reports of your apps, pages, zones, outcomes and errors, a query builder, and your apps, servers and backups. Both give the same numbers.</p>
         <div class="col">
           <h3>Terminal <span>imp-aly query</span></h3>
           <pre><span class="dim">$</span> imp-aly query '{"app": "myapp", "groupBy": ["page"],
@@ -783,6 +817,7 @@ onAnalytics(alySink({
 
       <footer>
         <span><code class="name">imp-aly</code> &middot; MIT license</span>
+        <a href="console/">Console</a>
         <a href="https://github.com/sobanieca/imp-aly/blob/main/docs/getting-started.md"
           target="_blank" rel="noopener">Getting started</a>
         <a href="https://github.com/sobanieca/imp-ui" target="_blank"

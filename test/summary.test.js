@@ -1,6 +1,7 @@
 import { sealDay, SUMMARY_ONLY_PROBLEM } from '../src/column-store.js'
 import { createBackupStream, restoreBackup } from '../src/backup.js'
-import { canUseSummary, finalizeQuery, parseQuery, runQuery } from '../src/query.js'
+import { canUseSummary, finalizeQuery, parseQuery } from '../src/query-core.js'
+import { runQuery } from '../src/query.js'
 import { checkSummary } from '../src/summary.js'
 import { applySegment } from '../src/storage.js'
 import { assertEquals, assertThrows, temporaryDir } from './assert.js'

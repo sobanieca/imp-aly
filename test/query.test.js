@@ -1,5 +1,5 @@
 import { sealDay } from '../src/column-store.js'
-import { parseQuery } from '../src/query.js'
+import { parseQuery } from '../src/query-core.js'
 import { applySegment } from '../src/storage.js'
 import { assertEquals, assertThrows, temporaryDir } from './assert.js'
 import { ask } from './fixtures.js'

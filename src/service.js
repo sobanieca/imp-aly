@@ -1,3 +1,4 @@
+import { NEW_KEY_FILE, writeKeyFile } from './auth.js'
 import { logger } from './logger.js'
 import { dirname, join } from './paths.js'
 
@@ -94,6 +95,29 @@ export const quote = (argument) => {
   const escaped = argument.replace(/%/g, '%%').replace(/\$/g, '$$$$')
   if (/^[A-Za-z0-9_@%$+=:,./-]+$/.test(escaped)) return escaped
   return `"${escaped.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+}
+
+export const unquote = (value) => {
+  const inner = value.length > 1 && value.startsWith('"') && value.endsWith('"')
+    ? value.slice(1, -1).replace(/\\(.)/g, '$1')
+    : value
+  return inner.replace(/\$\$/g, '$').replace(/%%/g, '%')
+}
+
+const unitValue = (unit, prefix) => {
+  const line = unit.split('\n').find((entry) => entry.startsWith(prefix))
+  return line === undefined ? null : unquote(line.slice(prefix.length))
+}
+
+export const unitSettings = (unit) => {
+  const keyPath = unitValue(unit, `LoadCredential=${CREDENTIALS.key}:`)
+  const dataDir = unitValue(unit, 'ReadWritePaths=')
+  if (!keyPath || !dataDir) {
+    throw new Error(
+      `${UNIT_PATH} has no key file or no data folder - run sudo imp-aly server again`,
+    )
+  }
+  return { keyPath, dataDir }
 }
 
 export const unitFile = ({ args, dataDir, ports, keyPath, tlsCert = null, tlsKey = null }) => {
@@ -233,6 +257,16 @@ export const serviceProblems = ({ dataDir, keyPath, tlsCert, tlsKey }) => {
   return problems
 }
 
+const idOf = (flag) => {
+  const { code, stdout } = new Deno.Command('id', { args: [flag, SERVICE_USER], stdout: 'piped' })
+    .outputSync()
+  const id = Number(new TextDecoder().decode(stdout).trim())
+  if (code !== 0 || !Number.isInteger(id)) throw new Error(`the user ${SERVICE_USER} is missing`)
+  return id
+}
+
+const serviceIds = () => [idOf('-u'), idOf('-g')]
+
 const ensureUser = async () => {
   if ((await run('id', ['-u', SERVICE_USER])).code === 0) return
   await mustRun('useradd', [
@@ -296,7 +330,7 @@ const readText = async (path) => {
   }
 }
 
-const readUnit = () => readText(UNIT_PATH)
+export const readUnit = () => readText(UNIT_PATH)
 
 export const isServiceInstalled = async () => (await readUnit()) !== null
 
@@ -398,6 +432,22 @@ export const restartService = async () => {
     await sleep(HEALTH_POLL_MS)
   }
   return true
+}
+
+const KEY_LOAD_MS = 5_000
+
+export const sendKeyToService = async ({ dataDir, key }) => {
+  const path = join(dataDir, NEW_KEY_FILE)
+  writeKeyFile(path, key, {
+    beforeRename: (temporary) => Deno.chownSync(temporary, ...serviceIds()),
+  })
+  await systemctl('kill', '--kill-whom=main', '--signal=SIGHUP', SERVICE_NAME)
+  const start = Date.now()
+  while (Date.now() - start < KEY_LOAD_MS) {
+    if (!(await exists(path))) return true
+    await sleep(HEALTH_POLL_MS)
+  }
+  return false
 }
 
 export const uninstallService = async () => {

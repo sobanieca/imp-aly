@@ -19,13 +19,14 @@ Usage:
   imp-aly server [options]              start the server (on the VPS)
   imp-aly server --uninstall            remove the systemd service
   imp-aly update [--check]              install the newest compatible version
+  imp-aly key rotate [-a <file>]        change the key, and the server does not stop
   imp-aly app add <name> <app url|build folder> [--segments plan,role]
   imp-aly app ls | show <name> | refresh <name> | rm <name>
   imp-aly query '<json>' | query <file.json> [--json]
   imp-aly backup <file> [--app <name>] [--from <day>] [--to <day>]
   imp-aly restore <file>                put the summaries of a backup back
   imp-aly status
-  imp-aly console [--port <port>]       open the console, a web page with reports, on this machine
+  imp-aly console [--port <port>]       serve the console, a web app with reports, on this machine
   imp-aly token <method> <path> [<body file>]   print a one-time token for one request
   imp-aly add <name> <url> [-a <key|file>]   save a server
   imp-aly ls | use <name> | rm <name>   list, select or remove saved servers
@@ -89,6 +90,17 @@ Updates (on the VPS):
   that version again. The old binary stays next to the new one, as
   .imp-aly.previous. Without the service, restart the server yourself.
 
+Change the key (on the VPS):
+
+  sudo imp-aly key rotate                   the service loads a new key and does not stop
+  imp-aly key rotate [-a <file>]            a server in the foreground: then send it
+                                            SIGHUP (kill -HUP <pid>), or start it again
+
+  The command makes a new key, writes it to the key file and prints it. From
+  then on, the server refuses each token that the old key signed. Give the new
+  key to each machine that calls the server, and change it in the console.
+  The API has no endpoint that changes the key.
+
 Client commands (app, query, backup, restore, status, token):
 
   -s, --server <name>       a saved server (default: the default saved server);
@@ -128,16 +140,19 @@ Saved servers (on your machine):
   to the key file is saved, not the key. A key given as text is saved as it is.
   The list is in ~/.config/imp-aly/servers.json ($XDG_CONFIG_HOME when set).
 
-Console (on your machine):
+Console (a web app for your phone or your machine):
 
-  imp-aly console                           start the console on http://localhost:${DEFAULT_CONSOLE_PORT}
+  https://sobanieca.github.io/imp-aly/console/   open it, and install it from the browser
+  imp-aly console                           serve it on http://localhost:${DEFAULT_CONSOLE_PORT}
   imp-aly console --port 9000               on another port
 
-  The console is a web page with reports on the visits, the pages, the
+  The console is a web app with reports on the visits, the pages, the
   zones, the outcomes and the errors, a query builder, and pages for the
-  apps, the saved servers and the backups. It uses the saved servers and
-  their keys, like the client commands. The key never goes to the browser.
-  It listens on 127.0.0.1 and ::1 only. Stop it with Ctrl+C.
+  apps, the servers and the backups. It calls the admin ports of the
+  servers directly. Add each server with its URL and its key in the page.
+  The page keeps the keys in the browser, and no script can read them back.
+  An installed console on https needs servers with https.
+  "imp-aly console" listens on 127.0.0.1 and ::1 only. Stop it with Ctrl+C.
 
 AI agents:
 

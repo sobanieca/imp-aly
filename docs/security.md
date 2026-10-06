@@ -18,6 +18,9 @@ strong, and the rate limit counts each try. But it is safer when a stranger cann
 - Let the firewall accept the admin port only from your machines.
 - Or give `--admin-bind 127.0.0.1`, and call the commands on the VPS or through an SSH tunnel.
 
+The console calls the admin port from your phone or your computer. So the device must reach the
+port. A VPN gives a phone a fixed address that the firewall can accept.
+
 A flood on the public port does not block the admin port. Each port has its own limit of requests in
 progress.
 
@@ -57,15 +60,46 @@ curl -H "Authorization: Bearer $(imp-aly token POST /query query.json)" \
 
 Use `--data-binary`. `curl -d` removes the line breaks, so the body no longer has the signed hash.
 
-To change the key, delete the key file and start the server again. With the systemd service, run
-`sudo imp-aly server --port 2980` again, then `sudo systemctl restart imp-aly`. The service reads
-the key at its start.
+### Change the key
+
+When the key leaks, change it on the VPS:
+
+```sh
+sudo imp-aly key rotate
+```
+
+The command makes a new key, writes it to the key file of the service and prints it. The service
+loads the new key and does not stop. From then on, it refuses each token that the old key signed.
+`/collect` does not stop, so no record is lost. When the service does not load the new key within 5
+seconds, the command shows an error. Then restart the service: `sudo systemctl restart imp-aly`.
+
+The command runs only as root on the VPS. The API has no endpoint that changes the key. So somebody
+who has the old key cannot change the key and lock you out.
+
+For a server in the foreground, run `imp-aly key rotate`, or `imp-aly key rotate -a <file>` when the
+server uses another key file. Then send `SIGHUP` to the server (`kill -HUP <pid>`), or start it
+again. Until then, the server uses the old key.
+
+After the change, give the new key to each machine that calls the server. Write it to the key file
+of that machine, or save the server again: `imp-aly add <name> <url> -a <file>`. In the console, use
+"Change the URL or the key" on the server.
 
 ## Use HTTPS
 
 The tokens cannot be reused, but a query answer travels in clear text over plain HTTP. Serve the
 server through HTTPS when you call the API from another machine. See
-[Getting started](getting-started.md).
+[Getting started](getting-started.md). The installed console on `https` calls only servers on HTTPS.
+
+## The console
+
+The admin port answers a browser page from every web address, with `access-control-allow-origin: *`.
+So the console can call the server from any address where it is installed. This gives a page no
+access without the key. The admin port uses no cookie and trusts no address. A page without the key
+gets `401`.
+
+The console keeps the key in the browser in a form that no script can read back. It signs a token
+for each call, like the CLI. Anybody who can open the console on your device can use the servers.
+See [Console](console.md#how-the-console-keeps-your-keys).
 
 ## The public endpoint
 

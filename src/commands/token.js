@@ -1,5 +1,6 @@
 import { requireOnlyFlags } from '../args.js'
-import { createToken, EMPTY_BODY_HASH, findKey } from '../auth.js'
+import { findKey } from '../auth.js'
+import { createToken, EMPTY_BODY_HASH } from '../token.js'
 import { resolveTarget } from '../servers.js'
 import { hashStream } from '../sha256.js'
 
