@@ -5,14 +5,14 @@ import { emptyState } from 'imp/std/display'
 import { stack } from 'imp/std/layout'
 import { luCircleCheck } from 'imp/icons'
 import { ERROR_TERMS } from '../lib/terms.js'
-import { previousScope, problemsOf, runQuery } from '../lib/api.js'
+import { problemsOf, runPrevious, runQuery } from '../lib/api.js'
 import { barOf, bucketsOf } from '../lib/days.js'
 import { formatCount } from '../lib/format.js'
 import { changeOf, errorRows, MAX_ROWS } from '../lib/reports.js'
 import { stackedSeries, TOP, topKeys } from '../lib/series.js'
 import {
   changeHint,
-  changeTag,
+  compareColumns,
   dataNote,
   noRecords,
   problemNotices,
@@ -33,7 +33,8 @@ const errorsReport = component('aly-errors-report', {
     const api = useHttpClient(self, 'aly.api')
     const bar = barOf(scope.from, scope.to)
     const buckets = bucketsOf(scope.from, scope.to, bar)
-    const one = filters.page !== undefined
+    const chosen = filters.page ?? []
+    const one = chosen.length === 1
     const where = { ...filters, type: ['page', 'error'] }
     const [current, before, trend] = await Promise.all([
       runQuery(api, scope, {
@@ -42,7 +43,7 @@ const errorsReport = component('aly-errors-report', {
         measures: ['records'],
         limit: MAX_ROWS,
       }),
-      runQuery(api, previousScope(scope), {
+      runPrevious(api, scope, {
         where,
         groupBy: ['page', 'type'],
         measures: ['records'],
@@ -57,19 +58,29 @@ const errorsReport = component('aly-errors-report', {
     ])
     if (!current.days) return noRecords(current)
     const pages = errorRows(current.rows)
-    const previous = new Map(errorRows(before.rows).map((row) => [row.page, row.errors]))
+    const previous = before
+      ? new Map(errorRows(before.rows).map((row) => [row.page, row.errors]))
+      : null
     const errors = pages.reduce((total, row) => total + row.errors, 0)
     const views = pages.reduce((total, row) => total + row.views, 0)
-    const earlier = [...previous.values()].reduce((total, count) => total + count, 0)
+    const earlier = previous
+      ? [...previous.values()].reduce((total, count) => total + count, 0)
+      : null
     const rows = pages.filter((row) => row.errors > 0).sort((a, b) => b.errors - a.errors)
       .slice(0, TOP).map((row) => {
-        const last = previous.get(row.page) ?? 0
-        return { ...row, previous: last, change: changeOf(row.errors, last) }
+        const last = previous ? previous.get(row.page) ?? 0 : null
+        return { ...row, previous: last, change: previous ? changeOf(row.errors, last) : null }
       })
-    const known = one ? [filters.page] : mapPages.length ? mapPages : pages.map((row) => row.page)
+    const known = chosen.length ? chosen : mapPages.length ? mapPages : pages.map((row) => row.page)
     const failing = known.filter((name) => pages.some((row) => row.page === name && row.errors))
-    const keys = one ? [filters.page] : topKeys(trend.rows, 'page')
-    const series = stackedSeries(trend.rows, { bar, field: 'page', buckets, keys, other: !one })
+    const keys = chosen.length ? chosen : topKeys(trend.rows, 'page')
+    const series = stackedSeries(trend.rows, {
+      bar,
+      field: 'page',
+      buckets,
+      keys,
+      other: !chosen.length,
+    })
     return stack(
       { gap: 5 },
       ...problemNotices(problemsOf([current, before, trend])),
@@ -77,7 +88,7 @@ const errorsReport = component('aly-errors-report', {
         statTile({
           label: 'Errors',
           value: formatCount(errors),
-          hint: changeHint(changeOf(errors, earlier), earlier, { upIsBad: true }),
+          hint: changeHint(errors, earlier, scope, { upIsBad: true }),
         }),
         statTile({
           label: 'Errors per 100 views',
@@ -92,10 +103,14 @@ const errorsReport = component('aly-errors-report', {
       ),
       reportCard(
         {
-          title: one ? `Errors of ${filters.page}` : 'Errors of the top pages',
+          title: one
+            ? `Errors of ${chosen[0]}`
+            : chosen.length
+            ? 'Errors of the chosen pages'
+            : 'Errors of the top pages',
           description: `${
-            one
-              ? 'The errors of the chosen page.'
+            chosen.length
+              ? 'The errors of each chosen page.'
               : 'The 10 pages with the most errors, and the errors of all other pages as "Other".'
           } One error record stands for up to 5 seconds of failures on one page view.`,
         },
@@ -103,7 +118,7 @@ const errorsReport = component('aly-errors-report', {
       ),
       reportCard(
         {
-          title: 'Pages with the most errors',
+          title: chosen.length ? 'The chosen pages with errors' : 'Pages with the most errors',
           description: 'The errors per 100 views come from the same query as the views.',
         },
         rows.length
@@ -134,14 +149,7 @@ const errorsReport = component('aly-errors-report', {
                 sortValue: (row) => row.per100 ?? Infinity,
                 render: (row) => per100(row.per100),
               },
-              {
-                key: 'percent',
-                label: 'Change',
-                align: 'end',
-                sortable: true,
-                sortValue: (row) => row.change.percent ?? Infinity,
-                render: (row) => changeTag(row.change, { upIsBad: true }),
-              },
+              ...compareColumns(scope, { upIsBad: true }),
             ],
           })
           : emptyState({

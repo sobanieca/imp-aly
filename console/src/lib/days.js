@@ -21,37 +21,43 @@ export const dayCount = (from, to) =>
   Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / DAY_MS) + 1
 
 export const PRESETS = [
-  { value: '30d', label: '30 days' },
-  { value: '3m', label: '3 months' },
-  { value: '6m', label: '6 months' },
-  { value: '1y', label: '1 year' },
-  { value: '5y', label: '5 years' },
+  { value: '7d', label: 'Last 7 days', days: 7, before: '-14 to -7 days' },
+  { value: '30d', label: 'Last 30 days', days: 30, before: '-60 to -30 days' },
+  { value: '3m', label: 'Last 3 months', months: 3, before: '-6 to -3 months' },
+  { value: '6m', label: 'Last 6 months', months: 6, before: '-12 to -6 months' },
+  { value: '1y', label: 'Last year', months: 12, before: '-2 to -1 years' },
+  { value: '5y', label: 'Last 5 years', months: 60, before: '-10 to -5 years' },
 ]
 
-const PRESET_MONTHS = { '3m': 3, '6m': 6, '1y': 12, '5y': 60 }
+export const DEFAULT_PRESET = '30d'
+
+const presetEntry = (preset) => PRESETS.find(({ value }) => value === preset)
+
+export const isPreset = (preset) => presetEntry(preset) !== undefined
+
+const backFrom = (end, entry, count) =>
+  entry.months
+    ? addDays(addMonths(end, -entry.months * count), 1)
+    : addDays(end, 1 - entry.days * count)
 
 export const presetRange = (preset, now = Date.now()) => {
   const end = todayUtc(now)
-  const months = PRESET_MONTHS[preset]
-  return { start: months ? addDays(addMonths(end, -months), 1) : addDays(end, -29), end }
+  return { start: backFrom(end, presetEntry(preset), 1), end }
 }
 
-export const presetOf = (range, now = Date.now()) =>
-  PRESETS.find(({ value }) => {
-    const candidate = presetRange(value, now)
-    return candidate.start === range?.start && candidate.end === range?.end
-  })?.value
+export const presetPrevious = (preset, now = Date.now()) => {
+  const entry = presetEntry(preset)
+  const end = todayUtc(now)
+  return { from: backFrom(end, entry, 2), to: addDays(backFrom(end, entry, 1), -1) }
+}
+
+export const previousLabel = (preset) => presetEntry(preset)?.before ?? null
 
 export const barOf = (from, to) => {
   const count = dayCount(from, to)
   if (count <= DAY_BARS_UP_TO) return 'day'
   return count <= WEEK_BARS_UP_TO ? 'week' : 'month'
 }
-
-export const previousRange = (from, to) => ({
-  from: addDays(from, -dayCount(from, to)),
-  to: addDays(from, -1),
-})
 
 export const mondayOf = (day) => addDays(day, -((new Date(`${day}T00:00:00Z`).getUTCDay() + 6) % 7))
 
@@ -70,6 +76,3 @@ export const bucketsOf = (from, to, bar) => {
 }
 
 export const bucketLabel = (bucket, bar) => (bar === 'day' ? bucket.slice(5) : bucket)
-
-export const barNote = (bar) =>
-  `One bar is one ${bar} (UTC).${bar === 'week' ? ' A week starts on Monday.' : ''}`

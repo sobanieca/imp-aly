@@ -95,21 +95,25 @@ export const errorRows = (rows) => {
 const valueOf = (label) => (label === NULL_LABEL ? null : label)
 
 export const emptyFilters = (segments = []) => ({
-  page: '',
+  page: [],
   zone: '',
-  country: '',
+  country: [],
   name: [],
-  segment: Object.fromEntries(segments.map((name) => [name, ''])),
+  segment: Object.fromEntries(segments.map((name) => [name, []])),
 })
+
+const listOf = (value) => (Array.isArray(value) ? value : value ? [value] : [])
 
 export const activeFilters = (values) => {
   const where = {}
-  for (const field of ['page', 'zone', 'country']) {
-    if (values?.[field]) where[field] = valueOf(values[field])
+  if (values?.zone) where.zone = valueOf(values.zone)
+  for (const field of ['page', 'country', 'name']) {
+    const chosen = listOf(values?.[field])
+    if (chosen.length) where[field] = chosen.map(valueOf)
   }
-  if (values?.name?.length) where.name = values.name.map(valueOf)
   for (const [name, value] of Object.entries(values?.segment ?? {})) {
-    if (value) where[name] = valueOf(value)
+    const chosen = listOf(value)
+    if (chosen.length) where[name] = chosen.map(valueOf)
   }
   return where
 }

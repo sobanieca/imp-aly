@@ -65,7 +65,7 @@ See `adr/plain-javascript-dependency-free-server.md` and `adr/console-web-app.md
 | `src/multi-server.js`                 | the calls to several servers and the sum of their answers, with no Deno API (shared with the page)                                   |
 | `src/console.js`                      | the local console: a listener that serves the built page, the host check and the security headers                                    |
 | `src/static-files.js`                 | the files of the built page of the console, with the fallback to `index.html`                                                        |
-| `dev/start.js`, `dev/demo-data.js`    | the demo of `deno task start`, and the sample records of the app `shop`                                                              |
+| `dev/start.js`, `dev/demo-data.js`    | the demo of `deno task start`, and the sample records of the apps `shop`, `crm` and `docs`                                           |
 | `console/`                            | the imp project of the PWA: `src/app.js`, `src/screens/`, `src/parts/`, `src/lib/` (`vault.js`, `client.js`), `test/`                |
 | `src/service.js`                      | the systemd unit, the service user and its limits, the update timer, the restart with a check, the new key sent to the service       |
 | `src/update.js`                       | the version list, the choice of the update, the download with its checks, the swap of the binary                                     |
@@ -102,23 +102,23 @@ Rules that keep the data correct:
 
 ## Commands
 
-| Command                   | What it does                                                                                                                         |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `deno task start`         | starts a demo: a server in a temporary folder with 45 days of sample data, a new visit every 3 seconds, and the console on port 8010 |
-| `deno task server`        | runs the server from source in the foreground on ports 2980 and 2981                                                                 |
-| `deno task console`       | builds the page, then runs the console from source on port 8010                                                                      |
-| `deno task console:build` | runs `imp build --pwa` in `console/`, which writes `console/dist`                                                                    |
-| `deno task test`          | runs `test/`                                                                                                                         |
-| `deno task check`         | runs `deno fmt`, `deno lint`, the tests, then `imp fmt`, `imp lint` and `imp test --unit` in `console/`                              |
-| `deno task compile`       | builds the page and `./imp-aly` with both workers and the page included                                                              |
+| Command                   | What it does                                                                                                                                                          |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `deno task start`         | starts a demo: a server on ports 44890 and 44889 (admin) in a temporary folder with 45 days of sample data, a new visit every 3 seconds, and the console on port 8010 |
+| `deno task server`        | runs the server from source in the foreground on ports 2980 and 2981                                                                                                  |
+| `deno task console`       | builds the page, then runs the console from source on port 8010                                                                                                       |
+| `deno task console:build` | runs `imp build --pwa` in `console/`, which writes `console/dist`                                                                                                     |
+| `deno task test`          | runs `test/`                                                                                                                                                          |
+| `deno task check`         | runs `deno fmt`, `deno lint`, the tests, then `imp fmt`, `imp lint` and `imp test --unit` in `console/`                                                               |
+| `deno task compile`       | builds the page and `./imp-aly` with both workers and the page included                                                                                               |
 
 After a batch of changes, run `deno task check` and fix every issue. Keep every change that
 `deno fmt` and `imp fmt` make. When you change a worker, the server start or the CLI, also run
 `deno task compile` and try the binary: start it with `server --foreground -d <temp folder>`,
 register an app, post a record, and query it. When you change the console, run `deno task start`,
-open the link that it prints, and look at each screen that you changed in a browser. The link adds
-the demo server to the page. The demo keeps its server and its data in a temporary folder, and
-removes the folder when it stops.
+open the link that it prints, add the demo server with the name, the URL and the key that it prints,
+and look at each screen that you changed in a browser. The demo keeps its server and its data in a
+temporary folder, and removes the folder when it stops.
 
 Tests use `Deno.test` and the helpers in `test/assert.js`. A test that starts a server uses port
 `0`, a temporary data folder, `minFree: null` and `quiet: true`, and shuts the server down.

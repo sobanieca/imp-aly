@@ -2,33 +2,19 @@ import { RARELY_USED } from './reports.js'
 
 const VISIT = [
   'Visit',
-  'One session of a person in one browser tab. The console counts visits, not people. Two tabs are two visits.',
+  'One session of a person in one browser tab. The console counts visits, not people. Two tabs are two visits. A tab that stays open past midnight UTC counts as one visit on each day.',
 ]
 
 const CHANGE = [
   'Change',
-  'The difference from the previous period. That period has the same number of days and ends just before this one.',
+  'The difference from the previous period of the same length, just before this one. For "Last 30 days", that is the days -60 to -30. For "Last 3 months", that is the months -6 to -3. A custom period shows no change.',
 ]
 
 const RARELY =
   `viewed ${RARELY_USED.minShown} times or more, and used in less than ${RARELY_USED.maxShare}% of them`
 
-export const APP_TERMS = [
-  VISIT,
-  [
-    'Visits of a range',
-    'The visits of each day, added up. A tab that stays open past midnight UTC counts once on each day.',
-  ],
-  ['Share', 'The visits of the app, divided by the visits of all apps.'],
-  CHANGE,
-]
-
 export const OVERVIEW_TERMS = [
   VISIT,
-  [
-    'Visits of a range',
-    'The visits of each day, added up. A tab that stays open past midnight UTC counts once on each day.',
-  ],
   ['Page views', 'How many times people opened a page of the app.'],
   [
     'Visits with an outcome',

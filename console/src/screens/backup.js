@@ -4,7 +4,7 @@ import { computed, initState, useState } from 'imp/state'
 import { button, text } from 'imp/std'
 import { table } from 'imp/std/data'
 import { notice, notify } from 'imp/std/feedback'
-import { datePicker, fileUpload, form, FormError, select, submitForm } from 'imp/std/inputs'
+import { dateRangePicker, fileUpload, form, FormError, select, submitForm } from 'imp/std/inputs'
 import { flex, stack } from 'imp/std/layout'
 import { downloadBlob, messageOf } from '../lib/api.js'
 import { downloadBackup, restoreBackup } from '../lib/client.js'
@@ -47,10 +47,9 @@ const backupForm = component('aly-backup-form', {
       },
       serverField(catalog),
       select({ field: 'app', label: 'App', options: apps, placeholder: 'All apps' }),
-      datePicker({
+      dateRangePicker({
         field: 'days',
         label: 'Days (UTC)',
-        range: true,
         max: todayUtc(),
         help: 'Empty: all the sealed days.',
       }),

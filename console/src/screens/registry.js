@@ -392,7 +392,7 @@ export const registryScreen = component('aly-registry', {
             'Register an app',
           ),
         ),
-        scopeBar({ app: false, period: false }),
+        scopeBar({ period: false }),
         reportCard({ title: 'Registered apps' }, catalog.view(appsTable)),
         dialog(
           { title: 'Register an app', open: adding },

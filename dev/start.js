@@ -6,22 +6,17 @@ import { logger } from '../src/logger.js'
 import { startServer } from '../src/server.js'
 import { applySegment } from '../src/storage.js'
 import { version } from '../src/version.js'
-import {
-  createRandom,
-  DEMO_APP,
-  DEMO_MAP,
-  DEMO_OUTCOMES,
-  DEMO_SEGMENTS,
-  DEMO_ZONES,
-  seedLines,
-  visitRecords,
-} from './demo-data.js'
+import { createRandom, DEMO_APPS, seedLines, visitRecords } from './demo-data.js'
 
 const DAYS = 45
 
 const VISIT_EVERY_MS = 3_000
 
 const COUNTRY_HEADER = 'x-demo-country'
+
+const DEMO_ADMIN_PORT = 44889
+
+const DEMO_PORT = 44890
 
 const { flags } = parseArgs(Deno.args)
 requireOnlyFlags(flags, ['port'], 'start')
@@ -37,8 +32,8 @@ await applySegment({ dataDir, segment: 1, text: `${lines.join('\n')}\n` })
 
 const key = generateKey()
 const server = await startServer({
-  port: 0,
-  adminPort: 0,
+  port: DEMO_PORT,
+  adminPort: DEMO_ADMIN_PORT,
   hostname: '127.0.0.1',
   dataDir,
   key,
@@ -47,26 +42,27 @@ const server = await startServer({
   quiet: true,
 })
 const adminUrl = `http://127.0.0.1:${server.adminPort}`
-const collectUrl = `http://127.0.0.1:${server.port}/collect/${DEMO_APP}`
-await callServer({ label: 'demo', server: 'demo', url: adminUrl, auth: key }, {
-  method: 'PUT',
-  path: `/apps/${DEMO_APP}`,
-  body: {
-    build: JSON.stringify({ pages: DEMO_MAP, zones: DEMO_ZONES, outcomes: DEMO_OUTCOMES }),
-    segments: DEMO_SEGMENTS,
-  },
-})
+const collectUrl = (app) => `http://127.0.0.1:${server.port}/collect/${app.name}`
+for (const app of DEMO_APPS) {
+  await callServer({ label: 'demo', server: 'demo', url: adminUrl, auth: key }, {
+    method: 'PUT',
+    path: `/apps/${app.name}`,
+    body: { build: JSON.stringify(app.build), segments: app.segments },
+  })
+}
 
 let sent = 0
 const sendVisit = async () => {
+  const app = DEMO_APPS[sent % DEMO_APPS.length]
   const { country, records } = visitRecords({
+    app,
     random,
     visit: `live${sent++}`,
     start: Date.now(),
     recent: true,
   })
   try {
-    const response = await fetch(collectUrl, {
+    const response = await fetch(collectUrl(app), {
       method: 'POST',
       headers: { [COUNTRY_HEADER]: country },
       body: JSON.stringify(records),
@@ -91,15 +87,19 @@ try {
 console.log(`
 imp-aly ${version} - demo
 
-  Server:   ${adminUrl} (admin)
-  Key:      ${key}
-  Collect:  ${collectUrl}
-  Data:     ${lines.length} records of the app "${DEMO_APP}" in ${DAYS + 1} days,
+  Console:  ${running.url}
+  Collect:  http://127.0.0.1:${server.port}/collect/<app>
+  Apps:     ${DEMO_APPS.map(({ name }) => name).join(', ')}
+  Data:     ${lines.length} records in ${DAYS + 1} days,
             and a new visit every ${VISIT_EVERY_MS / 1000} seconds
   Folder:   ${root}
 
-To open the console with the demo server, go to
-${running.url}/servers#${new URLSearchParams({ name: 'demo', url: adminUrl, key })}
+To add the demo server, open ${running.url}/servers, press "Add a server",
+and type these values:
+
+  Name:     demo
+  URL:      ${adminUrl}
+  Key:      ${key}
 
 Press Ctrl+C to stop. The demo removes its folder.
 `)

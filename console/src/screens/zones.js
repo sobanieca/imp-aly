@@ -4,10 +4,10 @@ import { table } from 'imp/std/data'
 import { tag } from 'imp/std/display'
 import { stack } from 'imp/std/layout'
 import { ZONE_TERMS } from '../lib/terms.js'
-import { previousScope, problemsOf, runQuery } from '../lib/api.js'
+import { problemsOf, runPrevious, runQuery } from '../lib/api.js'
 import { barOf, bucketsOf } from '../lib/days.js'
 import { formatCount, formatPercent } from '../lib/format.js'
-import { changeOf, MAX_ROWS, NEVER_USED, RARELY, RARELY_USED, zoneRows } from '../lib/reports.js'
+import { MAX_ROWS, NEVER_USED, RARELY, RARELY_USED, zoneRows } from '../lib/reports.js'
 import { stackedSeries, TOP, topKeys, totalsBy, usedSeries } from '../lib/series.js'
 import {
   changeHint,
@@ -72,7 +72,7 @@ const zonesReport = component('aly-zones-report', {
         measures: ['records'],
         limit: MAX_ROWS,
       }),
-      runQuery(api, previousScope(scope), {
+      runPrevious(api, scope, {
         where: { ...filters, type: 'used' },
         groupBy: ['zone'],
         measures: ['records'],
@@ -88,7 +88,7 @@ const zonesReport = component('aly-zones-report', {
     if (!current.days) return noRecords(current)
     const rows = zoneRows(current.rows)
     const uses = rows.reduce((total, row) => total + row.used, 0)
-    const earlier = usedOf(before.rows)
+    const earlier = before ? usedOf(before.rows) : null
     const mostUsed = rows.filter((row) => row.used > 0).sort((a, b) => b.used - a.used)
       .slice(0, TOP)
     const leastUsed = [...rows].sort((a, b) => a.used - b.used || b.seen - a.seen).slice(0, TOP)
@@ -110,7 +110,7 @@ const zonesReport = component('aly-zones-report', {
         statTile({
           label: 'Zone uses',
           value: formatCount(uses),
-          hint: changeHint(changeOf(uses, earlier), earlier),
+          hint: changeHint(uses, earlier, scope),
         }),
         statTile({
           label: 'Most used zone',

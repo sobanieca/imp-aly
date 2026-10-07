@@ -152,6 +152,30 @@ Deno.test('collects valid records and answers queries', async () => {
   }
 })
 
+Deno.test('a removed app keeps its records, and a new registration brings them back', async () => {
+  const { call, admin, stop } = await start()
+  try {
+    await admin('PUT', '/apps/myapp', { ...BUILD, segments: ['plan'] })
+    await call('POST', '/collect/myapp', [
+      record({ type: 'page', plan: 'pro' }),
+      record({ type: 'page', plan: 'free' }),
+    ])
+    const count = async () =>
+      (await admin('POST', '/query', { app: 'myapp' })).body.groups[0]?.records ?? 0
+    await waitFor(async () => (await count()) === 2)
+    assertEquals((await admin('DELETE', '/apps/myapp')).body, { removed: 'myapp' })
+    assertEquals((await admin('GET', '/apps')).body.apps, [])
+    assertEquals((await call('POST', '/collect/myapp', [record({ type: 'page' })])).status, 404)
+    assertEquals(await count(), 2)
+    await admin('PUT', '/apps/myapp', { ...BUILD, segments: ['plan'] })
+    assertEquals(await count(), 2)
+    const plans = await admin('POST', '/query', { app: 'myapp', where: { plan: 'pro' } })
+    assertEquals(plans.body.groups, [{ by: [], records: 1 }])
+  } finally {
+    await stop()
+  }
+})
+
 Deno.test('rejects malformed and oversized requests', async () => {
   const { adminBase, call, send, admin, stop } = await start()
   try {

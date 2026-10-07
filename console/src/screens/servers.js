@@ -14,17 +14,6 @@ import { formatBytes, formatCount, formatDateTime } from '../lib/format.js'
 import { parseServerUrl, removeServer, saveServer, SERVER_NAME, useServer } from '../lib/vault.js'
 import { columns, page, reportCard, screenHeader } from '../parts/report.js'
 
-const linkedServer = () => {
-  const params = new URLSearchParams(location.hash.slice(1))
-  if (!params.has('url')) return null
-  history.replaceState(history.state, '', `${location.pathname}${location.search}`)
-  return {
-    name: params.get('name') ?? '',
-    url: params.get('url') ?? '',
-    key: params.get('key') ?? '',
-  }
-}
-
 const storageNotices = (storage) =>
   [
     storage.lastError
@@ -184,9 +173,8 @@ export const serversScreen = component('aly-servers', {
     const catalog = useState(self, 'aly.catalog')
     const revision = useState(self, 'aly.revision')
     const scopeServers = useState(self, 'aly.scope.servers')
-    const linked = linkedServer()
-    const editing = initState(self, 'aly.servers.editing', linked ? { initial: linked } : null)
-    const formOpen = initState(self, 'aly.servers.formOpen', linked !== null)
+    const editing = initState(self, 'aly.servers.editing', null)
+    const formOpen = initState(self, 'aly.servers.formOpen', false)
     const removing = initState(self, 'aly.servers.removing', null)
     const removeOpen = initState(self, 'aly.servers.removeOpen', false)
     const saved = computed([catalog], (value) => value?.servers ?? null)

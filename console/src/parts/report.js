@@ -11,9 +11,9 @@ import { luBox, luCalendarX, luCircleQuestionMark, luServer } from 'imp/icons'
 import { app } from '../app-map.js'
 import { messageOf } from '../lib/api.js'
 import { mapPagesOf, segmentsOf } from '../lib/catalog.js'
-import { barNote, barOf, bucketLabel, dayCount, previousRange } from '../lib/days.js'
+import { bucketLabel, previousLabel } from '../lib/days.js'
 import { formatCount } from '../lib/format.js'
-import { activeFilters } from '../lib/reports.js'
+import { activeFilters, changeOf } from '../lib/reports.js'
 import { useScope } from '../lib/scope.js'
 import { filterBar } from './filters.js'
 import { scopeBar } from './scope-bar.js'
@@ -126,28 +126,18 @@ export const reportCard = ({ title, description, actions }, ...content) =>
     ),
   )
 
-const rangeNote = (value) => {
-  if (!value?.start || !value?.end) return ''
-  const before = previousRange(value.start, value.end)
-  return `${barNote(barOf(value.start, value.end))} A change compares with the ${
-    formatCount(dayCount(value.start, value.end))
-  } days before, ${before.from} to ${before.to}.`
-}
-
 export const screenHeader = component('aly-screen-header', {
   styles: `
     :host { display: block; }
     h1 { margin: 0; }
   `,
-  setup: (self, { title, description, terms = [], period = false }) => {
+  setup: (self, { title, description, terms = [] }) => {
     const open = initState(self, 'aly.help.open', false)
-    const range = period ? useState(self, 'aly.scope.range') : null
     const help = dialog(
       { title, open },
       stack(
         { gap: 4 },
         text(description),
-        range ? text({ tone: 'secondary', size: 'sm' }, range.text(rangeNote)) : null,
         terms.length
           ? descriptionList({
             layout: 'vertical',
@@ -252,14 +242,39 @@ export const noApp = (catalog) =>
     )
   })
 
-export const changeTag = (change, { upIsBad = false } = {}) => {
+const changeTag = (change, { upIsBad = false } = {}) => {
   const good = change.direction === 'up' ? !upIsBad : upIsBad
   const color = change.direction === 'same' ? 'neutral' : good ? 'green' : 'red'
   return tag({ color, size: 'sm' }, change.text)
 }
 
-export const changeHint = (change, previous, options) =>
-  span(changeTag(change, options), ` from ${formatCount(previous)}`)
+export const changeHint = (current, previous, scope, options) =>
+  previous === null || previous === undefined ? null : span(
+    changeTag(changeOf(current, previous), options),
+    ` from ${formatCount(previous)}`,
+    span({ style: 'display: block' }, `in ${previousLabel(scope.preset)}`),
+  )
+
+export const compareColumns = (scope, { upIsBad = false } = {}) =>
+  scope.preset
+    ? [
+      {
+        key: 'previous',
+        label: previousLabel(scope.preset),
+        align: 'end',
+        sortable: true,
+        render: (row) => formatCount(row.previous),
+      },
+      {
+        key: 'percent',
+        label: 'Change',
+        align: 'end',
+        sortable: true,
+        sortValue: (row) => row.change?.percent ?? Infinity,
+        render: (row) => (row.change ? changeTag(row.change, { upIsBad }) : ''),
+      },
+    ]
+    : []
 
 export const trendChart = ({ label, bar, buckets, series }) =>
   series.length
@@ -273,9 +288,12 @@ export const trendChart = ({ label, bar, buckets, series }) =>
     })
     : emptyState({ title: 'Nothing to draw', description: 'No record matches in these days.' })
 
+const termsFor = (terms, scope) =>
+  scope.preset ? terms : terms.filter(([term]) => term !== 'Change')
+
 export const reportScreen = (
   self,
-  { title, description, terms, filters: fields = [], pageLabel, render },
+  { title, description, terms, filters: fields = [], render },
 ) => {
   const scope = useScope(self)
   const catalog = useState(self, 'aly.catalog')
@@ -292,13 +310,15 @@ export const reportScreen = (
   return page(
     stack(
       { gap: 5 },
-      screenHeader({ title, description, terms, period: true }),
+      computed([scope], (current) => Boolean(current.preset)).view((compared) =>
+        screenHeader({ title, description, terms: termsFor(terms, { preset: compared }) })
+      ),
       scopeBar(),
       fields.length
         ? div(
           computed([scope, meta], (current, info) => ({ current, info })).view((
             { current, info },
-          ) => (ready(current) ? filterBar({ scope: current, fields, pageLabel, ...info }) : null)),
+          ) => (ready(current) ? filterBar({ scope: current, fields, ...info }) : null)),
         )
         : null,
       div(

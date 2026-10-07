@@ -2,10 +2,9 @@ import { component } from 'imp'
 import { div } from 'imp/html'
 import { computed, useState } from 'imp/state'
 import { button, icon } from 'imp/std'
-import { comboBox, datePicker, segmented, select } from 'imp/std/inputs'
+import { comboBox, dateRangePicker } from 'imp/std/inputs'
 import { luRefreshCw } from 'imp/icons'
-import { appNamesOf } from '../lib/catalog.js'
-import { PRESETS, todayUtc } from '../lib/days.js'
+import { presetRange, PRESETS, todayUtc } from '../lib/days.js'
 
 const serverControl = (store, servers) => {
   const saved = store?.servers ?? []
@@ -22,16 +21,12 @@ const serverControl = (store, servers) => {
   )
 }
 
-const appControl = (catalog, app) => {
-  const names = appNamesOf(catalog)
-  if (names.length < 2) return null
-  return div({ class: 'grow' }, select({ label: 'App', value: app, options: names }))
-}
+const presetChoices = () =>
+  PRESETS.map(({ value, label }) => ({ value, label, range: presetRange(value) }))
 
 export const scopeBar = component('aly-scope-bar', {
   styles: `
     :host { display: block; }
-    .scope { display: grid; gap: var(--imp-space-2, 8px); }
     .bar {
       display: flex;
       flex-wrap: wrap;
@@ -40,12 +35,10 @@ export const scopeBar = component('aly-scope-bar', {
     }
     .grow { flex: 0 1 15rem; min-inline-size: 11rem; }
   `,
-  setup: (self, { app: withApp = true, period = true } = {}) => {
+  setup: (self, { period = true } = {}) => {
     const catalog = useState(self, 'aly.catalog')
     const servers = useState(self, 'aly.scope.servers')
-    const app = useState(self, 'aly.scope.app')
-    const range = useState(self, 'aly.scope.range')
-    const preset = useState(self, 'aly.scope.preset')
+    const chosen = useState(self, 'aly.scope.period')
     const tick = useState(self, 'aly.scope.tick')
     const revision = useState(self, 'aly.revision')
     const saved = computed([catalog], (value) => value?.servers ?? null)
@@ -54,29 +47,23 @@ export const scopeBar = component('aly-scope-bar', {
       revision.set((value) => value + 1)
     }
     return div(
-      { class: 'scope' },
-      div(
-        { class: 'bar' },
-        saved.view((store) => serverControl(store, servers)),
-        withApp ? catalog.view((value) => appControl(value, app)) : null,
-        period ? segmented({ label: 'Period', value: preset, options: PRESETS }) : null,
-        period
-          ? datePicker({
-            label: 'From - to (UTC)',
-            value: range,
-            range: true,
-            required: true,
-            max: todayUtc(),
-          })
-          : null,
-        button(
-          {
-            square: true,
-            label: period ? 'Run the report again' : 'Load again',
-            events: { click: again },
-          },
-          icon(luRefreshCw),
-        ),
+      { class: 'bar' },
+      period
+        ? dateRangePicker({
+          label: 'Period (UTC)',
+          value: chosen,
+          presets: presetChoices(),
+          max: todayUtc(),
+        })
+        : null,
+      saved.view((store) => serverControl(store, servers)),
+      button(
+        {
+          square: true,
+          label: period ? 'Run the report again' : 'Load again',
+          events: { click: again },
+        },
+        icon(luRefreshCw),
       ),
     )
   },

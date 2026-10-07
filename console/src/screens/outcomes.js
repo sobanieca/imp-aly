@@ -3,7 +3,7 @@ import { useHttpClient } from 'imp/http'
 import { table } from 'imp/std/data'
 import { stack } from 'imp/std/layout'
 import { OUTCOME_TERMS } from '../lib/terms.js'
-import { previousScope, problemsOf, runQuery } from '../lib/api.js'
+import { problemsOf, runPrevious, runQuery } from '../lib/api.js'
 import { barOf, bucketsOf } from '../lib/days.js'
 import { formatCount, formatPercent } from '../lib/format.js'
 import { changeOf, MAX_ROWS, shareOf, withoutFields } from '../lib/reports.js'
@@ -11,7 +11,7 @@ import { indexBy, labelOf } from '../lib/rows.js'
 import { stackedSeries, TOP, topKeys } from '../lib/series.js'
 import {
   changeHint,
-  changeTag,
+  compareColumns,
   dataNote,
   noRecords,
   problemNotices,
@@ -42,7 +42,7 @@ const outcomesReport = component('aly-outcomes-report', {
         measures: ['records'],
         limit: MAX_ROWS,
       }),
-      runQuery(api, previousScope(scope), {
+      runPrevious(api, scope, {
         where,
         groupBy: ['name'],
         measures: ['records'],
@@ -62,19 +62,19 @@ const outcomesReport = component('aly-outcomes-report', {
     ])
     if (!current.days) return noRecords(current)
     const total = sumRecords(current.rows)
-    const earlier = sumRecords(before.rows)
-    const previous = indexBy(before.rows, 'name')
+    const earlier = before ? sumRecords(before.rows) : null
+    const previous = before ? indexBy(before.rows, 'name') : null
     const shown = chosen.length ? current.rows : current.rows.slice(0, TOP)
     const rows = shown.map((row) => {
       const name = labelOf(row.name)
-      const last = previous.get(name)?.records ?? 0
+      const last = previous ? previous.get(name)?.records ?? 0 : null
       return {
         id: name,
         name,
         records: row.records,
         share: shareOf(row.records, total),
         previous: last,
-        change: changeOf(row.records, last),
+        change: previous ? changeOf(row.records, last) : null,
       }
     })
     const visits = indexBy(reach.rows, 'type')
@@ -95,7 +95,7 @@ const outcomesReport = component('aly-outcomes-report', {
         statTile({
           label: 'Outcomes',
           value: formatCount(total),
-          hint: changeHint(changeOf(total, earlier), earlier),
+          hint: changeHint(total, earlier, scope),
         }),
         statTile({
           label: 'Visits with an outcome',
@@ -142,21 +142,7 @@ const outcomesReport = component('aly-outcomes-report', {
               sortable: true,
               render: (row) => formatPercent(row.share),
             },
-            {
-              key: 'previous',
-              label: 'Previous period',
-              align: 'end',
-              sortable: true,
-              render: (row) => formatCount(row.previous),
-            },
-            {
-              key: 'percent',
-              label: 'Change',
-              align: 'end',
-              sortable: true,
-              sortValue: (row) => row.change.percent ?? Infinity,
-              render: (row) => changeTag(row.change),
-            },
+            ...compareColumns(scope),
           ],
         }),
       ),

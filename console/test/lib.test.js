@@ -3,16 +3,17 @@ import { mapPagesOf, segmentsOf } from '../src/lib/catalog.js'
 import {
   addDays,
   addMonths,
-  barNote,
   barOf,
   bucketsOf,
   dayCount,
   mondayOf,
-  presetOf,
+  presetPrevious,
   presetRange,
-  previousRange,
+  previousLabel,
   todayUtc,
 } from '../src/lib/days.js'
+import { pageTree } from '../src/lib/page-tree.js'
+import { periodOf } from '../src/lib/scope.js'
 import { draftToQuery, parseQueryText, queryToDraft } from '../src/lib/query-draft.js'
 import {
   activeFilters,
@@ -44,8 +45,7 @@ test('days count in UTC and presets end today', () => {
   expect(presetRange('30d', NOW)).toEqual({ start: '2026-09-04', end: '2026-10-03' })
   expect(presetRange('3m', NOW)).toEqual({ start: '2026-07-04', end: '2026-10-03' })
   expect(presetRange('1y', NOW)).toEqual({ start: '2025-10-04', end: '2026-10-03' })
-  expect(presetOf({ start: '2026-07-04', end: '2026-10-03' }, NOW)).toEqual('3m')
-  expect(presetOf({ start: '2026-09-26', end: '2026-10-03' }, NOW)).toEqual(undefined)
+  expect(presetRange('7d', NOW)).toEqual({ start: '2026-09-27', end: '2026-10-03' })
 })
 
 test('the bar size follows the length of the range', () => {
@@ -54,18 +54,53 @@ test('the bar size follows the length of the range', () => {
   expect(barOf('2026-08-19', '2026-10-03')).toEqual('week')
   expect(barOf('2026-03-18', '2026-10-03')).toEqual('week')
   expect(barOf('2026-03-17', '2026-10-03')).toEqual('month')
-  expect(barNote('week')).toEqual('One bar is one week (UTC). A week starts on Monday.')
 })
 
-test('the previous period has the same length and ends the day before', () => {
-  expect(previousRange('2026-09-04', '2026-10-03')).toEqual({
-    from: '2026-08-05',
-    to: '2026-09-03',
+test('the previous period of a preset has the same length and ends the day before', () => {
+  expect(presetPrevious('30d', NOW)).toEqual({ from: '2026-08-05', to: '2026-09-03' })
+  expect(presetPrevious('3m', NOW)).toEqual({ from: '2026-04-04', to: '2026-07-03' })
+  expect(presetPrevious('1y', NOW)).toEqual({ from: '2024-10-04', to: '2025-10-03' })
+  expect(previousLabel('30d')).toEqual('-60 to -30 days')
+  expect(previousLabel('3m')).toEqual('-6 to -3 months')
+  expect(previousLabel(undefined)).toEqual(null)
+})
+
+test('a period is a preset or a custom range, and a bad value falls back to 30 days', () => {
+  expect(periodOf({ preset: '3m' })).toEqual({ preset: '3m' })
+  expect(periodOf({ start: '2026-09-01', end: '2026-09-10' })).toEqual({
+    start: '2026-09-01',
+    end: '2026-09-10',
   })
-  expect(previousRange('2026-10-03', '2026-10-03')).toEqual({
-    from: '2026-10-02',
-    to: '2026-10-02',
-  })
+  expect(periodOf({ start: '2026-09-10', end: '2026-09-01' })).toEqual({ preset: '30d' })
+  expect(periodOf({ preset: 'nope' })).toEqual({ preset: '30d' })
+  expect(periodOf(undefined)).toEqual({ preset: '30d' })
+})
+
+test('the pages form a tree under the nearest page that is a prefix', () => {
+  expect(pageTree(['/users/:id/orders', '/', '/users', '/users/:id', '/users/invites', '/help']))
+    .toEqual([
+      { value: '/', label: '/' },
+      { value: '/help', label: '/help' },
+      {
+        value: '/users',
+        label: '/users',
+        children: [
+          {
+            value: '/users/:id',
+            label: '/users/:id',
+            children: [{ value: '/users/:id/orders', label: '/users/:id/orders' }],
+          },
+          { value: '/users/invites', label: '/users/invites' },
+        ],
+      },
+    ])
+  expect(pageTree(['/users/:id/details', '/users'])).toEqual([
+    {
+      value: '/users',
+      label: '/users',
+      children: [{ value: '/users/:id/details', label: '/users/:id/details' }],
+    },
+  ])
 })
 
 test('the buckets of a range follow the bar', () => {
@@ -190,13 +225,21 @@ test('the errors per page come with the views of the same answer', () => {
 test('the filters turn into the where of a query', () => {
   const values = {
     ...emptyFilters(['plan']),
-    page: '/',
+    page: ['/', '/cart'],
+    zone: 'shop.hero',
+    country: ['PL'],
     name: ['paid', '(none)'],
-    segment: { plan: 'pro' },
+    segment: { plan: ['pro', '(none)'] },
   }
   const where = activeFilters(values)
-  expect(where).toEqual({ page: '/', name: ['paid', null], plan: 'pro' })
-  expect(withoutFields(where, ['page', 'name'])).toEqual({ plan: 'pro' })
+  expect(where).toEqual({
+    zone: 'shop.hero',
+    page: ['/', '/cart'],
+    country: ['PL'],
+    name: ['paid', null],
+    plan: ['pro', null],
+  })
+  expect(withoutFields(where, ['page', 'name', 'zone', 'country'])).toEqual({ plan: ['pro', null] })
   expect(activeFilters(emptyFilters(['plan']))).toEqual({})
 })
 

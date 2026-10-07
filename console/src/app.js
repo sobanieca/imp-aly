@@ -3,7 +3,7 @@ import { initHttpClient } from 'imp/http'
 import { router } from 'imp/router'
 import { computed, initState } from 'imp/state'
 import { icon } from 'imp/std'
-import { notify, toast } from 'imp/std/feedback'
+import { toast } from 'imp/std/feedback'
 import { flex } from 'imp/std/layout'
 import { appLogo, orgSelect, shell, themeSelect } from 'imp/std/shell'
 import {
@@ -23,7 +23,7 @@ import { messageOf } from './lib/api.js'
 import { appNamesOf } from './lib/catalog.js'
 import { appsOf, CLIENT_OPTIONS } from './lib/client.js'
 import { initScope } from './lib/scope.js'
-import { loadServers, useServer } from './lib/vault.js'
+import { loadServers } from './lib/vault.js'
 import { alyDark, alyLight } from './themes.js'
 import { installButton } from './parts/install-button.js'
 import { backupScreen } from './screens/backup.js'
@@ -51,8 +51,13 @@ const loadCatalog = async (api, servers) => {
   }
 }
 
-const serverOrgs = (catalog) =>
-  (catalog?.servers?.servers ?? []).map(({ name, url }) => ({ id: name, name, description: url }))
+const appOrgs = (catalog) =>
+  appNamesOf(catalog).map((name) => ({
+    id: name,
+    name,
+    description: catalog.apps.filter((entry) => entry.name === name).map(({ server }) => server)
+      .join(', '),
+  }))
 
 export const root = component('aly-root', {
   setup: (self) => {
@@ -60,8 +65,7 @@ export const root = component('aly-root', {
     const { servers, app: chosenApp } = initScope(self)
     const catalog = initState(self, 'aly.catalog', undefined)
     const revision = initState(self, 'aly.revision', 0)
-    const active = initState(self, 'aly.server.active', undefined)
-    const orgs = computed([catalog], serverOrgs)
+    const orgs = computed([catalog], appOrgs)
     let latest = 0
     const reload = async () => {
       const run = ++latest
@@ -74,26 +78,11 @@ export const root = component('aly-root', {
       if (run !== latest || self.abortSignal.aborted) return
       if (next.chosen.length !== servers.get().length) servers.set(next.chosen)
       catalog.set(next)
-      active.set(next.servers?.default || undefined)
       const names = appNamesOf(next)
       if (!next.error && !names.includes(chosenApp.get())) chosenApp.set(names[0])
     }
     servers.watch(self, reload)
     revision.watch(self, reload)
-    const switchServer = async (event) => {
-      try {
-        await useServer(event.detail.id)
-      } catch (error) {
-        event.preventDefault()
-        return notify({
-          kind: 'error',
-          title: 'The server did not change',
-          description: messageOf(error),
-        })
-      }
-      if (servers.get().length) servers.set([])
-      else revision.set((value) => value + 1)
-    }
     return shell(
       {
         logo: flex(
@@ -107,10 +96,9 @@ export const root = component('aly-root', {
             list.length
               ? orgSelect({
                 orgs: list,
-                selected: active,
-                label: 'Active server',
+                selected: chosenApp,
+                label: computed([chosenApp], (name) => `App: ${name ?? '-'}`),
                 size: 'sm',
-                events: { select: switchServer },
               })
               : null
           ),

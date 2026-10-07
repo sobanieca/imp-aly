@@ -1,15 +1,21 @@
 import { computed, initState, useState } from 'imp/state'
-import { presetOf, presetRange, PRESETS } from './days.js'
+import { DEFAULT_PRESET, isPreset, presetRange } from './days.js'
 import { readStored, writeStored } from './storage.js'
 
 const STORAGE_KEY = 'imp-aly.console.scope'
 
-const DEFAULT_PRESET = '30d'
-
-const SCOPE_STATES = ['aly.scope.servers', 'aly.scope.app', 'aly.scope.range', 'aly.scope.tick']
+const SCOPE_STATES = ['aly.scope.servers', 'aly.scope.app', 'aly.scope.period', 'aly.scope.tick']
 
 const isRange = (value) =>
   typeof value?.start === 'string' && typeof value?.end === 'string' && value.start <= value.end
+
+export const periodOf = (value) => {
+  if (isPreset(value?.preset)) return { preset: value.preset }
+  if (isRange(value)) return { start: value.start, end: value.end }
+  return { preset: DEFAULT_PRESET }
+}
+
+const rangeOf = (period) => (period.preset ? presetRange(period.preset) : period)
 
 const readSaved = () => {
   const value = readStored(STORAGE_KEY, {})
@@ -18,8 +24,6 @@ const readSaved = () => {
 
 export const initScope = (self) => {
   const saved = readSaved()
-  const knownPreset = PRESETS.some(({ value }) => value === saved.preset) ? saved.preset : undefined
-  const preset = knownPreset ?? (isRange(saved.range) ? undefined : DEFAULT_PRESET)
   const servers = initState(
     self,
     'aly.scope.servers',
@@ -30,33 +34,24 @@ export const initScope = (self) => {
     'aly.scope.app',
     typeof saved.app === 'string' ? saved.app : undefined,
   )
-  const range = initState(self, 'aly.scope.range', preset ? presetRange(preset) : saved.range)
-  const chosen = initState(self, 'aly.scope.preset', preset)
+  const period = initState(self, 'aly.scope.period', periodOf(saved.period))
   initState(self, 'aly.scope.tick', 0)
-  chosen.watch(self, (value) => {
-    if (value) range.set(presetRange(value))
-  })
-  range.watch(self, (value) => {
-    if (!isRange(value)) {
-      chosen.set(DEFAULT_PRESET)
-      return range.set(presetRange(DEFAULT_PRESET))
-    }
-    const match = presetOf(value)
-    if (match !== chosen.get()) chosen.set(match)
+  period.watch(self, (value) => {
+    const clean = periodOf(value)
+    if (JSON.stringify(clean) !== JSON.stringify(value)) period.set(clean)
   })
   const save = () =>
-    writeStored(STORAGE_KEY, {
-      servers: servers.get(),
-      app: app.get(),
-      preset: chosen.get(),
-      range: range.get(),
-    })
-  for (const state of [servers, app, range, chosen]) state.watch(self, save)
-  return { servers, app, range, preset: chosen }
+    writeStored(STORAGE_KEY, { servers: servers.get(), app: app.get(), period: period.get() })
+  for (const state of [servers, app, period]) state.watch(self, save)
+  return { servers, app, period }
 }
 
 export const useScope = (self) =>
   computed(
     SCOPE_STATES.map((name) => useState(self, name)),
-    (servers, app, range, tick) => ({ servers, app, from: range?.start, to: range?.end, tick }),
+    (servers, app, period, tick) => {
+      const clean = periodOf(period)
+      const range = rangeOf(clean)
+      return { servers, app, from: range.start, to: range.end, preset: clean.preset, tick }
+    },
   )

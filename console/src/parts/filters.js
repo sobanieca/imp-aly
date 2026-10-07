@@ -4,9 +4,10 @@ import { div } from 'imp/html'
 import { useState } from 'imp/state'
 import { button } from 'imp/std'
 import { notice, skeleton } from 'imp/std/feedback'
-import { comboBox, form, resetForm, select } from 'imp/std/inputs'
+import { comboBox, form, resetForm, select, treeSelect } from 'imp/std/inputs'
 import { messageOf, runQueries } from '../lib/api.js'
 import { emptyFilters } from '../lib/reports.js'
+import { pageTree } from '../lib/page-tree.js'
 import { labelOf } from '../lib/rows.js'
 
 const LOOKUPS = { zone: 'seen', name: 'outcome', country: null }
@@ -43,19 +44,28 @@ const choices = (all, values, current) => [
   ...[...new Set([...values, ...(current ? [current] : [])])].sort(),
 ]
 
+const listOf = (value) => (Array.isArray(value) ? value : value ? [value] : [])
+
 const initialValues = (saved, app, segments) => {
   const empty = emptyFilters(segments)
   if (!saved || saved.app !== app) return empty
+  const values = saved.values ?? {}
   return {
-    ...empty,
-    ...saved.values,
-    segment: { ...empty.segment, ...saved.values.segment },
+    page: listOf(values.page),
+    zone: typeof values.zone === 'string' ? values.zone : '',
+    country: listOf(values.country),
+    name: listOf(values.name),
+    segment: Object.fromEntries(
+      segments.map((segment) => [segment, listOf(values.segment?.[segment])]),
+    ),
   }
 }
 
+const multiChoices = (values, current) => [...new Set([...values, ...current])].sort()
+
 export const filterBar = component('aly-filter-bar', {
   loading: () => skeleton({ lines: 1 }),
-  setup: async (self, { scope, fields, segments, mapPages, pageLabel = 'Page' }) => {
+  setup: async (self, { scope, fields, segments, mapPages }) => {
     const api = useHttpClient(self, 'aly.api')
     const filters = useState(self, 'aly.report.filters')
     const lookups = [
@@ -81,10 +91,12 @@ export const filterBar = component('aly-filter-bar', {
     const values = initialValues(filters.get(), scope.app, segments)
     const controls = []
     if (fields.includes('page')) {
-      controls.push(select({
+      controls.push(treeSelect({
         field: 'page',
-        label: pageLabel,
-        options: choices('All pages', mapPages, values.page),
+        label: 'Pages',
+        items: pageTree([...mapPages, ...values.page]),
+        placeholder: 'All pages',
+        searchPlaceholder: 'Find a page',
       }))
     }
     if (fields.includes('zone')) {
@@ -99,24 +111,28 @@ export const filterBar = component('aly-filter-bar', {
         field: 'name',
         label: 'Outcomes',
         multiple: true,
-        options: [...new Set([...found.name, ...values.name])].sort(),
+        options: multiChoices(found.name, values.name),
         placeholder: 'All outcomes',
       }))
     }
     if (fields.includes('segments')) {
       for (const segment of segments) {
-        controls.push(select({
+        controls.push(comboBox({
           field: `segment.${segment}`,
           label: segment,
-          options: choices('All', found[segment], values.segment[segment]),
+          multiple: true,
+          options: multiChoices(found[segment], values.segment[segment]),
+          placeholder: 'All',
         }))
       }
     }
     if (fields.includes('country')) {
-      controls.push(select({
+      controls.push(comboBox({
         field: 'country',
-        label: 'Country',
-        options: choices('All countries', found.country, values.country),
+        label: 'Countries',
+        multiple: true,
+        options: multiChoices(found.country, values.country),
+        placeholder: 'All countries',
       }))
     }
     return form(

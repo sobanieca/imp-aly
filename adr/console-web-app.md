@@ -34,8 +34,14 @@ localhost.**
   the key as a `CryptoKey` for HMAC-SHA-256 with `extractable: false`. The browser signs with the
   key, but no script can read the key back, also not a script of this page. The page asks for
   persistent storage, so the browser does not delete the keys under storage pressure.
-- One server is the active server. The menu under the logo switches it. The bar of a report can also
+- One server is the active server. The Servers screen switches it. The bar of a report can also
   choose several servers, and the page adds up their answers.
+- The menu under the logo chooses one app for every report and for Explore. The page never mixes the
+  numbers of two apps on one screen. A person looks at one product at a time, and two apps have
+  different pages, zones and outcomes.
+- A report compares with the previous period only for a relative period, such as the last 30 days.
+  The previous period of "Last 3 months" is the months -6 to -3. A custom range has no natural
+  previous period, so the page shows no change for it.
 - One imp HTTP client, `aly.api`, makes every call. Its `onRequest` interceptor signs the method,
   the path with its query string and the SHA-256 of the body, like the CLI. It hashes a file body as
   a stream. The page sends no `x-request-id`, so a call needs only the headers that the admin port
@@ -45,9 +51,10 @@ localhost.**
   several servers. So the page and the CLI give the same numbers.
 - The admin port allows CORS from every origin, see `one-time-token-admin-api.md`. A token, not the
   origin, protects each call.
-- A link `/servers#name=<name>&url=<url>&key=<key>` opens the form to add a server with the values.
-  The page removes the fragment from the address and the history at once. `deno task start` prints
-  such a link for its demo server.
+- The page does not take a server or a key from its address. A key in a link goes into the history
+  of the browser, into logs and into chats. The person types the values in the form.
+  `deno task
+  start` prints the name, the URL and the key of its demo server for that.
 - The page has a dark theme and a light theme. Its fonts are IBM Plex Sans, Space Grotesk and
   JetBrains Mono, under the SIL Open Font License. The page serves the font files itself, with their
   licenses in `fonts/`. So the page loads nothing from another site.
