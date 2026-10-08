@@ -80,12 +80,15 @@ stored data in the range. `scanned` is the number of records in the days, and `m
 number that passed `where`. `truncated` is true when `limit` cut the rows.
 
 `servers` has one entry per server that answered. `summaryDays` is the number of days that the
-server read from their daily summary, see [How a query reads the data](#how-a-query-reads-the-data).
+server read only from summaries: daily, week or month summaries. See
+[How a query reads the data](#how-a-query-reads-the-data).
 
-`skippedDays` lists the days that the query cannot read, each with a `server`, a `day` and a
-`reason`. The query counts the other days. A day is skipped when a file of the day is missing or
-damaged, or when the day holds only its daily summary and the query needs its records. See
-[Backup](backup.md).
+`skippedDays` lists the days that the query cannot read, each with a `server`, a `day`, a `source`
+and a `reason`. A source is the server that received the records, see [Storage](storage.md#sources).
+The query counts the other days, and the other sources of the same day. A source of a day is skipped
+when one of its files is missing or damaged, or when it holds only its daily summary and the query
+needs its records. It is also skipped when only a week or a month summary holds the day, and the
+query cannot read that summary, for example a query grouped by `day`. See [Backup](backup.md).
 
 `failedServers` lists the servers that did not answer, each with a `server` and a `reason`.
 
@@ -178,6 +181,10 @@ A query reads a day in one of two ways:
 A day from a restore, or an old day after the retention removed its records, has only its summary. A
 query that cannot use a summary skips such a day, see [Backup](backup.md#a-summary-only-day).
 
+A day can have several sources, for example after a restore of the backup of another server. The
+query reads each source of the day in one of the two ways, and adds up the counts. It counts the
+visits of each source and each day, and then adds them up, as for several servers.
+
 The server uses the summary of a day when the day is sealed and the query can use it. A query cannot
 use a summary when it names `visit` in `where` or `groupBy`, or when it counts `visits` and names
 `zone` or `name`. The result is the same both ways. The current day is not sealed yet, so a query
@@ -189,6 +196,27 @@ scans 1 day, and takes about 6 seconds. The same query as a scan takes about 8 m
 The server runs one query at a time, in its own thread, so a long query does not slow down the
 collection of records. Up to 16 queries wait. A query stops after 120 seconds with `504`. Use a
 shorter range when a scan takes too long.
+
+### Week and month summaries
+
+When a UTC week or month is complete, the server adds up the daily summaries of the period into one
+summary of the week or the month. See [Storage](storage.md#week-and-month-summaries). A query reads
+the summary of a period in place of its days when all of these are true:
+
+- The query can use a summary.
+- The period is fully inside `from` and `to`.
+- The query groups by the time of the period, or by no time. A query grouped by `month` can also
+  read a week that has all its days in one month. A query grouped by `day` reads only days.
+- The summary is current: no day of the period got records after the server made the summary.
+
+The query reads the month summaries first, then the week summaries, then the days that are left. So
+a query of a year grouped by `month` reads 12 summaries per source, not 365. The result is the same
+as from the days. `visits` of a period is the sum of the visits of its days. The query reads the
+periods of each source on its own, and adds up the counts, as for the days.
+
+A restore or the retention can leave a week or a month summary with no days. A query grouped by
+`day` cannot read such a period. It skips the days of the period, and lists each day with its source
+in `skippedDays`.
 
 ## Several servers
 
@@ -203,12 +231,16 @@ together. Each server stores the visits that reach it. `imp-aly query` adds up t
    ```
 
 3. Put the URLs of all servers in the `servers` option of `alySink` in your app. The sink picks one
-   server for each visit from the visit id. A visit is one load of the page.
+   server for each visit from the visit id. A visit is one load of the page. See the
+   [Analytics](https://github.com/sobanieca/imp-ui/blob/main/docs/analytics.md#imp-aly) page of imp.
 4. Ask all servers together:
 
    ```sh
    imp-aly query report.json -s eu-1,eu-2,eu-3
    ```
+
+   You can also save the list as a group, with `imp-aly group prod eu-1,eu-2,eu-3`. Then `-s prod`
+   names all three servers. See [Groups](cli.md#groups).
 
 **Send all the records of a visit to one server.** When the records of one visit go to two servers,
 each server counts the visit, and `visits` counts it twice. `alySink` sends every record of a visit
@@ -221,6 +253,9 @@ query of 3 servers takes about one third of the time of the same query on one se
 The numbers are the same as the numbers of one server that holds all the records:
 
 - `records` and `visits` add up exactly.
+
+To stop a server and keep its history on another server, see
+[Storage](storage.md#move-from-several-servers-to-one-server).
 
 When a server does not answer, the command prints the rows of the other servers, then an error, and
 exits with code 1. The `servers` table shows the server with no numbers. When the app has different

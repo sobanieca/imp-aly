@@ -19,7 +19,7 @@ export const app = appMap({
     },
     servers: { description: 'The saved servers and their state', group: 'Manage' },
     backup: {
-      description: 'Download a backup of the daily summaries, or restore one',
+      description: 'Download a backup of the summaries, or restore one',
       group: 'Manage',
     },
   },

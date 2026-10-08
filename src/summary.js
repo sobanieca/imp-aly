@@ -7,6 +7,8 @@ export const SUMMARY_FILES = {
   visits: 'summary-visits.tsv',
 }
 
+export const PERIOD_DAYS_FILE = 'summary-days.tsv'
+
 export const COUNT_DIMENSIONS = ['type', 'page', 'zone', 'name', 'country']
 
 export const VISIT_DIMENSIONS = ['type', 'page', 'country']
@@ -79,6 +81,108 @@ export const createSummaryBuilder = ({ columns, rowColumns }) => {
   }
 }
 
+const canonicalKey = (header, cells, base) => {
+  let key = cells.slice(0, base).join('\t')
+  for (let index = base; index < header.length; index++) {
+    if (cells[index] !== '') key += `\t${header[index]}=${cells[index]}`
+  }
+  return key
+}
+
+const expandKey = (key, base, segments) => {
+  const parts = key.split('\t')
+  const values = new Map()
+  for (const part of parts.slice(base)) {
+    const at = part.indexOf('=')
+    values.set(part.slice(0, at), part.slice(at + 1))
+  }
+  return [...parts.slice(0, base), ...segments.map((segment) => values.get(segment) ?? '')]
+    .join('\t')
+}
+
+export const createSummaryMerger = () => {
+  const segments = new Set()
+  const counts = new Map()
+  const tuples = new Map()
+  const visits = new Map()
+  let rows = 0
+
+  const add = (summary) => {
+    const countTable = tableLines(summary.counts)
+    const countHeader = countTable.header.slice(0, -COUNT_MEASURES.length)
+    for (const segment of countHeader.slice(COUNT_DIMENSIONS.length)) segments.add(segment)
+    for (const line of countTable.lines) {
+      const cells = line.split('\t')
+      const key = canonicalKey(countHeader, cells, COUNT_DIMENSIONS.length)
+      const records = Number(cells[countHeader.length])
+      counts.set(key, (counts.get(key) ?? 0) + records)
+      rows += records
+    }
+    const tupleTable = tableLines(summary.tuples)
+    for (const segment of tupleTable.header.slice(VISIT_DIMENSIONS.length)) segments.add(segment)
+    const indexes = tupleTable.lines.map((line) => {
+      const key = canonicalKey(tupleTable.header, line.split('\t'), VISIT_DIMENSIONS.length)
+      let index = tuples.get(key)
+      if (index === undefined) {
+        index = tuples.size
+        tuples.set(key, index)
+      }
+      return index
+    })
+    forEachVisitLine(summary.visits, (count, local) => {
+      const key = [...new Set(local.map((index) => indexes[index]))].sort((a, b) => a - b).join(',')
+      visits.set(key, (visits.get(key) ?? 0) + count)
+    })
+  }
+
+  const finish = () => {
+    const sorted = [...segments].sort()
+    const countLines = [`${[...COUNT_DIMENSIONS, ...sorted, ...COUNT_MEASURES].join('\t')}\n`]
+    for (const [key, records] of counts) {
+      countLines.push(`${expandKey(key, COUNT_DIMENSIONS.length, sorted)}\t${records}\n`)
+    }
+    const tupleLines = [`${[...VISIT_DIMENSIONS, ...sorted].join('\t')}\n`]
+    for (const key of tuples.keys()) {
+      tupleLines.push(`${expandKey(key, VISIT_DIMENSIONS.length, sorted)}\n`)
+    }
+    const visitLines = ['visits\ttuples\n']
+    for (const [key, count] of visits) visitLines.push(`${count}\t${key}\n`)
+    return { rows, files: { counts: countLines, tuples: tupleLines, visits: visitLines } }
+  }
+
+  return { add, finish }
+}
+
+export const formatPeriodDays = (days) =>
+  ['day\trecords\n', ...Object.keys(days).sort().map((day) => `${day}\t${days[day].rows}\n`)]
+    .join('')
+
+export const parsePeriodDays = (text, allowed) => {
+  if (hasControlCharacter(text)) throw new Error(`${PERIOD_DAYS_FILE} holds a control character`)
+  const table = tableLines(text)
+  if (!sameList(table.header, ['day', 'records'])) {
+    throw new Error(`${PERIOD_DAYS_FILE} has a header that is not valid`)
+  }
+  if (!table.lines.length) throw new Error(`${PERIOD_DAYS_FILE} lists no day`)
+  const days = {}
+  let rows = 0
+  let previous = ''
+  for (const line of table.lines) {
+    const cells = line.split('\t')
+    if (
+      cells.length !== 2 || !allowed.includes(cells[0]) || cells[0] <= previous ||
+      !POSITIVE.test(cells[1])
+    ) {
+      throw new Error(`${PERIOD_DAYS_FILE} has a line that is not valid`)
+    }
+    previous = cells[0]
+    days[cells[0]] = { rows: Number(cells[1]) }
+    rows += Number(cells[1])
+  }
+  if (!Number.isSafeInteger(rows)) throw new Error(`${PERIOD_DAYS_FILE} counts too many records`)
+  return { days, rows }
+}
+
 export const tableLines = (text) => {
   const lines = text.split('\n')
   if (lines.at(-1) !== '') throw new Error('a summary file does not end with a line break')
@@ -102,7 +206,7 @@ export const forEachVisitLine = (text, onLine) => {
     let visits = 0
     let code = text.charCodeAt(position)
     while (code !== TAB) {
-      if (code < ZERO || code > ZERO + 9) throw new Error('a summary visit line is not valid')
+      if (!(code >= ZERO && code <= ZERO + 9)) throw new Error('a summary visit line is not valid')
       visits = visits * 10 + code - ZERO
       code = text.charCodeAt(++position)
     }

@@ -24,9 +24,9 @@ files of the user. Never ask for a key and never put a key in a command.
 
 1. Run \`imp-aly skill\` once to read the full reference (commands, options and
    the API).
-2. Run \`imp-aly ls\` to see the saved servers. \`*\` marks the default server.
-   Use \`-s <name>\` for another server, or \`-s eu,us\` to add up the answers of
-   several servers.
+2. Run \`imp-aly ls\` to see the saved servers and groups. \`*\` marks the
+   default. Use \`-s <name>\` for another server, or \`-s eu,us\` or a group to
+   add up the answers of several servers.
 3. Run \`imp-aly app ls\` to see the registered apps. Run
    \`imp-aly app show <name>\` to see the pages, the zones, the outcome names,
    the segments and the rejection counts of one app. Use these values in

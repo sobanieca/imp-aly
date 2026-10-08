@@ -13,6 +13,7 @@ self.onmessage = (event) => {
     logger.setQuiet(Boolean(message.quiet))
     storage = createStorage({
       dataDir: message.dataDir,
+      source: message.source,
       minFree: message.minFree ? parseMinFree(message.minFree) : null,
       sealDelayMs: message.sealDelayMs,
       maintenanceMs: message.maintenanceMs,

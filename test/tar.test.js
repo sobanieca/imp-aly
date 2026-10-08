@@ -1,5 +1,5 @@
 import { readTar, tarEnd, tarEntry, tarHeader } from '../src/tar.js'
-import { assertEquals, assertRejects } from './assert.js'
+import { assertEquals, assertRejects, assertThrows } from './assert.js'
 
 const encoder = new TextEncoder()
 
@@ -60,4 +60,17 @@ Deno.test('a damaged, cut or too large archive fails', async () => {
   await assertRejects(() => read(streamOf(damaged)), /checksum/)
   await assertRejects(() => read(streamOf([entry[0]])), /ends in the middle/)
   await assertRejects(() => read(streamOf(entry), 2), /larger than 2 bytes/)
+})
+
+Deno.test('a long name goes into the prefix field and reads back whole', async () => {
+  const app = 'a'.repeat(63)
+  const name = `${app}/0123456789abcdef/months/2026-09/summary-counts.tsv`
+  const header = tarHeader({ name, size: 1, mtimeMs: 0 })
+  assertEquals(decoder.decode(header.subarray(0, 18)), 'summary-counts.tsv')
+  const prefix = name.slice(0, name.lastIndexOf('/'))
+  assertEquals(decoder.decode(header.subarray(345, 345 + prefix.length + 1)), `${prefix}\0`)
+  const chunks = [...tarEntry({ name, data: encoder.encode('x'), mtimeMs: 0 }), tarEnd()]
+  assertEquals(await read(streamOf(chunks)), [[name, 'x']])
+  assertThrows(() => tarHeader({ name: `${'b'.repeat(160)}/c`, size: 0, mtimeMs: 0 }), /too long/)
+  assertThrows(() => tarHeader({ name: `a/${'c'.repeat(101)}`, size: 0, mtimeMs: 0 }), /too long/)
 })

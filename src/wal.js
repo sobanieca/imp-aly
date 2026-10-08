@@ -1,4 +1,4 @@
-import { listDirectory, writeAll, writeFileAtomic } from './fs-utils.js'
+import { listDirectory, syncDirectory, writeAll, writeFileAtomic } from './fs-utils.js'
 import { join } from './paths.js'
 
 export const SEGMENT_PATTERN = /^(\d{16})(?:-(\d+))?\.(log|open)$/
@@ -85,6 +85,7 @@ export const openWal = async ({
       create: true,
       truncate: true,
     })
+    await syncDirectory(dir)
     size = 0
     broken = false
   }

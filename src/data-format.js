@@ -2,7 +2,7 @@ import { readJson, writeJsonAtomic } from './fs-utils.js'
 import { join } from './paths.js'
 import { version } from './version.js'
 
-export const DATA_FORMAT = 1
+export const DATA_FORMAT = 3
 
 export const FORMAT_FILE = 'format.json'
 

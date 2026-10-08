@@ -18,6 +18,8 @@ const COUNTRY_PATTERN = /^[A-Z][A-Z0-9]$/
 
 export const MAX_RECORD_AGE_MS = 3_600_000
 
+export const DEFAULT_SEAL_DELAY_MS = MAX_RECORD_AGE_MS + 600_000
+
 export const MAX_RECORD_AHEAD_MS = 3_600_000
 
 const COMMON_FIELDS = ['type', 'visit', 'at', 'page']

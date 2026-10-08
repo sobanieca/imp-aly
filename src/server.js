@@ -11,6 +11,7 @@ import { createOriginCheck } from './origins.js'
 import { isAppName } from './names.js'
 import { join } from './paths.js'
 import { createSha256, sha256Hex } from './sha256.js'
+import { openSource } from './source.js'
 import { parseQuery, QueryError } from './query-core.js'
 import {
   clientAddress,
@@ -223,7 +224,7 @@ const createQueryRunner = ({ dataDir, timeoutMs, log }) => {
 }
 
 const createStorageRunner = (
-  { dataDir, minFree, sealDelayMs, maintenanceMs, log, debug, quiet },
+  { dataDir, source, minFree, sealDelayMs, maintenanceMs, log, debug, quiet },
 ) => {
   let worker = null
   let status = null
@@ -262,6 +263,7 @@ const createStorageRunner = (
     worker.postMessage({
       type: 'init',
       dataDir,
+      source,
       minFree,
       sealDelayMs,
       maintenanceMs,
@@ -360,6 +362,7 @@ export const startServer = async ({
 
   try {
     await checkDataFormat(dataDir)
+    const source = await openSource(dataDir)
     await removeIfExists(uploadDir, { recursive: true })
     const apps = await openApps({ dataDir, ...(fetchFile ? { fetchFile } : {}) })
     let storage = null
@@ -372,6 +375,7 @@ export const startServer = async ({
     cleanups.push(() => wal.close())
     storage = createStorageRunner({
       dataDir,
+      source,
       minFree,
       sealDelayMs,
       maintenanceMs,
@@ -461,6 +465,7 @@ export const startServer = async ({
           dataFormat: DATA_FORMAT,
           startedAt,
           dataDir,
+          source,
           apps: apps.list().length,
           rateLimitedClients: limiter.size(),
           activeRequests: { public: inFlight.public.count, admin: inFlight.admin.count },
@@ -475,7 +480,7 @@ export const startServer = async ({
       if (path === '/backup' && method === 'GET') {
         noBody()
         const options = parseBackupOptions(url.searchParams)
-        return new Response(createBackupStream({ dataDir, ...options, log }), {
+        return new Response(createBackupStream({ dataDir, ...options, sealDelayMs, log }), {
           headers: {
             'content-type': 'application/gzip',
             'content-disposition': 'attachment; filename="imp-aly-backup.tar.gz"',

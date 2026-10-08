@@ -1,10 +1,11 @@
 import { restoreBackup } from './backup.js'
-import { appendRecords, appendTarget, dayDir, sealDay } from './column-store.js'
-import { dayEndMs, isDay } from './days.js'
+import { appendRecords, appendTarget, sealDay, sourceDir } from './column-store.js'
+import { dayEndMs, isDay, PERIOD_KINDS, periodOf } from './days.js'
 import { listDirectory, removeIfExists, writeFileAtomic } from './fs-utils.js'
-import { isAppName, isColumnName } from './names.js'
+import { isAppName, isColumnName, isSource } from './names.js'
 import { join } from './paths.js'
-import { MAX_RECORD_AGE_MS } from './records.js'
+import { DEFAULT_SEAL_DELAY_MS } from './records.js'
+import { duePeriods, updatePeriodSummary } from './periods.js'
 import { enforceRetention, listStoredDays } from './retention.js'
 import {
   listClosedSegments,
@@ -12,8 +13,6 @@ import {
   segmentFileName,
   writeAppliedSegment,
 } from './wal.js'
-
-export const DEFAULT_SEAL_DELAY_MS = MAX_RECORD_AGE_MS + 600_000
 
 export const DEFAULT_MAINTENANCE_MS = 60_000
 
@@ -66,8 +65,8 @@ export const parseSegment = (text, log) => {
   return [...groups.values()]
 }
 
-const applyGroup = async ({ dataDir, segment, group, log }) => {
-  const target = await appendTarget(dayDir(dataDir, group.app, group.day))
+const applyGroup = async ({ dataDir, source, segment, group, log }) => {
+  const target = await appendTarget(sourceDir(dataDir, group.app, group.day, source))
   if (!target) {
     log?.warn(
       `Dropped ${group.records.length} records of ${group.app}/${group.day}: only the daily summary of the day is stored`,
@@ -92,13 +91,18 @@ const holdGroup = async ({ dataDir, segment, group }) => {
   await writeFileAtomic(join(dir, segmentFileName(segment, 'log')), text)
 }
 
-export const applySegment = async ({ dataDir, segment, text, log, held = new Map() }) => {
+const checkSource = (source) => {
+  if (!isSource(source)) throw new Error(`the storage needs a source id, not ${source}`)
+}
+
+export const applySegment = async ({ dataDir, source, segment, text, log, held = new Map() }) => {
+  checkSource(source)
   let rows = 0
   for (const group of parseSegment(text, log)) {
     const key = `${group.app}/${group.day}`
     if (!held.has(key)) {
       try {
-        rows += await applyGroup({ dataDir, segment, group, log })
+        rows += await applyGroup({ dataDir, source, segment, group, log })
         continue
       } catch (error) {
         held.set(key, error.message)
@@ -123,21 +127,27 @@ export const listHeldDays = async (dataDir) => {
   return held
 }
 
-export const retryHeldDay = async ({ dataDir, key, log }) => {
+export const retryHeldDay = async ({ dataDir, source, key, log }) => {
   const [app, day] = key.split('/')
   const dir = heldDir(dataDir, app, day)
   let rows = 0
   for (const segment of await listClosedSegments(dir)) {
     const text = await Deno.readTextFile(segment.path)
     const records = text.split('\n').filter(Boolean).map((line) => JSON.parse(line))
-    rows += await applyGroup({ dataDir, segment: segment.id, group: { app, day, records }, log })
+    rows += await applyGroup({
+      dataDir,
+      source,
+      segment: segment.id,
+      group: { app, day, records },
+      log,
+    })
     await removeIfExists(segment.path)
   }
   await removeIfExists(dir, { recursive: true })
   return rows
 }
 
-export const sealDueDays = async ({ dataDir, now, sealDelayMs, log }) => {
+export const sealDueDays = async ({ dataDir, source, now, sealDelayMs, log }) => {
   const sealed = []
   let days = []
   try {
@@ -148,7 +158,7 @@ export const sealDueDays = async ({ dataDir, now, sealDelayMs, log }) => {
   for (const { app, day } of days) {
     if (now < dayEndMs(day) + sealDelayMs) continue
     try {
-      if (await sealDay(dayDir(dataDir, app, day))) {
+      if (await sealDay(sourceDir(dataDir, app, day, source))) {
         sealed.push(`${app}/${day}`)
         log?.info(`Sealed ${app}/${day}`)
       }
@@ -159,8 +169,39 @@ export const sealDueDays = async ({ dataDir, now, sealDelayMs, log }) => {
   return sealed
 }
 
+export const sealDuePeriods = async (
+  { dataDir, source, now, sealDelayMs, checked = new Set(), log },
+) => {
+  const built = []
+  let days = []
+  try {
+    days = await listStoredDays(dataDir)
+  } catch (error) {
+    log?.error(`Cannot list the stored days: ${error.message}`)
+  }
+  for (const [key, period] of duePeriods({ days, now, sealDelayMs, checked })) {
+    try {
+      if (await updatePeriodSummary({ dataDir, source, ...period })) {
+        built.push(key)
+        log?.info(`Made the summary of ${key}`)
+      }
+      checked.add(key)
+    } catch (error) {
+      log?.error(`Cannot make the summary of ${key}: ${error.message}`)
+    }
+  }
+  return built
+}
+
+const periodKeysOf = (sealed) =>
+  sealed.flatMap((key) => {
+    const [app, day] = key.split('/')
+    return PERIOD_KINDS.map((kind) => `${app}/${kind}/${periodOf(kind, day)}`)
+  })
+
 export const createStorage = ({
   dataDir,
+  source,
   minFree,
   sealDelayMs = DEFAULT_SEAL_DELAY_MS,
   maintenanceMs = DEFAULT_MAINTENANCE_MS,
@@ -170,6 +211,7 @@ export const createStorage = ({
   log,
   onStatus = () => {},
 }) => {
+  checkSource(source)
   const walDir = join(dataDir, 'wal')
   let stopping = false
   let wake = null
@@ -181,6 +223,7 @@ export const createStorage = ({
   const held = new Map()
   const readFailures = new Map()
   const restores = []
+  const checkedPeriods = new Set()
   const status = {
     pendingSegments: 0,
     processedRows: 0,
@@ -257,6 +300,7 @@ export const createStorage = ({
         if (text) {
           status.processedRows += await applySegment({
             dataDir,
+            source,
             segment: segment.id,
             text,
             log,
@@ -274,6 +318,7 @@ export const createStorage = ({
   const processRestores = async () => {
     while (restores.length && !stopping) {
       const { path, resolve, reject } = restores.shift()
+      checkedPeriods.clear()
       try {
         resolve(
           await restoreBackup({
@@ -294,7 +339,7 @@ export const createStorage = ({
     for (const [key, previous] of [...held]) {
       if (stopping) return
       try {
-        status.processedRows += await retryHeldDay({ dataDir, key, log })
+        status.processedRows += await retryHeldDay({ dataDir, source, key, log })
         held.delete(key)
         log?.info(`Stored the records of ${key} that were kept aside`)
       } catch (error) {
@@ -346,7 +391,16 @@ export const createStorage = ({
       await processRestores()
       if (!stopping && stored && now() - lastSeal >= maintenanceMs) {
         lastSeal = now()
-        await sealDueDays({ dataDir, now: now(), sealDelayMs, log })
+        const sealed = await sealDueDays({ dataDir, source, now: now(), sealDelayMs, log })
+        for (const key of periodKeysOf(sealed)) checkedPeriods.delete(key)
+        await sealDuePeriods({
+          dataDir,
+          source,
+          now: now(),
+          sealDelayMs,
+          checked: checkedPeriods,
+          log,
+        })
       }
       onStatus(snapshot())
       if (!stopping) await sleep(stored ? IDLE_MS : retryMs)

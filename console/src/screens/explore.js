@@ -84,8 +84,7 @@ const filterRows = component('aly-filter-rows', {
                 multiple: true,
                 custom: true,
                 placeholder: 'Type a value, then press Enter',
-                onSearch: (typed, { signal }) =>
-                  searchValues(values.get()?.filters?.[index]?.field, typed, signal),
+                onSearch: (typed) => searchValues(values.get()?.filters?.[index]?.field, typed),
               }),
               button(
                 {
@@ -233,6 +232,7 @@ const exploreResult = component('aly-explore-result', {
               columns: [
                 { key: 'server', label: 'Server' },
                 { key: 'day', label: 'Day' },
+                { key: 'source', label: 'Source' },
                 { key: 'reason', label: 'Reason' },
               ],
             }),
@@ -343,7 +343,7 @@ export const exploreScreen = component('aly-explore', {
       notify({ kind: 'success', title: `Saved the query "${name}"` })
     }
     const cache = new Map()
-    const searchValues = async (field, typed, signal) => {
+    const searchValues = async (field, typed) => {
       const current = scope.get()
       if (!field || !current.app) return []
       const key = JSON.stringify([field, current.app, current.from, current.to, current.servers])
@@ -356,7 +356,7 @@ export const exploreScreen = component('aly-explore', {
             to: current.to,
             groupBy: [field],
             limit: 300,
-          }, { signal }).then((answer) => answer.rows.map((row) => labelOf(row[field]))).catch(
+          }).then((answer) => answer.rows.map((row) => labelOf(row[field]))).catch(
             (error) => {
               cache.delete(key)
               throw error

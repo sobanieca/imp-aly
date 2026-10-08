@@ -3,7 +3,7 @@ const cell = (value) => (value === null || value === undefined ? '-' : String(va
 export const formatTable = (columns, rows) => {
   const cells = rows.map((row) => columns.map((column) => cell(row[column])))
   const widths = columns.map((column, index) =>
-    Math.max(column.length, ...cells.map((line) => line[index].length))
+    cells.reduce((width, line) => Math.max(width, line[index].length), column.length)
   )
   const isNumeric = columns.map((_, index) =>
     cells.length > 0 && cells.every((line) => /^-?\d+(\.\d+)?$|^-$/.test(line[index]))

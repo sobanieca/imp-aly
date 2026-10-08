@@ -4,6 +4,7 @@ import { generateKey } from '../src/auth.js'
 import { startConsole } from '../src/console.js'
 import { logger } from '../src/logger.js'
 import { startServer } from '../src/server.js'
+import { openSource } from '../src/source.js'
 import { applySegment } from '../src/storage.js'
 import { version } from '../src/version.js'
 import { createRandom, DEMO_APPS, seedLines, visitRecords } from './demo-data.js'
@@ -28,7 +29,8 @@ await Deno.mkdir(dataDir)
 
 const random = createRandom(42)
 const lines = seedLines({ random, now: Date.now(), days: DAYS })
-await applySegment({ dataDir, segment: 1, text: `${lines.join('\n')}\n` })
+const source = await openSource(dataDir)
+await applySegment({ dataDir, source, segment: 1, text: `${lines.join('\n')}\n` })
 
 const key = generateKey()
 const server = await startServer({

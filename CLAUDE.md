@@ -40,39 +40,41 @@ See `adr/plain-javascript-dependency-free-server.md` and `adr/console-web-app.md
 
 ## Architecture
 
-| Module                                | Job                                                                                                                                  |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `main.js`                             | parses the arguments and runs a command                                                                                              |
-| `src/commands/`                       | `server`, `update`, `app`, `query`, `backup`, `restore`, `status`, `console`, `token`, `key`, `add`/`ls`/`use`/`rm`, `skill`, `help` |
-| `src/server.js`                       | `startServer()`: HTTP routes, workers, log, registry, limiter                                                                        |
-| `src/records.js`                      | the checks of one imp record                                                                                                         |
-| `src/apps.js`, `src/app-build.js`     | the app registry in `apps.json`, and reading `app-analytics.json`                                                                    |
-| `src/rate-limit.js`                   | the sliding windows per client address                                                                                               |
-| `src/origins.js`                      | the allowed browser origins of the public endpoint                                                                                   |
-| `src/wal.js`                          | the write-ahead log with group commit and parts                                                                                      |
-| `src/storage.js`, `storage-worker.js` | the single writer: log parts to columns, restore, seal, retention                                                                    |
-| `src/column-store.js`, `src/rle.js`   | the column files, the append transaction, sealing, reading                                                                           |
-| `src/seal-sort.js`                    | the sort of a day in chunks, and the merge of the chunks into the run files                                                          |
-| `src/line-files.js`                   | the reading and writing of line files in blocks                                                                                      |
-| `src/summary.js`                      | the daily summary of a sealed day: build, parse and check                                                                            |
-| `src/backup.js`, `src/tar.js`         | the backup stream of the summaries, and the restore                                                                                  |
-| `src/query-core.js`                   | the query parser, the groups and the merge of the answers of servers, with no Deno API (shared with the page)                        |
-| `src/query.js`, `query-worker.js`     | the query engine over the day folders and the summaries, run in a worker                                                             |
-| `src/retention.js`                    | `df`, the free space rule, old days to summaries, then removal                                                                       |
-| `src/auth.js`                         | the key, the key file, and the new key that the service takes on SIGHUP                                                              |
-| `src/token.js`, `src/sha256.js`       | the one-time tokens signed per request, and a streaming SHA-256, with no Deno API (shared with the page)                             |
-| `src/servers.js`, `src/api-client.js` | the saved servers of the CLI, and the calls of the CLI to the API                                                                    |
-| `src/multi-server.js`                 | the calls to several servers and the sum of their answers, with no Deno API (shared with the page)                                   |
-| `src/console.js`                      | the local console: a listener that serves the built page, the host check and the security headers                                    |
-| `src/static-files.js`                 | the files of the built page of the console, with the fallback to `index.html`                                                        |
-| `dev/start.js`, `dev/demo-data.js`    | the demo of `deno task start`, and the sample records of the apps `shop`, `crm` and `docs`                                           |
-| `console/`                            | the imp project of the PWA: `src/app.js`, `src/screens/`, `src/parts/`, `src/lib/` (`vault.js`, `client.js`), `test/`                |
-| `src/service.js`                      | the systemd unit, the service user and its limits, the update timer, the restart with a check, the new key sent to the service       |
-| `src/update.js`                       | the version list, the choice of the update, the download with its checks, the swap of the binary                                     |
-| `src/data-format.js`                  | the data format in `format.json`, which the server checks at start                                                                   |
-| `dev/versions-manifest.js`            | writes `versions.json` for GitHub Pages from the release tags                                                                        |
-| `src/file-watch.js`                   | the hourly check of the TLS files                                                                                                    |
-| `site/index.html`                     | the landing page, one static file that GitHub Pages serves with `install.sh`                                                         |
+| Module                                | Job                                                                                                                                          |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `main.js`                             | parses the arguments and runs a command                                                                                                      |
+| `src/commands/`                       | `server`, `update`, `app`, `query`, `backup`, `restore`, `status`, `console`, `token`, `key`, `add`/`group`/`ls`/`use`/`rm`, `skill`, `help` |
+| `src/server.js`                       | `startServer()`: HTTP routes, workers, log, registry, limiter                                                                                |
+| `src/records.js`                      | the checks of one imp record                                                                                                                 |
+| `src/apps.js`, `src/app-build.js`     | the app registry in `apps.json`, and reading `app-analytics.json`                                                                            |
+| `src/rate-limit.js`                   | the sliding windows per client address                                                                                                       |
+| `src/origins.js`                      | the allowed browser origins of the public endpoint                                                                                           |
+| `src/wal.js`                          | the write-ahead log with group commit and parts                                                                                              |
+| `src/storage.js`, `storage-worker.js` | the single writer: log parts to columns, restore, seal, retention                                                                            |
+| `src/column-store.js`, `src/rle.js`   | the column files, the append transaction, sealing, reading                                                                                   |
+| `src/seal-sort.js`                    | the sort of a day in chunks, and the merge of the chunks into the run files                                                                  |
+| `src/line-files.js`                   | the reading and writing of line files in blocks                                                                                              |
+| `src/summary.js`                      | the daily summary of a sealed day: build, parse, check, and the merge of days into a week or a month                                         |
+| `src/periods.js`                      | the week and month summaries of a source: paths, the check that one is current, the build at seal                                            |
+| `src/backup.js`, `src/tar.js`         | the backup stream of the summaries, and the restore                                                                                          |
+| `src/query-core.js`                   | the query parser, the groups and the merge of the answers of servers, with no Deno API (shared with the page)                                |
+| `src/query.js`, `query-worker.js`     | the query engine over the day folders and the daily, week and month summaries, run in a worker                                               |
+| `src/retention.js`                    | `df`, the free space rule, old days to summaries, then removal of days, weeks and months                                                     |
+| `src/auth.js`                         | the key, the key file, and the new key that the service takes on SIGHUP                                                                      |
+| `src/token.js`, `src/sha256.js`       | the one-time tokens signed per request, and a streaming SHA-256, with no Deno API (shared with the page)                                     |
+| `src/servers.js`, `src/api-client.js` | the saved servers and groups of the CLI, and the calls of the CLI to the API                                                                 |
+| `src/multi-server.js`                 | the calls to several servers and the sum of their answers, with no Deno API (shared with the page)                                           |
+| `src/console.js`                      | the local console: a listener that serves the built page, the host check and the security headers                                            |
+| `src/static-files.js`                 | the files of the built page of the console, with the fallback to `index.html`                                                                |
+| `dev/start.js`, `dev/demo-data.js`    | the demo of `deno task start`, and the sample records of the apps `shop`, `crm` and `docs`                                                   |
+| `console/`                            | the imp project of the PWA: `src/app.js`, `src/screens/`, `src/parts/`, `src/lib/` (`vault.js`, `client.js`), `test/`                        |
+| `src/service.js`                      | the systemd unit, the service user and its limits, the update timer, the restart with a check, the new key sent to the service               |
+| `src/update.js`                       | the version list, the choice of the update, the download with its checks, the swap of the binary                                             |
+| `src/data-format.js`                  | the data format in `format.json`, which the server checks at start                                                                           |
+| `src/source.js`                       | the random source id of the server in `source.json`; a day has one folder per source                                                         |
+| `dev/versions-manifest.js`            | writes `versions.json` for GitHub Pages from the release tags                                                                                |
+| `src/file-watch.js`                   | the hourly check of the TLS files                                                                                                            |
+| `site/index.html`                     | the landing page, one static file that GitHub Pages serves with `install.sh`                                                                 |
 
 Rules that keep the data correct:
 
@@ -87,7 +89,9 @@ Rules that keep the data correct:
   `test/summary.test.js` compares them. Add a case there when you add a query feature.
 - **The answer of N servers must equal the answer of one server with all the records.** A server
   sends counts, never a finished measure. `test/summary.test.js` splits the visits over two data
-  folders and compares. Keep every new measure mergeable.
+  folders and compares. Keep every new measure mergeable. A server with the sources of N servers
+  must give the same answer too: a query counts each source of a day on its own and adds them. A
+  week or a month summary keeps `visits` per source and per day, so it answers like its days.
 - **A new worker module must be in the `--include` list** of `deno task compile` and of the build in
   `.github/workflows/ci.yml`. `deno compile` does not find a module that only a `Worker` URL names.
   `console/dist` is in the same list, so the binary serves the page.

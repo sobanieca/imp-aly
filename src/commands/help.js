@@ -23,13 +23,14 @@ Usage:
   imp-aly app add <name> <app url|build folder> [--segments plan,role]
   imp-aly app ls | show <name> | refresh <name> | rm <name>
   imp-aly query '<json>' | query <file.json> [--json]
-  imp-aly backup <file> [--app <name>] [--from <day>] [--to <day>]
+  imp-aly backup <file> [--last <period>] [--by day|week|month] [-s <name>]
   imp-aly restore <file>                put the summaries of a backup back
   imp-aly status
   imp-aly console [--port <port>]       serve the console, a web app with reports, on this machine
   imp-aly token <method> <path> [<body file>]   print a one-time token for one request
   imp-aly add <name> <url> [-a <key|file>]   save a server
-  imp-aly ls | use <name> | rm <name>   list, select or remove saved servers
+  imp-aly group <name> <a,b,c>          save a group of saved servers
+  imp-aly ls | use <name> | rm <name>   list, select or remove saved servers and groups
   imp-aly skill [--init]                print instructions for AI agents, or create a skill
   imp-aly help | version
 
@@ -47,7 +48,8 @@ Server (on the VPS):
   --admin-port <port>       port for the private API that the client commands
                             call (default ${DEFAULT_ADMIN_PORT}); open it only to your machines
   -d, --data <folder>       data folder (default ${SERVICE_DATA_DIR} for the service,
-                            ${DEFAULT_DATA_DIR} in the foreground)
+                            ${DEFAULT_DATA_DIR} in the foreground); each folder has its
+                            own source id, so do not run a copy of a used folder
   -a, --auth <key|file>     key, or a file with the key (default
                             ~/.secret/imp-aly-key, created when missing)
   --bind <address>          listen on this address only (default: all)
@@ -66,7 +68,8 @@ Server (on the VPS):
                             (default: every origin)
   --min-free <size>         free disk space to keep, as 10% or 5GB (default ${DEFAULT_MIN_FREE});
                             the records of the oldest days are removed to keep it,
-                            and then their daily summaries
+                            then their daily summaries, then the week and month
+                            summaries
   --tls-cert <file>         serve HTTPS with this certificate (PEM)
   --tls-key <file>          and this private key (PEM); the server checks both files
                             once an hour and loads a renewed certificate
@@ -104,15 +107,31 @@ Change the key (on the VPS):
 Client commands (app, query, backup, restore, status, token):
 
   -s, --server <name>       a saved server (default: the default saved server);
-                            app and query take a list, like -s eu-1,eu-2: app runs
-                            on each server, query adds up the answers of all
+                            app and query take a list, like -s eu-1,eu-2, or a
+                            group: app runs on each server, query adds up the
+                            answers of all
   --url <url>               server URL (default: the default saved server, or
                             http://127.0.0.1:${DEFAULT_ADMIN_PORT} when no server is saved)
   -a, --auth <key|file>     key, or a file with the key (default: the key of the
                             saved server, or ~/.secret/imp-aly-key)
   --json                    print the raw JSON answer
-  --app <name>              backup: only this app (default: all)
-  --from <day>, --to <day>  backup: only these days, as YYYY-MM-DD
+
+Backup:
+
+  imp-aly backup day.tar.gz --last 1d               the last sealed day
+  imp-aly backup year.tar.gz --last 1y --by month   the months of the last year
+  imp-aly backup all.tar.gz -s eu                   all the days of the server "eu"
+
+  --last <period>           1d, 7d, 30d, 3m, 6m, 1y or all (default all); the
+                            period ends at the last sealed day
+  --by <granularity>        day, week or month (default day): a summary of each
+                            sealed day, UTC week (Monday to Sunday) or UTC month
+
+  A backup holds all the apps and all the sources of one server. A week or a
+  month is in the backup when it is complete and its last day is in the
+  period. A day is sealed at 01:10 UTC of the next day. A restored week
+  answers a query by week or with no time, and a restored month a query by
+  month or with no time. A query by day skips them.
 
 Apps:
 
@@ -135,9 +154,17 @@ Saved servers (on your machine):
   imp-aly ls                                list the servers, "*" marks the default
   imp-aly rm us                             remove one
   imp-aly query '{"app": "myapp"}' -s eu,us ask both and add up the answers
+  imp-aly group all eu,us                   save the group "all" of eu and us
+  imp-aly query '{"app": "myapp"}' -s all   ask the servers of the group
+  imp-aly use all                           make the group the default
+  imp-aly rm all                            remove the group, not its servers
 
   "add" replaces a server with the same name and makes it the default. A path
   to the key file is saved, not the key. A key given as text is saved as it is.
+  "group" replaces a group with the same name and does not change the default.
+  A group holds saved servers, not groups. A server and a group cannot have
+  the same name. "rm" refuses a server that is in a group. When the default is
+  a group, backup, restore, status and token need -s <server>.
   The list is in ~/.config/imp-aly/servers.json ($XDG_CONFIG_HOME when set).
 
 Console (a web app for your phone or your machine):
@@ -179,7 +206,7 @@ API:
   POST /apps/<name>/refresh key: read app-analytics.json again
   DELETE /apps/<name>       key: stop accepting records of the app
   POST /query               key: a query, answers the counts per group (docs/query.md)
-  GET  /backup              key: the daily summaries as .tar.gz, ?app=&from=&to=
+  GET  /backup              key: the summaries as .tar.gz, ?last=<period>&by=<granularity>
   POST /restore             key: a backup file, see docs/backup.md
 
   "key" endpoints take "Authorization: Bearer <token>", where the token comes

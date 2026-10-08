@@ -24,6 +24,10 @@ and adds up the counts of each group.**
 - When the chosen server fails, the sink can change to another server, and keeps the new one for the
   rest of the visit. Only such a visit has records on two servers, and it counts twice.
 - The servers do not know each other. There is no proxy, no coordinator and no replication.
+- Each server has a random source id, and keeps each day of its records in a folder of that source,
+  see `source-folders-per-server.md`. So one server can later hold the days of several servers, from
+  their backups or a copy, and its answer equals the answer of those servers. A query counts
+  `visits` per source and per day, as the client adds the visits of the servers.
 - A server answers a query with the counts of each group: `records` and `visits`. The client adds
   them. So the answer of N servers equals the answer of one server with all the records. A test
   splits the visits of a fixture over two data folders and checks this for every query.
@@ -48,6 +52,7 @@ and adds up the counts of each group.**
   counts document loads, per day.
 - Each server keeps its own app registry, key and backups. The owner registers each app on every
   server.
+- An owner can move from several servers to one, and keep the history of each server.
 - A caller of the API must add up the counts itself.
 - A measure that does not add up, such as a percentile or a count of distinct users, does not fit
   this design.

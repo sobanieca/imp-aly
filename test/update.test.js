@@ -188,7 +188,10 @@ Deno.test('the data folder keeps its format and refuses another one', async () =
     })
     await checkDataFormat(dir)
     await Deno.writeTextFile(`${dir}/${FORMAT_FILE}`, JSON.stringify({ format: DATA_FORMAT + 1 }))
-    await assertRejects(() => checkDataFormat(dir), /has the data format 2/)
+    await assertRejects(
+      () => checkDataFormat(dir),
+      new RegExp(`has the data format ${DATA_FORMAT + 1}`),
+    )
   } finally {
     await Deno.remove(dir, { recursive: true })
   }

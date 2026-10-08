@@ -12,11 +12,23 @@ const writeText = (block, offset, text) => block.set(encoder.encode(text), offse
 
 const octal = (value, width) => `${value.toString(8).padStart(width - 1, '0')}\0`
 
-export const tarHeader = ({ name, size, mtimeMs }) => {
+const SLASH = 0x2f
+
+const splitName = (name) => {
   const bytes = encoder.encode(name)
-  if (bytes.length > NAME_BYTES) throw new Error(`the archive name ${name} is too long`)
+  if (bytes.length <= NAME_BYTES) return { prefix: new Uint8Array(), last: bytes }
+  const slash = bytes.lastIndexOf(SLASH, PREFIX_BYTES)
+  if (slash <= 0 || slash === bytes.length - 1 || bytes.length - slash - 1 > NAME_BYTES) {
+    throw new Error(`the archive name ${name} is too long`)
+  }
+  return { prefix: bytes.subarray(0, slash), last: bytes.subarray(slash + 1) }
+}
+
+export const tarHeader = ({ name, size, mtimeMs }) => {
+  const { prefix, last } = splitName(name)
   const block = new Uint8Array(BLOCK_BYTES)
-  block.set(bytes, 0)
+  block.set(last, 0)
+  block.set(prefix, 345)
   writeText(block, 100, octal(0o644, 8))
   writeText(block, 108, octal(0, 8))
   writeText(block, 116, octal(0, 8))
@@ -112,7 +124,7 @@ export async function* readTar(stream, { maxEntryBytes }) {
       checkHeader(block)
       const type = String.fromCharCode(block[156])
       const size = readOctal(block, 124, 12)
-      const prefix = field(block, 345, PREFIX_BYTES)
+      const prefix = field(block, 257, 6) === 'ustar' ? field(block, 345, PREFIX_BYTES) : ''
       const name = (prefix ? `${prefix}/` : '') + field(block, 0, NAME_BYTES)
       if (size > maxEntryBytes) {
         throw new Error(`the archive entry ${name} is larger than ${maxEntryBytes} bytes`)

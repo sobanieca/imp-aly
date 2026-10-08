@@ -23,7 +23,7 @@ export const problemsOf = (answers) => {
   for (const answer of answers.filter(Boolean)) {
     for (const entry of answer.failedServers ?? []) failed.set(entry.server, entry.reason)
     for (const entry of answer.skippedDays ?? []) {
-      skipped.set(`${entry.server} ${entry.day}`, entry)
+      skipped.set(`${entry.server} ${entry.day} ${entry.source}`, entry)
     }
     for (const warning of answer.warnings ?? []) warnings.add(warning)
   }

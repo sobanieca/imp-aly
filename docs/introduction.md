@@ -103,6 +103,9 @@ the key can register apps and run queries.
 - **Column file** - one file for one field of the records of one app and one day, such as
   `page.txt`. Line N of each column file holds a field of record N. A query opens only the files of
   the fields that it needs.
+- **Source** - the server that received the records. Each data folder has a random source id, and
+  each day has one folder per source. One server can hold the days of several sources, for example
+  after a restore of the backup of another server.
 - **Commit** - the file `commit.json` in each day folder. It holds the number of records and the
   size of each column file. The storage worker adds all the records of a log part, or none of them.
   A crash can never leave a half-written record that a query reads.

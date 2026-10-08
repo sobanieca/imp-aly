@@ -8,7 +8,7 @@ import {
   writeJsonAtomic,
 } from './fs-utils.js'
 import { isDay } from './days.js'
-import { BASE_COLUMNS, isAppName } from './names.js'
+import { BASE_COLUMNS, isAppName, isSource } from './names.js'
 import { join } from './paths.js'
 import { nullValues, openLineWriter, openRunReader, openValueReader } from './line-files.js'
 import { decodeRuns, encodeValue, splitLines } from './rle.js'
@@ -33,6 +33,8 @@ export const appDir = (dataDir, app) => join(dataDir, 'apps', app)
 
 export const dayDir = (dataDir, app, day) => join(dataDir, 'apps', app, day)
 
+export const sourceDir = (dataDir, app, day, source) => join(dataDir, 'apps', app, day, source)
+
 export const orderColumns = (columns) => {
   const unique = new Set(columns)
   const base = BASE_COLUMNS.filter((column) => unique.has(column))
@@ -51,6 +53,14 @@ export const listDays = async (dataDir, app) =>
     .filter((entry) => entry.isDirectory && isDay(entry.name))
     .map((entry) => entry.name)
     .sort()
+
+export const listSourcesIn = async (path) =>
+  (await listDirectory(path))
+    .filter((entry) => entry.isDirectory && isSource(entry.name))
+    .map((entry) => entry.name)
+    .sort()
+
+export const listSources = (dataDir, app, day) => listSourcesIn(dayDir(dataDir, app, day))
 
 export const readGenerations = async (path) => {
   const sealedAll = []
@@ -189,7 +199,7 @@ const readRawPart = async (dir) => {
   }
 }
 
-const readSealedMeta = async (dir) => {
+export const readSealedMeta = async (dir) => {
   const meta = await readJson(join(dir, SEALED_META_FILE), null)
   if (meta === null) throw new Deno.errors.NotFound(`${join(dir, SEALED_META_FILE)} is missing`)
   if (
@@ -273,17 +283,19 @@ export const readDay = async (path, columns) => {
   }
 }
 
-export const readDaySummary = async (path, { withVisits }) => {
+export const readDaySummary = async (path, { withVisits, accept = () => true }) => {
   for (let attempt = 1;; attempt++) {
     const before = await readGenerations(path)
     if (before.sealed === 0 || before.raws.length) return null
     try {
       const dir = join(path, `sealed-${before.sealed}`)
       const meta = await readSealedMeta(dir)
-      if (meta.summary !== true) return null
+      if (meta.summary !== true || !(await accept(meta))) return null
       const read = (kind) => Deno.readTextFile(join(dir, SUMMARY_FILES[kind]))
       const summary = {
         rows: meta.rows,
+        wal: meta.wal,
+        days: meta.days,
         counts: await read('counts'),
         tuples: withVisits ? await read('tuples') : null,
         visits: withVisits ? await read('visits') : null,
@@ -321,14 +333,15 @@ const writeSyncedLines = async (path, lines) => {
   await writer.close()
 }
 
-const writeSummaryFolder = async (path, generation, { rows, wal, files }) => {
+const writeSummaryFolder = async (path, generation, { rows, wal, files, days }) => {
   const temporary = join(path, `sealed-${generation}.tmp`)
   await removeIfExists(temporary, { recursive: true })
   await Deno.mkdir(temporary)
   for (const [kind, text] of Object.entries(files)) {
-    await writeSyncedLines(join(temporary, SUMMARY_FILES[kind]), [text])
+    await writeSyncedLines(join(temporary, SUMMARY_FILES[kind]), [text].flat())
   }
   const meta = { rows, wal, columns: [], plain: [], summary: true, summaryOnly: true }
+  if (days) meta.days = days
   await writeFileAtomic(join(temporary, SEALED_META_FILE), `${JSON.stringify(meta, null, 2)}\n`)
   await syncDirectory(temporary)
   await Deno.rename(temporary, join(path, `sealed-${generation}`))
@@ -341,6 +354,15 @@ export const writeSummaryDay = async (path, { rows, files }) => {
   const { sealed, raws } = await readGenerations(path)
   if (sealed > 0 || raws.length) throw new Error(`${path} already holds data`)
   await writeSummaryFolder(path, 1, { rows, wal: 0, files })
+}
+
+export const writeSummaryPeriod = async (path, { rows, days, files }) => {
+  await Deno.mkdir(path, { recursive: true })
+  await tidyDay(path)
+  const { sealed, raws } = await readGenerations(path)
+  const generation = Math.max(sealed, ...raws) + 1
+  await writeSummaryFolder(path, generation, { rows, wal: 0, files, days })
+  await tidyDay(path)
 }
 
 export const keepOnlySummary = async (path) => {

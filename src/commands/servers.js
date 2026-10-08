@@ -1,12 +1,13 @@
 import { requireOnlyFlags } from '../args.js'
 import { logger } from '../logger.js'
 import {
+  addGroup,
   addServer,
   keyLabel,
   loadServers,
-  removeServer,
+  removeSaved,
   serversPath,
-  useServer,
+  useSaved,
 } from '../servers.js'
 import { formatTable } from '../table.js'
 
@@ -21,6 +22,17 @@ export const add = ({ positional, flags }) => {
   logger.plain(`It is the default server now. Saved in ${serversPath()}`)
 }
 
+export const group = ({ positional, flags }) => {
+  requireOnlyFlags(flags, [], 'group')
+  const [, name, servers, ...rest] = positional
+  if (!name || !servers || rest.length) throw new Error('use: imp-aly group <name> <a,b,c>')
+  const saved = addGroup({ name, servers })
+  logger.plain(`Saved group "${saved.name}": ${saved.servers.join(', ')}`)
+  if (loadServers().default !== saved.name) {
+    logger.plain(`Make it the default with: imp-aly use ${saved.name}`)
+  }
+}
+
 export const ls = ({ positional, flags }) => {
   requireOnlyFlags(flags, ['json'], 'ls')
   if (positional.length > 1) throw new Error('use: imp-aly ls [--json]')
@@ -30,12 +42,19 @@ export const ls = ({ positional, flags }) => {
   if (!servers.length) {
     return logger.plain('No server is saved. Add one with: imp-aly add <name> <url>')
   }
+  const mark = (name) => (name === store.default ? '*' : '')
   logger.plain(formatTable(
     ['default', 'name', 'url', 'key'],
-    servers.map((entry) => ({
-      ...entry,
-      default: entry.name === store.default ? '*' : '',
-      key: entry.auth,
+    servers.map((entry) => ({ ...entry, default: mark(entry.name), key: entry.auth })),
+  ))
+  if (!store.groups.length) return
+  logger.plain('')
+  logger.plain(formatTable(
+    ['default', 'group', 'servers'],
+    store.groups.map((entry) => ({
+      default: mark(entry.name),
+      group: entry.name,
+      servers: entry.servers.join(','),
     })),
   ))
 }
@@ -47,14 +66,19 @@ const readName = ({ positional, flags }, command) => {
   return name
 }
 
+const describe = ({ server, group }) =>
+  server
+    ? `server "${server.name}" (${server.url})`
+    : `group "${group.name}" (${group.servers.join(', ')})`
+
 export const use = (parsed) => {
-  const found = useServer(readName(parsed, 'use'))
-  logger.plain(`"${found.name}" (${found.url}) is the default server now`)
+  const found = useSaved(readName(parsed, 'use'))
+  logger.plain(`The ${describe(found)} is the default now`)
 }
 
 export const rm = (parsed) => {
-  const removed = removeServer(readName(parsed, 'rm'))
+  const removed = removeSaved(readName(parsed, 'rm'))
   const next = loadServers().default
-  logger.plain(`Removed server "${removed.name}" (${removed.url})`)
-  if (next) logger.plain(`The default server is "${next}"`)
+  logger.plain(`Removed ${describe(removed)}`)
+  if (next) logger.plain(`The default is "${next}"`)
 }

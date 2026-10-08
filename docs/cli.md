@@ -8,12 +8,13 @@ imp-aly key rotate [-a <file>]        change the key, and the server does not st
 imp-aly app add <name> <app url|build folder> [--segments plan,role]
 imp-aly app ls | show <name> | refresh <name> | rm <name>
 imp-aly query '<json>' | query <file.json> [--json]
-imp-aly backup <file> [--app <name>] [--from <day>] [--to <day>]
+imp-aly backup <file> [--last <period>] [--by <granularity>] [-s <name>]
 imp-aly restore <file>
 imp-aly status
 imp-aly console [--port <port>]
 imp-aly token <method> <path> [<body file>]
 imp-aly add <name> <url> [-a <key|file>]
+imp-aly group <name> <a,b,c>
 imp-aly ls | use <name> | rm <name>
 imp-aly skill [--init]
 imp-aly help | version
@@ -113,42 +114,45 @@ starts again. `-a <file>` names another key file for a server in the foreground.
 
 The commands `app`, `query`, `backup`, `restore` and `status` take these options:
 
-| Option                     | Value                                                            | Default                                       |
-| -------------------------- | ---------------------------------------------------------------- | --------------------------------------------- |
-| `-s`, `--server <name>`    | a saved server, or a list `a,b,c` for `app` and `query`          | the default saved server                      |
-| `--url <url>`              | the URL of the admin port of the server                          | the default saved server, or the local server |
-| `-a`, `--auth <key\|file>` | the key, or a file with the key                                  | the key of the server, or the key file        |
-| `--json`                   | print the JSON answer (`app ls`, `app show`, `query`, `restore`) |                                               |
+| Option                     | Value                                                              | Default                                       |
+| -------------------------- | ------------------------------------------------------------------ | --------------------------------------------- |
+| `-s`, `--server <name>`    | a saved server, or a list `a,b,c` or a group for `app` and `query` | the default saved server                      |
+| `--url <url>`              | the URL of the admin port of the server                            | the default saved server, or the local server |
+| `-a`, `--auth <key\|file>` | the key, or a file with the key                                    | the key of the server, or the key file        |
+| `--json`                   | print the JSON answer (`app ls`, `app show`, `query`, `restore`)   |                                               |
 
 The command finds the server in this order:
 
-1. `--server <name>`: the saved server with this name, with its saved key.
+1. `--server <name>`: the saved server or the group with this name, with the saved keys.
 2. `--url <url>`: this URL. Do not give `--server` and `--url` together.
-3. The default saved server, with its saved key.
+3. The default saved server or group, with the saved keys.
 4. The admin port of the local server, `http://127.0.0.1:2981`.
 
 `-a` replaces the saved key. Without `-a` and without a saved key, the command reads
 `~/.secret/imp-aly-key`.
 
-`app` and `query` take a list of saved servers, such as `-s eu-1,eu-2,eu-3`. `app` runs on each
-server in turn. `query` asks all servers at the same time and adds up their answers. When one server
-fails, the command continues with the others, then exits with code 1. The other commands take one
-server. See [Several servers](query.md#several-servers).
+`app` and `query` take a list of saved servers, such as `-s eu-1,eu-2,eu-3`, or a group, such as
+`-s prod`. A list can name groups and servers, such as `-s prod,us-1`. It must not name a server two
+times. `app` runs on each server in turn. `query` asks all servers at the same time and adds up
+their answers. When one server fails, the command continues with the others, then exits with code 1.
+The other commands take one server. See [Several servers](query.md#several-servers).
 
 `token` takes only `-s` and `-a`. It prints a one-time token for one request to the API, such as
 `imp-aly token GET /status`. For a request with a body, give the file of the body. The token is
 valid for 60 seconds. See [Security](security.md).
 
-`status` prints the state of the server: the version, the start time, the data folder, the number of
-apps, the number of addresses in the rate limit, the requests in progress on each port, and the
-state of the storage worker. The storage state holds the number of log parts that wait, the number
-of stored records since the start, the last error, and the free disk space. It also lists the days
-whose records the worker keeps aside (`heldDays`), and counts the log parts that it cannot read
-(`unreadableSegments`). See [Storage](storage.md#a-day-that-the-worker-cannot-store).
+`status` prints the state of the server: the version, the start time, the data folder, the source
+id, the number of apps, the number of addresses in the rate limit, the requests in progress on each
+port, and the state of the storage worker. The storage state holds the number of log parts that
+wait, the number of stored records since the start, the last error, and the free disk space. It also
+lists the days whose records the worker keeps aside (`heldDays`), and counts the log parts that it
+cannot read (`unreadableSegments`). See [Storage](storage.md#a-day-that-the-worker-cannot-store).
 
-`backup` saves the daily summaries of the sealed days to a compressed file. `--app`, `--from` and
-`--to` limit the apps and the days. `restore` sends such a file to the server. See
-[Backup](backup.md).
+`backup` saves the summaries of all the apps and sources of one server to a compressed file.
+`--last` sets the period: `1d`, `7d`, `30d`, `3m`, `6m`, `1y` or `all` (the default). The period
+ends at the last sealed day. `--by` sets the granularity: `day` (the default), `week` or `month`. A
+week or a month is in the backup when it is complete and all its days are in the period. `restore`
+sends such a file to the server. See [Backup](backup.md).
 
 See [Apps](apps.md) for `app`, and [Queries](query.md) for `query`.
 
@@ -163,18 +167,20 @@ imp-aly query '{"app": "myapp"}'
 imp-aly query '{"app": "myapp"}' -s eu
 ```
 
-| Command                             | What it does                                                        |
-| ----------------------------------- | ------------------------------------------------------------------- |
-| `add <name> <url> [-a <key\|file>]` | saves a server, or replaces the server with the same name           |
-| `ls [--json]`                       | lists the saved servers, `*` marks the default server               |
-| `use <name>`                        | makes the server the default server                                 |
-| `rm <name>`                         | removes the server. The last server in the list becomes the default |
+| Command                             | What it does                                                                     |
+| ----------------------------------- | -------------------------------------------------------------------------------- |
+| `add <name> <url> [-a <key\|file>]` | saves a server, or replaces the server with the same name                        |
+| `group <name> <a,b,c>`              | saves a group of saved servers, or replaces the group with the same name         |
+| `ls [--json]`                       | lists the saved servers and groups, `*` marks the default                        |
+| `use <name>`                        | makes the server or the group the default                                        |
+| `rm <name>`                         | removes the server or the group. The last server in the list becomes the default |
 
 The server that you add becomes the default server. A client command without `-s` and without
-`--url` calls the default server.
+`--url` calls the default server, or the servers of the default group.
 
-A name has up to 63 letters, digits, `.`, `_` and `-`. It starts with a letter or a digit. The URL
-starts with `http://` or `https://`. It can have a path, for a server behind a proxy.
+A name of a server or a group has up to 63 letters, digits, `.`, `_` and `-`. It starts with a
+letter or a digit. The URL starts with `http://` or `https://`. It can have a path, for a server
+behind a proxy.
 
 `-a` takes the same values as in the other commands. For a key file, the command saves the absolute
 path of the file, not the key. For a key given as text, the command saves the key. `ls` does not
@@ -182,6 +188,26 @@ show a saved key.
 
 The command keeps the list in `~/.config/imp-aly/servers.json`, with access for the owner only. When
 `XDG_CONFIG_HOME` is set, the list is in `$XDG_CONFIG_HOME/imp-aly/servers.json`.
+
+### Groups
+
+A group gives a name to a list of saved servers. Then `-s <group>` names all of its servers.
+
+```sh
+imp-aly group prod eu-1,eu-2,eu-3
+imp-aly query report.json -s prod
+imp-aly use prod
+imp-aly query report.json
+```
+
+- A group holds saved servers. It cannot hold a group.
+- A server and a group cannot have the same name.
+- `group` does not change the default. Use `use <group>` to make the group the default.
+- `rm <group>` removes the group. It does not remove the servers of the group.
+- `rm` refuses a server that is in a group. Change the group with `group`, or remove the group
+  first.
+- `backup`, `restore`, `status` and `token` take one server. When the default is a group of two or
+  more servers, give `-s <server>` to these commands.
 
 ## Console
 

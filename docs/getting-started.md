@@ -193,7 +193,7 @@ charts. It also has a query builder, and pages for the apps, the servers and the
 - [Apps](apps.md) - the registry, the build file and the segments
 - [Queries](query.md) - the query API
 - [Storage](storage.md) - how the server stores the records and removes old ones
-- [Backup](backup.md) - save the daily summaries, restore them, and keep them safe
+- [Backup](backup.md) - save the daily, week or month summaries, restore them, and keep them safe
 - [Console](console.md) - the web app with charts, a query builder, apps, servers and backups
 - [Security](security.md) - the key, the tokens and the limits
 - [Updates](update.md) - the daily update, and how to control it

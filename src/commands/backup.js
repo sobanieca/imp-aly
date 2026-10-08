@@ -1,12 +1,26 @@
 import { requireOnlyFlags } from '../args.js'
 import { apiFetch } from '../api-client.js'
-import { countBackup } from '../backup.js'
+import { BACKUP_KINDS, BACKUP_PERIODS, countBackup } from '../backup.js'
 import { removeIfExists } from '../fs-utils.js'
 import { logger } from '../logger.js'
 
-const USAGE = 'use: imp-aly backup <file> [--app <name>] [--from <day>] [--to <day>]'
+const USAGE = 'use: imp-aly backup <file> [--last <period>] [--by day|week|month] [-s <name>]'
 
-const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`
+const plural = (count, word, many = `${word}s`) => `${count} ${count === 1 ? word : many}`
+
+const SUMMARY_NAMES = {
+  days: ['daily summary', 'daily summaries'],
+  weeks: ['week summary', 'week summaries'],
+  months: ['month summary', 'month summaries'],
+}
+
+const EMPTY_HINTS = {
+  day: 'No sealed day is in the period. A day is sealed at 01:10 UTC of the next day.',
+  week:
+    'No complete week is in the period. A week is complete at 01:10 UTC on Monday, and all its days must be in the period.',
+  month:
+    'No complete month is in the period. A month is complete at 01:10 UTC on the first day of the next month, and all its days must be in the period.',
+}
 
 const formatBytes = (bytes) => {
   const units = ['B', 'KB', 'MB', 'GB', 'TB']
@@ -20,19 +34,24 @@ const formatBytes = (bytes) => {
 }
 
 export const backup = async ({ positional, flags }) => {
-  requireOnlyFlags(flags, ['auth', 'url', 'server', 'app', 'from', 'to'], 'backup')
+  requireOnlyFlags(flags, ['auth', 'url', 'server', 'last', 'by'], 'backup')
   const [, file, ...rest] = positional
   if (!file || rest.length) throw new Error(USAGE)
-  const params = new URLSearchParams()
-  for (const name of ['app', 'from', 'to']) {
-    if (flags[name] !== undefined) params.set(name, flags[name])
+  const last = flags.last ?? 'all'
+  const by = flags.by ?? 'day'
+  if (!Object.hasOwn(BACKUP_PERIODS, last)) {
+    throw new Error(`--last is one of ${Object.keys(BACKUP_PERIODS).join(', ')}`)
   }
+  if (!Object.hasOwn(BACKUP_KINDS, by)) {
+    throw new Error(`--by is one of ${Object.keys(BACKUP_KINDS).join(', ')}`)
+  }
+  const params = new URLSearchParams({ last, by })
   const response = await apiFetch({
     url: flags.url,
     auth: flags.auth,
     server: flags.server,
     method: 'GET',
-    path: params.size ? `/backup?${params}` : '/backup',
+    path: `/backup?${params}`,
   })
   const temporary = `${file}.tmp`
   const [toFile, toCheck] = response.body.tee()
@@ -47,10 +66,12 @@ export const backup = async ({ positional, flags }) => {
     throw new Error(`the backup failed: ${error.message}`)
   }
   const { size } = await Deno.stat(file)
-  const days = plural(counted.days, 'day')
+  const kinds = Object.keys(SUMMARY_NAMES).filter((kind) => counted[kind])
+  const summaries = (kinds.length ? kinds : [BACKUP_KINDS[by]])
+    .map((kind) => plural(counted[kind], ...SUMMARY_NAMES[kind]))
+    .join(', ')
   const apps = plural(counted.apps, 'app')
-  logger.plain(`Saved the daily summaries of ${days} of ${apps} to ${file} (${formatBytes(size)})`)
-  if (!counted.days) {
-    logger.plain('No sealed day matched. A day is sealed at 01:10 UTC of the next day.')
-  }
+  const sources = plural(counted.sources, 'source')
+  logger.plain(`Saved ${summaries} of ${apps} and ${sources} to ${file} (${formatBytes(size)})`)
+  if (!kinds.length) logger.plain(EMPTY_HINTS[by])
 }

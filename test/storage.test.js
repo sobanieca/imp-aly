@@ -8,6 +8,7 @@ import {
 } from '../src/storage.js'
 import { listClosedSegments, openWal, segmentFileName } from '../src/wal.js'
 import { assert, assertEquals, temporaryDir, waitFor } from './assert.js'
+import { dayPath, OTHER_SOURCE, SOURCE } from './fixtures.js'
 
 const line = (app, day, record) => `${JSON.stringify([app, day, record])}\n`
 
@@ -29,28 +30,49 @@ Deno.test('a segment groups records by app and day and skips bad lines', () => {
 Deno.test('applying a segment twice stores it once', async () => {
   const dataDir = await temporaryDir()
   const text = line('a', '2026-10-01', { type: 'error', visit: 'v', at: 1, page: '/' })
-  assertEquals(await applySegment({ dataDir, segment: 1, text }), 1)
-  assertEquals(await applySegment({ dataDir, segment: 1, text }), 0)
-  assertEquals((await readDay(`${dataDir}/apps/a/2026-10-01`, ['visit'])).rows, 1)
+  assertEquals(await applySegment({ dataDir, source: SOURCE, segment: 1, text }), 1)
+  assertEquals(await applySegment({ dataDir, source: SOURCE, segment: 1, text }), 0)
+  assertEquals((await readDay(dayPath(dataDir, '2026-10-01', SOURCE, 'a'), ['visit'])).rows, 1)
   await Deno.remove(dataDir, { recursive: true })
 })
 
 Deno.test('days are sealed only after the delay', async () => {
   const dataDir = await temporaryDir()
   const text = line('a', '2026-10-01', { type: 'error', visit: 'v', at: 1, page: '/' })
-  await applySegment({ dataDir, segment: 1, text })
+  await applySegment({ dataDir, source: SOURCE, segment: 1, text })
   const dayEnd = Date.parse('2026-10-02')
-  assertEquals(await sealDueDays({ dataDir, now: dayEnd + 10, sealDelayMs: 60_000 }), [])
-  assertEquals(await sealDueDays({ dataDir, now: dayEnd + 60_000, sealDelayMs: 60_000 }), [
+  assertEquals(
+    await sealDueDays({ dataDir, source: SOURCE, now: dayEnd + 10, sealDelayMs: 60_000 }),
+    [],
+  )
+  assertEquals(
+    await sealDueDays({ dataDir, source: SOURCE, now: dayEnd + 60_000, sealDelayMs: 60_000 }),
+    [
+      'a/2026-10-01',
+    ],
+  )
+  assertEquals((await readGenerations(dayPath(dataDir, '2026-10-01', SOURCE, 'a'))).sealed, 1)
+  await Deno.remove(dataDir, { recursive: true })
+})
+
+Deno.test('a server writes and seals only its own source of a day', async () => {
+  const dataDir = await temporaryDir()
+  const text = line('a', '2026-10-01', { type: 'error', visit: 'v', at: 1, page: '/' })
+  await applySegment({ dataDir, source: SOURCE, segment: 1, text })
+  await applySegment({ dataDir, source: OTHER_SOURCE, segment: 1, text })
+  const now = Date.parse('2026-10-03')
+  assertEquals(await sealDueDays({ dataDir, source: SOURCE, now, sealDelayMs: 0 }), [
     'a/2026-10-01',
   ])
-  assertEquals((await readGenerations(`${dataDir}/apps/a/2026-10-01`)).sealed, 1)
+  assertEquals((await readGenerations(dayPath(dataDir, '2026-10-01', SOURCE, 'a'))).sealed, 1)
+  const other = await readGenerations(dayPath(dataDir, '2026-10-01', OTHER_SOURCE, 'a'))
+  assertEquals([other.sealed, other.raws], [0, [1]])
   await Deno.remove(dataDir, { recursive: true })
 })
 
 Deno.test('the storage loop moves the log into columns and removes it', async () => {
   const dataDir = await temporaryDir()
-  const storage = createStorage({ dataDir, minFree: null })
+  const storage = createStorage({ dataDir, source: SOURCE, minFree: null })
   const running = storage.run()
   const wal = await openWal({ dir: `${dataDir}/wal`, segmentMs: 20, onSegment: storage.wake })
   await wal.append(line('a', '2026-10-01', { type: 'error', visit: 'v', at: 1, page: '/' }))
@@ -60,7 +82,10 @@ Deno.test('the storage loop moves the log into columns and removes it', async ()
   storage.stop()
   await running
   assertEquals(await listClosedSegments(`${dataDir}/wal`), [])
-  assertEquals((await readDay(`${dataDir}/apps/a/2026-10-01`, ['visit'])).columns.visit, ['v', 'w'])
+  assertEquals(
+    (await readDay(dayPath(dataDir, '2026-10-01', SOURCE, 'a'), ['visit'])).columns.visit,
+    ['v', 'w'],
+  )
   await Deno.remove(dataDir, { recursive: true })
 })
 
@@ -71,13 +96,16 @@ Deno.test('the worker stores only the valid bytes of a part that a failed write 
   await Deno.mkdir(`${dataDir}/wal`)
   const name = segmentFileName(1, 'log', new TextEncoder().encode(valid).length)
   await Deno.writeTextFile(`${dataDir}/wal/${name}`, valid + failed)
-  const storage = createStorage({ dataDir, minFree: null })
+  const storage = createStorage({ dataDir, source: SOURCE, minFree: null })
   const running = storage.run()
   await waitFor(() => storage.status().processedRows === 1)
   storage.stop()
   await running
   assertEquals(await listClosedSegments(`${dataDir}/wal`), [])
-  assertEquals((await readDay(`${dataDir}/apps/a/2026-10-01`, ['visit'])).columns.visit, ['v'])
+  assertEquals(
+    (await readDay(dayPath(dataDir, '2026-10-01', SOURCE, 'a'), ['visit'])).columns.visit,
+    ['v'],
+  )
   await Deno.remove(dataDir, { recursive: true })
 })
 
@@ -85,13 +113,22 @@ Deno.test('a broken day does not stop retention or the other days', async () => 
   const dataDir = await temporaryDir()
   const text = line('a', '2026-09-01', { type: 'error', visit: 'v', at: 1, page: '/' }) +
     line('b', '2026-09-01', { type: 'error', visit: 'v', at: 1, page: '/' })
-  await applySegment({ dataDir, segment: 1, text })
-  await Deno.writeTextFile(`${dataDir}/apps/a/2026-09-01/raw-1/commit.json`, '{broken')
-  const sealed = await sealDueDays({ dataDir, now: Date.parse('2026-09-03'), sealDelayMs: 0 })
+  await applySegment({ dataDir, source: SOURCE, segment: 1, text })
+  await Deno.writeTextFile(
+    `${dayPath(dataDir, '2026-09-01', SOURCE, 'a')}/raw-1/commit.json`,
+    '{broken',
+  )
+  const sealed = await sealDueDays({
+    dataDir,
+    source: SOURCE,
+    now: Date.parse('2026-09-03'),
+    sealDelayMs: 0,
+  })
   assertEquals(sealed, ['b/2026-09-01'])
   let checks = 0
   const storage = createStorage({
     dataDir,
+    source: SOURCE,
     minFree: { percent: 10 },
     usage: () => {
       checks++
@@ -109,8 +146,8 @@ Deno.test('a day that fails keeps its records aside, in order, also over a resta
   const dataDir = await temporaryDir()
   const day = '2026-10-01'
   const record = (visit) => ({ type: 'error', visit, at: 1, page: '/' })
-  await applySegment({ dataDir, segment: 1, text: line('a', day, record('v1')) })
-  const commit = `${dataDir}/apps/a/${day}/raw-1/commit.json`
+  await applySegment({ dataDir, source: SOURCE, segment: 1, text: line('a', day, record('v1')) })
+  const commit = `${dayPath(dataDir, day, SOURCE, 'a')}/raw-1/commit.json`
   const good = await Deno.readTextFile(commit)
   await Deno.writeTextFile(commit, '{broken')
   const wal = `${dataDir}/wal`
@@ -120,7 +157,7 @@ Deno.test('a day that fails keeps its records aside, in order, also over a resta
     line('a', day, record('v2')) + line('b', day, record('w')),
   )
   await Deno.writeTextFile(`${wal}/${segmentFileName(3, 'log')}`, line('a', day, record('v3')))
-  const first = createStorage({ dataDir, minFree: null, maintenanceMs: 20 })
+  const first = createStorage({ dataDir, source: SOURCE, minFree: null, maintenanceMs: 20 })
   const running = first.run()
   await waitFor(() => first.status().processedRows === 1 && first.status().pendingSegments === 0)
   assertEquals(first.status().heldDays.map((entry) => entry.day), [`a/${day}`])
@@ -128,18 +165,18 @@ Deno.test('a day that fails keeps its records aside, in order, also over a resta
   first.stop()
   await running
   assertEquals(await listClosedSegments(wal), [])
-  assertEquals((await readDay(`${dataDir}/apps/b/${day}`, ['visit'])).columns.visit, ['w'])
+  assertEquals((await readDay(dayPath(dataDir, day, SOURCE, 'b'), ['visit'])).columns.visit, ['w'])
   assertEquals(await listHeldDays(dataDir), [`a/${day}`])
 
   await Deno.writeTextFile(commit, good)
-  const second = createStorage({ dataDir, minFree: null, maintenanceMs: 20 })
+  const second = createStorage({ dataDir, source: SOURCE, minFree: null, maintenanceMs: 20 })
   const again = second.run()
   await waitFor(() => second.status().processedRows === 2)
   second.stop()
   await again
   assertEquals(second.status().heldDays, [])
   assertEquals(await listHeldDays(dataDir), [])
-  assertEquals((await readDay(`${dataDir}/apps/a/${day}`, ['visit'])).columns.visit, [
+  assertEquals((await readDay(dayPath(dataDir, day, SOURCE, 'a'), ['visit'])).columns.visit, [
     'v1',
     'v2',
     'v3',
@@ -161,7 +198,7 @@ Deno.test({
       `${wal}/${segmentFileName(2, 'log')}`,
       line('a', '2026-10-01', { type: 'error', visit: 'w', at: 2, page: '/' }),
     )
-    const storage = createStorage({ dataDir, minFree: null, retryMs: 10 })
+    const storage = createStorage({ dataDir, source: SOURCE, minFree: null, retryMs: 10 })
     const running = storage.run()
     await waitFor(() => storage.status().processedRows === 1)
     storage.stop()

@@ -1,10 +1,9 @@
 import { createToken, EMPTY_BODY_HASH } from '../src/token.js'
-import { sealDay } from '../src/column-store.js'
 import { logger } from '../src/logger.js'
 import { startServer } from '../src/server.js'
 import { sha256Hex } from '../src/sha256.js'
 import { assert, assertEquals, temporaryDir, waitFor } from './assert.js'
-import { DAYS, fill } from './fixtures.js'
+import { DAYS, fill, sealAll } from './fixtures.js'
 
 const KEY = 'test-key-0123456789'
 
@@ -149,6 +148,21 @@ Deno.test('collects valid records and answers queries', async () => {
     assertEquals(status.status, 200)
   } finally {
     await stop()
+  }
+})
+
+Deno.test('a server keeps its source id in the data folder over a restart', async () => {
+  const first = await start()
+  const { body } = await first.admin('GET', '/status')
+  assert(/^[0-9a-f]{16}$/.test(body.source))
+  const stored = JSON.parse(await Deno.readTextFile(`${first.dataDir}/source.json`))
+  assertEquals(stored.source, body.source)
+  await first.stop({ keep: true })
+  const second = await start({ dataDir: first.dataDir })
+  try {
+    assertEquals((await second.admin('GET', '/status')).body.source, body.source)
+  } finally {
+    await second.stop()
   }
 })
 
@@ -561,8 +575,8 @@ Deno.test('a token works only for its method, path and body', async () => {
       sign: { method: 'GET', path: '/status', body: query },
     })
     assertEquals(bodyOnGet.status, 401)
-    const otherSearch = await admin('GET', '/backup?app=myapp', undefined, {
-      sign: { method: 'GET', path: '/backup?app=other' },
+    const otherSearch = await admin('GET', '/backup?by=week', undefined, {
+      sign: { method: 'GET', path: '/backup?by=month' },
     })
     assertEquals(otherSearch.status, 401)
     assertEquals((await admin('GET', '/apps/myapp')).status, 200)
@@ -573,7 +587,7 @@ Deno.test('a token works only for its method, path and body', async () => {
 
 Deno.test('a backup of one server restores into another', async () => {
   const sourceDir = await fill()
-  for (const day of DAYS) await sealDay(`${sourceDir}/apps/myapp/${day}`)
+  await sealAll(sourceDir)
   const source = await start({ dataDir: sourceDir })
   const target = await start()
   try {
@@ -588,9 +602,10 @@ Deno.test('a backup of one server restores into another', async () => {
     const denied = await fetch(`${source.adminBase}/backup`)
     await denied.body?.cancel()
     assertEquals(denied.status, 401)
-    assertEquals((await source.admin('GET', '/backup?from=yesterday')).status, 400)
-    const backup = await fetch(`${source.adminBase}/backup?app=myapp`, {
-      headers: await headers('GET', '/backup?app=myapp'),
+    assertEquals((await source.admin('GET', '/backup?last=yesterday')).status, 400)
+    assertEquals((await source.admin('GET', '/backup?app=myapp')).status, 400)
+    const backup = await fetch(`${source.adminBase}/backup?last=all&by=day`, {
+      headers: await headers('GET', '/backup?last=all&by=day'),
     })
     assertEquals(backup.headers.get('content-type'), 'application/gzip')
     const bytes = new Uint8Array(await backup.arrayBuffer())

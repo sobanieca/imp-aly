@@ -16,6 +16,8 @@ the days and removes old days. It does them one after the other.**
   once a minute.
 - The free space check comes first and has its own error handling. So an error in the storing or the
   sealing, such as a full disk, never stops the retention that would fix it.
+- The worker writes the records into the source of the server, and seals only that source, see
+  `source-folders-per-server.md`.
 - Each day seals on its own. A day that fails to seal is logged and stays raw, and the other days
   still seal.
 - The server wakes the worker when it closes a part. Without a wake-up, the worker checks every

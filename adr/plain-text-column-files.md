@@ -12,8 +12,9 @@ that a query needs, but they need a dependency or a second service, see
 **Each field of a record has its own text file, with one line per record. Line N of every file in a
 folder is record N.**
 
-- The layout is `apps/<app>/<day>/raw-<n>/<field>.txt`. A day is a folder, so a query of a range
-  opens only the folders of its days, and retention removes a day with one delete.
+- The layout is `apps/<app>/<day>/<source>/raw-<n>/<field>.txt`. A day is a folder, so a query of a
+  range opens only the folders of its days, and retention removes a day with one delete. A day has
+  one folder per source, see `source-folders-per-server.md`.
 - The fields are `type`, `visit`, `at`, `page`, `zone`, `name`, `country` and the segments of the
   app. A field that a record does not have is an empty line, which is null.
 - A field that appears for the first time in a folder gets a file with one empty line for each

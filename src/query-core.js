@@ -1,4 +1,4 @@
-import { dayOf, isDay } from './days.js'
+import { dayOf, isDay, monthOf, weekOf } from './days.js'
 import { BASE_COLUMNS, isAppName, RESERVED_NAMES, SEGMENT_NAME_PATTERN } from './names.js'
 
 export class QueryError extends Error {
@@ -29,18 +29,10 @@ const isDimension = (field) =>
   (DIMENSIONS.includes(field) ||
     (SEGMENT_NAME_PATTERN.test(field) && !RESERVED_NAMES.has(field)))
 
-const DAY_MS = 86_400_000
-
-const mondayOf = (day) => {
-  const time = Date.parse(day)
-  const weekday = (new Date(time).getUTCDay() + 6) % 7
-  return new Date(time - weekday * DAY_MS).toISOString().slice(0, 10)
-}
-
 const TIME_OF = {
   day: (day) => day,
-  week: mondayOf,
-  month: (day) => day.slice(0, 7),
+  week: weekOf,
+  month: monthOf,
 }
 
 const dimensionHint = () => `${DIMENSIONS.join(', ')} or a segment name`
@@ -131,6 +123,8 @@ export const canUseSummary = ({ where, groupBy, measures }) => {
   if (!measures.includes('visits')) return true
   return !fields.some((field) => VISIT_BLIND_DIMENSIONS.includes(field))
 }
+
+export const timeFieldOf = (groupBy) => groupBy.find((field) => TIME_FIELDS.includes(field)) ?? null
 
 export const groupParts = (groupBy, day) => ({
   fields: groupBy.filter((field) => !TIME_FIELDS.includes(field)),

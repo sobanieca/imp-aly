@@ -12,7 +12,7 @@ stores them on the local disk in plain text column files, and answers queries.
   limit per address.
 - Retention by free disk space: the oldest days lose their records first and keep their daily
   summaries, so the history is as long as the disk allows.
-- Compressed backups of the daily summaries, which the server can restore and query.
+- Compressed backups of the daily, week or month summaries, which the server can restore and query.
 - A private query API with one-time tokens, so the key never goes over the network.
 
 imp-aly is not released yet. Until version `1.0.0`, any part of it can change.

@@ -1,14 +1,17 @@
 import { dayOf } from './days.js'
 import {
   appDir,
-  dayDir,
   isSummaryOnlyDay,
   keepOnlySummary,
   listApps,
   listDays,
+  listSources,
+  sourceDir,
 } from './column-store.js'
 import { listDirectory, removeIfExists } from './fs-utils.js'
 import { join } from './paths.js'
+import { PERIOD_KINDS } from './days.js'
+import { listPeriods, periodsDir } from './periods.js'
 
 export const DEFAULT_MIN_FREE = '10%'
 
@@ -55,12 +58,26 @@ const TRASH_SUFFIX = '.trash'
 
 const removeTrash = async (dataDir) => {
   for (const app of await listApps(dataDir)) {
-    for (const entry of await listDirectory(appDir(dataDir, app))) {
-      if (entry.name.endsWith(TRASH_SUFFIX)) {
-        await removeIfExists(join(appDir(dataDir, app), entry.name), { recursive: true })
+    const folders = [
+      appDir(dataDir, app),
+      ...PERIOD_KINDS.map((kind) => periodsDir(dataDir, app, kind)),
+    ]
+    for (const folder of folders) {
+      for (const entry of await listDirectory(folder)) {
+        if (entry.name.endsWith(TRASH_SUFFIX)) {
+          await removeIfExists(join(folder, entry.name), { recursive: true })
+        }
       }
     }
   }
+}
+
+const listStoredPeriods = async (dataDir, kind) => {
+  const periods = []
+  for (const app of await listApps(dataDir)) {
+    for (const id of await listPeriods(dataDir, app, kind)) periods.push({ app, id })
+  }
+  return periods.sort((a, b) => (a.id === b.id ? (a.app < b.app ? -1 : 1) : a.id < b.id ? -1 : 1))
 }
 
 export const listStoredDays = async (dataDir) => {
@@ -71,12 +88,21 @@ export const listStoredDays = async (dataDir) => {
   return days.sort((a, b) => (a.day === b.day ? (a.app < b.app ? -1 : 1) : a.day < b.day ? -1 : 1))
 }
 
+const holdsOnlySummaries = async (dataDir, { app, day }) => {
+  const sources = await listSources(dataDir, app, day)
+  if (!sources.length) return false
+  for (const source of sources) {
+    if (!(await isSummaryOnlyDay(sourceDir(dataDir, app, day, source)))) return false
+  }
+  return true
+}
+
 const removalOrder = async (dataDir, today) => {
   const withRecords = []
   const summaryOnly = []
   for (const entry of await listStoredDays(dataDir)) {
     if (entry.day >= today) continue
-    if (await isSummaryOnlyDay(dayDir(dataDir, entry.app, entry.day))) {
+    if (await holdsOnlySummaries(dataDir, entry)) {
       summaryOnly.push({ ...entry, summaryOnly: true })
     } else {
       withRecords.push({ ...entry, summaryOnly: false })
@@ -85,19 +111,23 @@ const removalOrder = async (dataDir, today) => {
   return [...withRecords, ...summaryOnly]
 }
 
-const removeDay = async (dataDir, app, day) => {
-  const trash = join(appDir(dataDir, app), `${day}${TRASH_SUFFIX}`)
-  await Deno.rename(join(appDir(dataDir, app), day), trash)
+const removeFolder = async (folder, name) => {
+  const trash = join(folder, `${name}${TRASH_SUFFIX}`)
+  await Deno.rename(join(folder, name), trash)
   await removeIfExists(trash, { recursive: true })
 }
 
-const tryKeepOnlySummary = async (path, log) => {
-  try {
-    return await keepOnlySummary(path)
-  } catch (error) {
-    log?.warn(`Cannot keep the daily summary of ${path}: ${error.message}`)
-    return false
+const keepOnlySummaries = async (dataDir, app, day, log) => {
+  let reduced = false
+  for (const source of await listSources(dataDir, app, day)) {
+    const path = sourceDir(dataDir, app, day, source)
+    try {
+      if (await keepOnlySummary(path)) reduced = true
+    } catch (error) {
+      log?.warn(`Cannot keep the daily summary of ${path}: ${error.message}`)
+    }
   }
+  return reduced
 }
 
 export const enforceRetention = async (
@@ -118,7 +148,7 @@ export const enforceRetention = async (
   const summarize = async () => {
     for (const { app, day, summaryOnly } of await removalOrder(dataDir, today)) {
       if (summaryOnly) return
-      if (!(await tryKeepOnlySummary(dayDir(dataDir, app, day), log))) continue
+      if (!(await keepOnlySummaries(dataDir, app, day, log))) continue
       summarized.push(`${app}/${day}`)
       log?.info(`Removed the records of ${app}/${day} to keep free disk space, kept its summary`)
       if (await enough()) return
@@ -127,18 +157,29 @@ export const enforceRetention = async (
   const remove = async (withSummaryOnly) => {
     for (const { app, day, summaryOnly } of await removalOrder(dataDir, today)) {
       if (summaryOnly !== withSummaryOnly) continue
-      await removeDay(dataDir, app, day)
+      await removeFolder(appDir(dataDir, app), day)
       removed.push(`${app}/${day}`)
       log?.info(`Removed ${app}/${day} to keep free disk space`)
+      if (await enough()) return
+    }
+  }
+  const removePeriods = async (kind) => {
+    for (const { app, id } of await listStoredPeriods(dataDir, kind)) {
+      await removeFolder(periodsDir(dataDir, app, kind), id)
+      removed.push(`${app}/${kind}/${id}`)
+      log?.info(`Removed the summary of ${app}/${kind}/${id} to keep free disk space`)
       if (await enough()) return
     }
   }
   await summarize()
   if (current.freeBytes < needed) await remove(false)
   if (current.freeBytes < needed) await remove(true)
+  for (const kind of PERIOD_KINDS) {
+    if (current.freeBytes < needed) await removePeriods(kind)
+  }
   if (current.freeBytes < needed) {
     log?.warn(
-      `Free disk space is ${current.freeBytes} bytes, below ${needed} bytes, and no older day is left to remove`,
+      `Free disk space is ${current.freeBytes} bytes, below ${needed} bytes, and no older day or summary is left to remove`,
     )
   }
   return result()

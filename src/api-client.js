@@ -1,7 +1,7 @@
 import { findKey } from './auth.js'
 import { ApiError, eachServer as eachTarget, queryEach } from './multi-server.js'
 import { DEFAULT_ADMIN_PORT } from './server.js'
-import { resolveTarget, serverNames, serversPath } from './servers.js'
+import { resolveTarget, resolveTargets as resolveSaved, serversPath } from './servers.js'
 import { sha256Hex } from './sha256.js'
 import { createToken, EMPTY_BODY_HASH } from './token.js'
 
@@ -15,10 +15,8 @@ const toTarget = ({ url, auth, server }) => {
 export const resolveOne = ({ url, auth, server }, path = serversPath()) =>
   toTarget(resolveTarget({ url, auth, server }, path))
 
-export const resolveTargets = ({ url, auth, server }, path = serversPath()) => {
-  const names = server === undefined ? [undefined] : serverNames(server)
-  return names.map((name) => toTarget(resolveTarget({ url, auth, server: name }, path)))
-}
+export const resolveTargets = ({ url, auth, server }, path = serversPath()) =>
+  resolveSaved({ url, auth, server }, path).map(toTarget)
 
 export const fetchServer = async (
   target,

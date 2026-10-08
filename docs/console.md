@@ -285,7 +285,7 @@ slow.
 | Table        | the rows. Click a column to sort it.                                         |
 | Chart        | a line over time when the first group is `day`, `week` or `month`, else bars |
 | Servers      | the days, the summary days and the records of each server                    |
-| Skipped days | the days that the query cannot read, with the reason                         |
+| Skipped days | the days that the query cannot read, with the source and the reason          |
 | CLI          | the same query as an `imp-aly query` command, to copy                        |
 
 `CSV` and `JSON` download the result. `Save` keeps the query of the builder under a name, in the
@@ -297,11 +297,13 @@ storage of the browser. A saved query runs again with a click.
 | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Explore         | run any query of the app. See [Explore](#explore).                                                                                                                                            |
 | Registered apps | see the apps of the servers in the bar. Register an app from a URL, the build file or text, with segments. See the reasons of the rejected records. Read the build file again. Remove an app. |
-| Servers         | see the servers of the console, and the state of each one: the version, the free disk space and the problems of the storage. Add, change, switch and remove a server.                         |
-| Backup          | download a backup of one server, of one app or all apps, and of some days or all days. Restore a backup into a server.                                                                        |
+| Servers         | see the servers of the console, and the state of each one: the version, the source id, the free disk space and the problems of the storage. Add, change, switch and remove a server.          |
+| Backup          | download a backup of one server, with a period and a granularity (day, week or month). Restore a backup into a server.                                                                        |
 
 "Register" registers the app on each server of the bar, like `imp-aly app add -s a,b`. See
 [Apps](apps.md).
 
-A backup downloads as `imp-aly-backup-<server>-<day>.tar.gz`. It is the same file as the file of
-`imp-aly backup`. See [Backup](backup.md).
+The backup form has three fields: the server, the period and the granularity. The period ends at the
+last sealed day. The backup holds all the apps and all the sources of the server. A backup downloads
+as `imp-aly-backup-<server>-<period>-by-<granularity>-<day>.tar.gz`. It is the same file as the file
+of `imp-aly backup --last <period> --by <granularity>`. See [Backup](backup.md).

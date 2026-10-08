@@ -31,15 +31,17 @@ status field. When a decision changes, replace its ADR. When a decision is dropp
 
 ## Storage
 
-| ADR                                                                 | Decision                                                                 |
-| ------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| [single-writer-storage-worker](single-writer-storage-worker.md)     | One storage worker is the only writer of the data                        |
-| [plain-text-column-files](plain-text-column-files.md)               | Plain text column files, one folder per app and day                      |
-| [append-transaction-with-revert](append-transaction-with-revert.md) | An append to the columns is a transaction that reverts                   |
-| [sealed-days-sorted-runs](sealed-days-sorted-runs.md)               | A finished day is sorted and stored as runs                              |
-| [daily-summaries](daily-summaries.md)                               | A sealed day carries a summary that queries read                         |
-| [disk-space-retention](disk-space-retention.md)                     | Retention follows free disk space, and keeps summaries longest           |
-| [summary-backups](summary-backups.md)                               | Backups hold the daily summaries, and a restore writes summary-only days |
+| ADR                                                                 | Decision                                                                       |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| [single-writer-storage-worker](single-writer-storage-worker.md)     | One storage worker is the only writer of the data                              |
+| [plain-text-column-files](plain-text-column-files.md)               | Plain text column files, one folder per app and day                            |
+| [source-folders-per-server](source-folders-per-server.md)           | Each server has a source id, and a day has one folder per source               |
+| [append-transaction-with-revert](append-transaction-with-revert.md) | An append to the columns is a transaction that reverts                         |
+| [sealed-days-sorted-runs](sealed-days-sorted-runs.md)               | A finished day is sorted and stored as runs                                    |
+| [daily-summaries](daily-summaries.md)                               | A sealed day carries a summary that queries read                               |
+| [week-and-month-summaries](week-and-month-summaries.md)             | Each source keeps a summary of each UTC week and month                         |
+| [disk-space-retention](disk-space-retention.md)                     | Retention follows free disk space, and keeps summaries longest                 |
+| [summary-backups](summary-backups.md)                               | Backups hold the summaries of a period, and a restore writes summary-only days |
 
 ## Access
 
@@ -50,7 +52,7 @@ status field. When a decision changes, replace its ADR. When a decision is dropp
 | [separate-admin-port](separate-admin-port.md)                                   | The private API has its own port                                        |
 | [security-headers](security-headers.md)                                         | Every answer carries headers that stop a browser from running it        |
 | [json-query-api-in-a-worker](json-query-api-in-a-worker.md)                     | Queries are JSON objects, run one at a time in a worker                 |
-| [saved-servers](saved-servers.md)                                               | The client keeps a list of named servers and a default                  |
+| [saved-servers](saved-servers.md)                                               | The client keeps named servers, groups of them, and a default           |
 | [several-servers-merged-by-the-client](several-servers-merged-by-the-client.md) | Servers hold separate visits, and the client adds up their answers      |
 | [agent-skill-location](agent-skill-location.md)                                 | The agent skill goes to the git repository, or else to the home folder  |
 | [console-web-app](console-web-app.md)                                           | The console is an installable web app that calls the servers directly   |

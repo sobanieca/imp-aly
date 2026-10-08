@@ -31,9 +31,10 @@ group, and the client adds them up.**
 - A reader lists the generations of a day before and after it reads the day. When they differ, it
   reads the day again, up to 5 times. When a file is missing and the generations did not change, the
   file is lost, and the read fails at once.
-- A day that a query cannot read does not fail the query. The query counts the other days, and the
-  answer lists the day and the problem in `skippedDays`. Each day goes into its own groups first, so
-  a day that fails in the middle adds nothing.
+- A query reads each source of a day, see `source-folders-per-server.md`. A source of a day that a
+  query cannot read does not fail the query. The query counts the other days and sources, and the
+  answer lists the day, the source and the problem in `skippedDays`. Each source of a day goes into
+  its own groups first, so a source that fails in the middle adds nothing.
 
 ## Consequences
 

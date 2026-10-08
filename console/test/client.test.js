@@ -14,9 +14,10 @@ test('the body hash covers no body, a text and a file', async () => {
 
 test('the signed path leaves out the path of the server URL and keeps the query', () => {
   expect(signedPath('https://a.example:2981/query', 'https://a.example:2981')).toEqual('/query')
-  expect(signedPath('https://a.example/aly/backup?app=shop', 'https://a.example/aly')).toEqual(
-    '/backup?app=shop',
-  )
+  expect(signedPath('https://a.example/aly/backup?last=7d&by=week', 'https://a.example/aly'))
+    .toEqual(
+      '/backup?last=7d&by=week',
+    )
 })
 
 test('a server URL is http or https, and an https page calls only https', () => {

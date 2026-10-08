@@ -13,9 +13,10 @@ group, which costs more than the scan it replaces.
 
 ## Decision
 
-**When the storage worker seals a day, it writes a daily summary into the sealed folder. A query
-reads the summary of a sealed day when the query allows it, and scans the columns otherwise.
-`visits` is the number of distinct visits of each day, added up over the days.**
+**When the storage worker seals a day of its source, it writes a daily summary into the sealed
+folder. A query reads the summary of a sealed source of a day when the query allows it, and scans
+the columns otherwise. `visits` is the number of distinct visits of each source and day, added up
+over the sources and the days.**
 
 - `summary-counts.tsv` has one line per combination of `type`, `page`, `zone`, `name`, `country` and
   the segments. A line has the number of records.
@@ -25,12 +26,18 @@ reads the summary of a sealed day when the query allows it, and scans the column
   to each group that the line reaches. So the visits of a day are exact without a set.
 - A query uses the summaries when it does not name `visit`, and when it does not count `visits` with
   `zone` or `name`. The tuples leave out `zone` and `name` to keep the visit file small.
-- A day uses its summary only when it has no raw records above the sealed generation. A day with
-  late records is scanned until the next seal.
-- The scan path counts `visits` per day too, so both paths give the same result. A test checks this
-  for many queries.
+- A day has one folder per source, see `source-folders-per-server.md`. Each source of a day has its
+  own summary. A query uses the summary of each source on its own, and scans the other sources.
+- A source of a day uses its summary only when it has no raw records above the sealed generation. A
+  source with late records is scanned until the next seal.
+- The scan path counts `visits` per source and per day too, so both paths give the same result. A
+  test checks this for many queries. A visit with records in two sources counts twice, as with two
+  servers.
 - `meta.json` has `summary: true`. The summary files are part of the sealed folder, so the rename of
   the folder makes them visible together with the columns.
+- When a UTC week or month is complete, the worker adds the daily summaries of its source into a
+  summary of the period. A query grouped by `week` or `month`, or by no time, reads it instead of
+  the days, with the same result. See `week-and-month-summaries.md`.
 - A backup holds the summaries, and a restored day holds only its summary, see `summary-backups.md`.
   The retention keeps the summary of an old day when it removes the records, see
   `disk-space-retention.md`.
@@ -42,3 +49,5 @@ reads the summary of a sealed day when the query allows it, and scans the column
   analytics tools, and the docs state it.
 - A seal takes longer, about 15 seconds for 1,000,000 records. A summary takes about 2 MB a day.
 - The current day is not sealed, so every query scans it.
+- A period summary keeps `visits` per source and per day, so it adds a visit list per day. See
+  `week-and-month-summaries.md`.

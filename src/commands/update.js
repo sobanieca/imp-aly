@@ -41,6 +41,15 @@ const printCheck = (choice, dir) => {
   if (note) logger.plain(note)
 }
 
+const restartChecked = async () => {
+  try {
+    return await restartService()
+  } catch (error) {
+    logger.error(error.message)
+    return false
+  }
+}
+
 const installTarget = async ({ binary, target, dir }) => {
   logger.info(`Downloading imp-aly ${target}`)
   const staged = await stageBinary({ binary, version: target })
@@ -51,13 +60,13 @@ const installTarget = async ({ binary, target, dir }) => {
     return
   }
   logger.info(`Restarting the service ${SERVICE_NAME}`)
-  if (await restartService()) {
+  if (await restartChecked()) {
     logger.info(`The service ${SERVICE_NAME} runs imp-aly ${target}`)
     return
   }
   await restorePrevious(binary)
   await addSkipped(dir, target)
-  const back = await restartService()
+  const back = await restartChecked()
   throw new Error(
     `imp-aly ${target} did not stay running, so imp-aly ${version} is back${
       back ? '' : ', but it did not stay running either'

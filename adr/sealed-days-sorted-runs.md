@@ -12,6 +12,10 @@ layout once.
 **1 hour and 10 minutes after the end of a UTC day, the storage worker seals the day: it sorts the
 rows and writes each field as a run file.**
 
+- The worker seals only the source folder of its own server, `apps/<app>/<day>/<source>/`. The
+  folder of another source comes from a restore or a copy, see `source-folders-per-server.md`. The
+  generations below are per source folder.
+
 - The sort keys are `page`, `type`, `zone`, `name`, `visit` and `at`. The worker computes one order
   from these columns and applies it to every column, so the rows stay aligned.
 - To keep memory low, the worker sorts the day in chunks of 250,000 rows. It turns each key column

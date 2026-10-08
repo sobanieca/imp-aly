@@ -115,17 +115,13 @@ export const statusOf = async (api, name) => {
   return { server: target.name, url: target.url, ...status }
 }
 
-export const downloadBackup = async (api, name, { app, from, to } = {}) => {
+export const downloadBackup = async (api, name, { last = 'all', by = 'day' } = {}) => {
   const [target] = await targetsOf(name ? [name] : [])
-  const params = new URLSearchParams()
-  for (const [field, value] of Object.entries({ app, from, to })) {
-    if (value) params.set(field, value)
-  }
-  const path = params.size ? `/backup?${params}` : '/backup'
+  const path = `/backup?${new URLSearchParams({ last, by })}`
   const blob = await callServer(api, target, { method: 'GET', path, timeout: 0 })
   const day = new Date().toISOString().slice(0, 10)
   const label = target.name.replace(/[^A-Za-z0-9._-]+/g, '-')
-  return { blob, fileName: `imp-aly-backup-${label}-${day}.tar.gz` }
+  return { blob, fileName: `imp-aly-backup-${label}-${last}-by-${by}-${day}.tar.gz` }
 }
 
 export const restoreBackup = async (api, name, file) => {

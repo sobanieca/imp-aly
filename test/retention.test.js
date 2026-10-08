@@ -1,9 +1,9 @@
 import { isSummaryOnlyDay, sealDay, writeSummaryDay } from '../src/column-store.js'
 import { parseQuery } from '../src/query-core.js'
-import { applySegment } from '../src/storage.js'
+import { applySegment, sealDuePeriods } from '../src/storage.js'
 import { enforceRetention, minFreeBytes, parseDf, parseMinFree } from '../src/retention.js'
 import { assert, assertEquals, assertThrows, temporaryDir } from './assert.js'
-import { ask, DAYS, fill } from './fixtures.js'
+import { ask, dayPath, DAYS, fill, OTHER_SOURCE, sealAll, SOURCE } from './fixtures.js'
 
 Deno.test('min free takes a percent or a size', () => {
   assertEquals(parseMinFree('10%'), { percent: 10 })
@@ -32,6 +32,7 @@ Deno.test('the oldest days go first until the disk has room, and today stays', a
     for (const app of ['a', 'b']) {
       await applySegment({
         dataDir,
+        source: SOURCE,
         segment: ++segment,
         text: `${JSON.stringify([app, day, record])}\n`,
       })
@@ -58,7 +59,7 @@ Deno.test('the oldest days go first until the disk has room, and today stays', a
 
 Deno.test('days with records go before older days that hold only a summary', async () => {
   const dataDir = await temporaryDir()
-  await writeSummaryDay(`${dataDir}/apps/a/2026-09-01`, {
+  await writeSummaryDay(dayPath(dataDir, '2026-09-01', SOURCE, 'a'), {
     rows: 0,
     files: {
       counts: 'type\tpage\tzone\tname\tcountry\trecords\n',
@@ -69,6 +70,7 @@ Deno.test('days with records go before older days that hold only a summary', asy
   const record = { type: 'error', visit: 'v', at: 1, page: '/' }
   await applySegment({
     dataDir,
+    source: SOURCE,
     segment: 1,
     text: `${JSON.stringify(['a', '2026-09-30', record])}\n`,
   })
@@ -82,7 +84,7 @@ Deno.test('days with records go before older days that hold only a summary', asy
 
 Deno.test('the retention keeps the summary of a sealed day before it removes days', async () => {
   const dataDir = await fill()
-  for (const day of DAYS) await sealDay(`${dataDir}/apps/myapp/${day}`)
+  await sealAll(dataDir)
   const now = Date.parse('2026-10-01T12:00:00Z')
   const query = parseQuery({ app: 'myapp', from: DAYS[1], groupBy: ['page'] }, now)
   const before = await ask(dataDir, query)
@@ -91,7 +93,7 @@ Deno.test('the retention keeps the summary of a sealed day before it removes day
   const result = await enforceRetention({ dataDir, minFree: { percent: 10 }, usage, now })
   assertEquals(result.summarized, DAYS.map((day) => `myapp/${day}`))
   assertEquals(result.removed, [`myapp/${DAYS[0]}`])
-  const path = `${dataDir}/apps/myapp/${DAYS[1]}`
+  const path = dayPath(dataDir, DAYS[1])
   assert(await isSummaryOnlyDay(path))
   const files = []
   for await (const entry of Deno.readDir(`${path}/sealed-2`)) files.push(entry.name)
@@ -108,14 +110,82 @@ Deno.test('the retention keeps the summary of a sealed day before it removes day
 
 Deno.test('a day without a summary stays while the summaries of newer days free enough', async () => {
   const dataDir = await fill()
-  await sealDay(`${dataDir}/apps/myapp/${DAYS[1]}`)
+  await sealDay(dayPath(dataDir, DAYS[1]))
   const free = [0, 100]
   const usage = () => Promise.resolve({ totalBytes: 100, freeBytes: free.shift() })
   const now = Date.parse('2026-10-01T12:00:00Z')
   const result = await enforceRetention({ dataDir, minFree: { percent: 10 }, usage, now })
   assertEquals(result.summarized, [`myapp/${DAYS[1]}`])
   assertEquals(result.removed, [])
-  assert(!(await isSummaryOnlyDay(`${dataDir}/apps/myapp/${DAYS[0]}`)))
-  await Deno.stat(`${dataDir}/apps/myapp/${DAYS[0]}`)
+  assert(!(await isSummaryOnlyDay(dayPath(dataDir, DAYS[0]))))
+  await Deno.stat(dayPath(dataDir, DAYS[0]))
+  await Deno.remove(dataDir, { recursive: true })
+})
+
+Deno.test('the retention reduces and removes a day with all its sources', async () => {
+  const dataDir = await fill()
+  const other = await fill({ source: OTHER_SOURCE })
+  for (const day of DAYS) {
+    await Deno.rename(dayPath(other, day, OTHER_SOURCE), dayPath(dataDir, day, OTHER_SOURCE))
+  }
+  await Deno.remove(other, { recursive: true })
+  await sealAll(dataDir)
+  await sealAll(dataDir, OTHER_SOURCE)
+  const now = Date.parse('2026-10-01T12:00:00Z')
+  const query = parseQuery({ app: 'myapp', from: DAYS[0], to: DAYS[1], groupBy: ['page'] }, now)
+  const before = await ask(dataDir, query)
+  const run = (free) =>
+    enforceRetention({
+      dataDir,
+      minFree: { percent: 10 },
+      usage: () => Promise.resolve({ totalBytes: 100, freeBytes: free.shift() }),
+      now,
+    })
+  const reduced = await run([0, 0, 100])
+  assertEquals(reduced.summarized, DAYS.map((day) => `myapp/${day}`))
+  assertEquals(reduced.removed, [])
+  for (const day of DAYS) {
+    for (const source of [SOURCE, OTHER_SOURCE]) {
+      assert(await isSummaryOnlyDay(dayPath(dataDir, day, source)))
+    }
+  }
+  assertEquals(await ask(dataDir, query), before)
+  const removed = await run([0, 100])
+  assertEquals(removed.removed, [`myapp/${DAYS[0]}`])
+  const after = await ask(dataDir, { ...query, from: DAYS[0] })
+  assertEquals(after.days, 1)
+  assertEquals(after.skippedDays, [])
+  await Deno.remove(dataDir, { recursive: true })
+})
+
+Deno.test('the retention removes the days of a period, then the weeks, then the months', async () => {
+  const days = ['2026-08-31', '2026-09-01', '2026-09-02', '2026-09-03', '2026-09-04']
+  const dataDir = await fill({ days })
+  await sealAll(dataDir, SOURCE, days)
+  const now = Date.parse('2026-10-01T12:00:00Z')
+  await sealDuePeriods({ dataDir, source: SOURCE, now, sealDelayMs: 0 })
+  const range = { app: 'myapp', from: '2026-08-31', to: '2026-09-30', measures: ['visits'] }
+  const byWeek = parseQuery({ ...range, groupBy: ['week'] }, now)
+  const byMonth = parseQuery({ ...range, from: '2026-08-01', groupBy: ['month'] }, now)
+  const before = [await ask(dataDir, byWeek), await ask(dataDir, byMonth)]
+  const run = (zeros) => {
+    let calls = 0
+    return enforceRetention({
+      dataDir,
+      minFree: { percent: 10 },
+      usage: () => Promise.resolve({ totalBytes: 100, freeBytes: calls++ < zeros ? 0 : 100 }),
+      now,
+    })
+  }
+  const first = await run(days.length * 2)
+  assertEquals(first.summarized, days.map((day) => `myapp/${day}`))
+  assertEquals(first.removed, days.map((day) => `myapp/${day}`))
+  assertEquals([await ask(dataDir, byWeek), await ask(dataDir, byMonth)], before)
+  const second = await run(Infinity)
+  assertEquals(second.removed, [
+    'myapp/weeks/2026-08-31',
+    'myapp/months/2026-08',
+    'myapp/months/2026-09',
+  ])
   await Deno.remove(dataDir, { recursive: true })
 })

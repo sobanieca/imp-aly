@@ -45,7 +45,9 @@ export const query = async ({ positional, flags }) => {
     }
     if (result.skippedDays.length) {
       logger.plain(`\nSkipped ${result.skippedDays.length} days that the query cannot read:`)
-      const columns = targets.length > 1 ? ['server', 'day', 'reason'] : ['day', 'reason']
+      const columns = targets.length > 1
+        ? ['server', 'day', 'source', 'reason']
+        : ['day', 'source', 'reason']
       logger.plain(formatTable(columns, result.skippedDays))
     }
   }

@@ -20,3 +20,7 @@ export const isAppName = (value) => typeof value === 'string' && APP_NAME_PATTER
 
 export const isColumnName = (value) =>
   typeof value === 'string' && (BASE_COLUMNS.includes(value) || SEGMENT_NAME_PATTERN.test(value))
+
+export const SOURCE_PATTERN = /^[0-9a-f]{16}$/
+
+export const isSource = (value) => typeof value === 'string' && SOURCE_PATTERN.test(value)

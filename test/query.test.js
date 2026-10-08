@@ -2,7 +2,7 @@ import { sealDay } from '../src/column-store.js'
 import { parseQuery } from '../src/query-core.js'
 import { applySegment } from '../src/storage.js'
 import { assertEquals, assertThrows, temporaryDir } from './assert.js'
-import { ask } from './fixtures.js'
+import { ask, dayPath, SOURCE } from './fixtures.js'
 
 const VISITS = [
   ['2026-10-01', '/invoice', 'PL', 'pro'],
@@ -29,7 +29,7 @@ const fill = async () => {
     }
     text += `${JSON.stringify(['myapp', day, record])}\n`
   })
-  await applySegment({ dataDir, segment: 1, text })
+  await applySegment({ dataDir, source: SOURCE, segment: 1, text })
   return dataDir
 }
 
@@ -48,7 +48,7 @@ Deno.test('visits per day where country is PL and plan is pro', async () => {
   assertEquals(result.rows, [{ day: '2026-10-01', records: 2 }, { day: '2026-10-02', records: 2 }])
   assertEquals(result.scanned, 8)
   assertEquals(result.matched, 4)
-  await sealDay(`${dataDir}/apps/myapp/2026-10-01`)
+  await sealDay(dayPath(dataDir, '2026-10-01'))
   assertEquals((await ask(dataDir, query)).rows, result.rows)
   await Deno.remove(dataDir, { recursive: true })
 })

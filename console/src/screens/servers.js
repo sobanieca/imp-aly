@@ -71,6 +71,7 @@ const serverStatus = component('aly-server-status', {
           { term: 'Version', details: status.version },
           { term: 'Started at', details: formatDateTime(status.startedAt) },
           { term: 'Data folder', details: status.dataDir },
+          { term: 'Source id', details: status.source },
           { term: 'Apps', details: formatCount(status.apps) },
           { term: 'Records stored since the start', details: formatCount(storage.processedRows) },
           { term: 'Last store', details: formatDateTime(storage.lastProcessedAt) },
@@ -178,6 +179,9 @@ export const serversScreen = component('aly-servers', {
     const removing = initState(self, 'aly.servers.removing', null)
     const removeOpen = initState(self, 'aly.servers.removeOpen', false)
     const saved = computed([catalog], (value) => value?.servers ?? null)
+    formOpen.watch(self, (open) => {
+      if (!open) editing.set(null)
+    })
     const reload = () => {
       scopeServers.set((names) => names.filter((name) => name !== removing.get()))
       revision.set((value) => value + 1)
