@@ -1,4 +1,4 @@
-import { inNetwork, parseIp, parseNetwork } from './ip.js'
+import { formatIp, inNetwork, parseClientAddress, parseIp, parseNetwork } from './ip.js'
 
 export const DEFAULT_LIMITS = [
   { name: '5s', ms: 5_000, limit: 200 },
@@ -112,7 +112,7 @@ export const createRateLimiter = (
 export const maxBatch = (limits) => Math.min(...limits.map((limit) => limit.limit))
 
 export const clientKeys = (address) => {
-  const ip = parseIp(address)
+  const ip = parseClientAddress(address)
   if (!ip) return [{ key: address, scale: 1 }]
   const [a, b, c, d] = ip.parts
   if (ip.version === 4) return [{ key: `${a}.${b}.${c}.${d}`, scale: 1 }]
@@ -133,5 +133,6 @@ export const clientAddress = (request, info, { ipHeader = null, trustedProxies =
   const value = request.headers.get(ipHeader)
   if (!value) return remote
   const entries = value.split(',').map((entry) => entry.trim()).filter(Boolean)
-  return entries.at(-1) ?? remote
+  const ip = parseClientAddress(entries.at(-1))
+  return ip ? formatIp(ip) : remote
 }

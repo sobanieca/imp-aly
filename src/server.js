@@ -6,6 +6,7 @@ import { dayOf } from './days.js'
 import { removeIfExists } from './fs-utils.js'
 import { watchFiles } from './file-watch.js'
 import { HttpError, parseJsonBytes, readBodyBytes, readJsonBody } from './http-body.js'
+import { createInFlight } from './in-flight.js'
 import { logger } from './logger.js'
 import { createOriginCheck } from './origins.js'
 import { isAppName } from './names.js'
@@ -34,6 +35,10 @@ export const DEFAULT_ADMIN_PORT = 2981
 export const COLLECT_MAX_BYTES = 65_536
 
 export const DEFAULT_MAX_REQUESTS = 1_024
+
+export const COLLECT_TIMEOUT_MS = 5_000
+
+export const RESTORE_IDLE_MS = 30_000
 
 const BUSY_RETRY_SECONDS = '5'
 
@@ -113,16 +118,29 @@ const acquireLock = async (dataDir) => {
 
 const bodyMismatch = () => new HttpError(401, 'unauthorized: the body does not match the token')
 
-const saveUpload = async (request, dir, bodyHash) => {
+const saveUpload = async (request, { dir, bodyHash, idleMs }) => {
   const tooLarge = () => new HttpError(413, `a backup is at most ${RESTORE_MAX_BYTES} bytes`)
   if (Number(request.headers.get('content-length')) > RESTORE_MAX_BYTES) throw tooLarge()
   if (!request.body) throw new HttpError(400, 'send the backup file as the body')
   await Deno.mkdir(dir, { recursive: true })
   const path = join(dir, `${crypto.randomUUID()}.tar.gz`)
   let total = 0
+  let timer = null
+  let stream = null
   const hash = createSha256()
+  const wait = () => {
+    clearTimeout(timer)
+    timer = setTimeout(() => {
+      stream.error(new HttpError(408, `the backup sent no bytes for ${idleMs / 1000} s`))
+    }, idleMs)
+  }
   const limit = new TransformStream({
+    start: (controller) => {
+      stream = controller
+      wait()
+    },
     transform: (chunk, controller) => {
+      wait()
       total += chunk.length
       hash.update(chunk)
       if (total > RESTORE_MAX_BYTES) controller.error(tooLarge())
@@ -135,6 +153,8 @@ const saveUpload = async (request, dir, bodyHash) => {
   } catch (error) {
     await removeIfExists(path)
     throw error instanceof HttpError ? error : new HttpError(400, 'the body could not be read')
+  } finally {
+    clearTimeout(timer)
   }
   if (hash.digest() !== bodyHash) {
     await removeIfExists(path)
@@ -304,15 +324,25 @@ const createStorageRunner = (
   }
 }
 
-const listen = (options, handler) => {
-  if (options.hostname) return Deno.serve(options, handler)
+const probeAddress = (port, hostname) => {
+  const listener = Deno.listen({ port, hostname })
+  const { addr } = listener
+  listener.close()
+  return { port: addr.port, hostname: addr.hostname }
+}
+
+const claimAddress = ({ port, hostname }) => {
+  if (hostname) return probeAddress(port, hostname)
   try {
-    return Deno.serve({ ...options, hostname: '::' }, handler)
+    return probeAddress(port, '::')
   } catch (error) {
     if (error instanceof Deno.errors.AddrInUse) throw error
-    return Deno.serve({ ...options, hostname: '0.0.0.0' }, handler)
+    return probeAddress(port, '0.0.0.0')
   }
 }
+
+const serveOn = (address, tls, handler) =>
+  Deno.serve({ ...address, reusePort: true, onListen: () => {}, ...tls }, handler)
 
 export const startServer = async ({
   port = DEFAULT_PORT,
@@ -328,6 +358,9 @@ export const startServer = async ({
   limits = DEFAULT_LIMITS,
   maxClients,
   maxRequests = DEFAULT_MAX_REQUESTS,
+  maxClientRequests,
+  collectTimeoutMs = COLLECT_TIMEOUT_MS,
+  restoreIdleMs = RESTORE_IDLE_MS,
   minFree = DEFAULT_MIN_FREE,
   tlsCert = null,
   tlsKey = null,
@@ -389,7 +422,11 @@ export const startServer = async ({
     const limiter = createRateLimiter({ limits, ...(maxClients ? { maxClients } : {}) })
     const batchLimit = maxBatch(limits)
     let verifyToken = createTokenVerifier(key)
-    const inFlight = { public: { count: 0 }, admin: { count: 0 } }
+    const perClient = maxClientRequests ? { perClient: maxClientRequests } : {}
+    const inFlight = {
+      public: createInFlight({ max: maxRequests, ...perClient }),
+      admin: createInFlight({ max: maxRequests, ...perClient }),
+    }
 
     let refreshing = false
     const refreshTimer = setInterval(async () => {
@@ -408,7 +445,10 @@ export const startServer = async ({
     const collect = async (request, clients, name, headers) => {
       const app = isAppName(name) ? apps.get(name) : undefined
       if (!app) throw new HttpError(404, `no app "${name}" is registered`)
-      const body = await readJsonBody(request, { maxBytes: COLLECT_MAX_BYTES })
+      const body = await readJsonBody(request, {
+        maxBytes: COLLECT_MAX_BYTES,
+        timeoutMs: collectTimeoutMs,
+      })
       const inputs = Array.isArray(body) ? body : [body]
       if (inputs.length > batchLimit) {
         throw new HttpError(413, `a request holds at most ${batchLimit} records`)
@@ -468,7 +508,7 @@ export const startServer = async ({
           source,
           apps: apps.list().length,
           rateLimitedClients: limiter.size(),
-          activeRequests: { public: inFlight.public.count, admin: inFlight.admin.count },
+          activeRequests: { public: inFlight.public.count(), admin: inFlight.admin.count() },
           storage: storage.status(),
         })
       }
@@ -488,7 +528,11 @@ export const startServer = async ({
         })
       }
       if (path === '/restore' && method === 'POST') {
-        const upload = await saveUpload(request, uploadDir, bodyHash)
+        const upload = await saveUpload(request, {
+          dir: uploadDir,
+          bodyHash,
+          idleMs: restoreIdleMs,
+        })
         try {
           return json(200, await storage.restore(upload))
         } finally {
@@ -548,33 +592,38 @@ export const startServer = async ({
       throw new HttpError(404, `${request.method} ${path} is not an endpoint`)
     }
 
+    const refuse = async (request, status, error, headers) => {
+      await request.body?.cancel().catch(() => {})
+      return secure(json(status, { error }, headers))
+    }
+
     const createHandler = (route, counter) => async (request, info) => {
       const url = new URL(request.url)
       const origin = route === publicRoute && url.pathname.startsWith('/collect/')
         ? checkOrigin(request.headers.get('origin'))
         : { allowed: true, headers: route === adminRoute ? ADMIN_CORS_HEADERS : {} }
       const { headers } = origin
-      if (counter.count >= maxRequests) {
-        await request.body?.cancel().catch(() => {})
-        return secure(json(
-          503,
-          { error: 'the server is busy, try again later' },
-          { ...headers, 'retry-after': BUSY_RETRY_SECONDS },
-        ))
+      const retry = { ...headers, 'retry-after': BUSY_RETRY_SECONDS }
+      if (counter.full()) {
+        return refuse(request, 503, 'the server is busy, try again later', retry)
       }
       const clients = clientKeys(
         clientAddress(request, info, { ipHeader, trustedProxies: proxies }),
       )
+      const leave = counter.enter(clients)
+      if (!leave) {
+        return refuse(request, 429, 'too many requests in progress from this address', retry)
+      }
       const exceeded = limiter.take(clients, 1)
       if (exceeded) {
-        await request.body?.cancel().catch(() => {})
-        return secure(json(
+        leave()
+        return refuse(
+          request,
           429,
-          { error: `too many requests from this address in ${exceeded.name}` },
+          `too many requests from this address in ${exceeded.name}`,
           headers,
-        ))
+        )
       }
-      counter.count++
       try {
         return secure(await route(request, url, clients, origin), headers)
       } catch (error) {
@@ -587,7 +636,7 @@ export const startServer = async ({
         log.error(error instanceof Error ? (error.stack ?? error.message) : String(error))
         return secure(json(500, { error: 'internal error' }, headers))
       } finally {
-        counter.count--
+        leave()
       }
     }
 
@@ -604,33 +653,41 @@ export const startServer = async ({
       tlsCert && tlsKey
         ? { cert: Deno.readTextFileSync(tlsCert), key: Deno.readTextFileSync(tlsKey) }
         : {}
-    let tls = readTls()
     let servers = []
-    cleanups.push(async () => {
-      for (const server of servers) await server.shutdown()
-    })
-    for (const { port, hostname, handler } of handlers) {
-      servers.push(listen({ port, hostname, onListen: () => {}, ...tls }, handler))
+    const draining = new Set()
+    const drain = (old) => {
+      for (const server of old) {
+        const done = server.shutdown().finally(() => draining.delete(done))
+        draining.add(done)
+      }
     }
-    const addresses = servers.map((server) => ({
-      port: server.addr.port,
-      hostname: server.addr.hostname,
-    }))
+    cleanups.push(async () => {
+      drain(servers)
+      servers = []
+      await Promise.all([...draining])
+    })
+    const tls = readTls()
+    const addresses = []
+    for (const { port, hostname, handler } of handlers) {
+      const address = claimAddress({ port, hostname })
+      servers.push(serveOn(address, tls, handler))
+      addresses.push(address)
+    }
 
     const serveAll = (options) => {
       const started = []
       try {
         for (const [index, { handler }] of handlers.entries()) {
-          started.push(Deno.serve({ ...addresses[index], onListen: () => {}, ...options }, handler))
+          started.push(serveOn(addresses[index], options, handler))
         }
         return started
       } catch (error) {
-        for (const server of started) server.shutdown()
+        drain(started)
         throw error
       }
     }
 
-    const reloadTls = async () => {
+    const reloadTls = () => {
       let fresh
       try {
         fresh = readTls()
@@ -638,19 +695,19 @@ export const startServer = async ({
         log.error(`Cannot read the new TLS certificate: ${error.message}`)
         return false
       }
-      log.info('The TLS certificate changed, the server restarts its listeners')
-      for (const server of servers) await server.shutdown()
+      let started
       try {
-        servers = serveAll(fresh)
-        tls = fresh
-        return true
+        started = serveAll(fresh)
       } catch (error) {
         log.error(
           `The new TLS certificate does not work, the server keeps the old one: ${error.message}`,
         )
-        servers = serveAll(tls)
         return false
       }
+      drain(servers)
+      servers = started
+      log.info('The TLS certificate changed, the server uses the new one')
+      return true
     }
     if (tlsCert && tlsKey) {
       const watcher = await watchFiles({

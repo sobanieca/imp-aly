@@ -45,10 +45,11 @@ Deno.test('the console answers only on localhost, serves files only, and sets st
 })
 
 Deno.test('the page adds up the answers of several servers like the CLI, and names a failed server', async () => {
-  const targets = ['one', 'two', 'down'].map((label) => ({ label }))
+  const targets = ['one', 'two', 'down', 'proxy'].map((label) => ({ label }))
   const call = (target, request) => {
     assertEquals([request.method, request.path], ['POST', '/query'])
     if (target.label === 'down') return Promise.reject(new Error('cannot reach down'))
+    if (target.label === 'proxy') return Promise.resolve('<html>login</html>')
     return Promise.resolve(answerOf(target.label === 'one' ? 2 : 3, target.label))
   }
   const { result, warnings } = await queryEach(
@@ -57,12 +58,15 @@ Deno.test('the page adds up the answers of several servers like the CLI, and nam
     call,
   )
   assertEquals(result.rows, [{ page: 'page', records: 5, visits: 5 }])
-  assertEquals(result.failedServers, [{ server: 'down', reason: 'cannot reach down' }])
+  assertEquals(result.failedServers, [
+    { server: 'down', reason: 'cannot reach down' },
+    { server: 'proxy', reason: 'proxy sent a reply that is not a query answer' },
+  ])
   assertEquals(warnings, [
     'the app myapp has different builds or different segments on the servers',
   ])
 
-  const each = await eachServer(targets, (target) => {
+  const each = await eachServer(targets.slice(0, 3), (target) => {
     if (target.label === 'down') throw new Error('no answer')
     return target.label
   })

@@ -84,10 +84,11 @@ wrong by more than the window loses its records, and the rejection counts of the
 | ---------------------- | ---------------------------------- | ------ |
 | body size              | 64 KiB                             | `413`  |
 | records in one request | the 5 s rate limit, 200 by default | `413`  |
-| time to send the body  | 10 s                               | `408`  |
+| time to send the body  | 5 s                                | `408`  |
 | body that is not JSON  |                                    | `400`  |
 | app that is not known  |                                    | `404`  |
 | requests in progress   | 1,024 on the public port           | `503`  |
+| requests in progress   | 32 from one address                | `429`  |
 
 The browser limits the body of a `keepalive` request or a `sendBeacon` to about 64 KiB. 20 records
 are about 2 KB. One request holds at most as many records as the smallest window of the rate limit
@@ -133,6 +134,11 @@ answers `503` with `retry-after: 5` at once. The admin port has a separate limit
 This limit protects the memory and the processor of the server during a flood of requests from many
 addresses. `--max-requests <n>` changes it.
 
+One address can have at most 1/32 of these requests in progress, 32 by default. Above this number,
+the server answers `429` with `retry-after: 5` at once. An IPv6 `/48` network can have 4 times this
+number. The server reads a body for at most 5 seconds. So a few slow senders cannot take all the
+places of the server.
+
 ## Behind a proxy
 
 Behind a proxy, every request comes from the address of the proxy. Tell the server which header
@@ -143,7 +149,9 @@ sudo imp-aly server --port 2980 --ip-header x-forwarded-for
 ```
 
 The server takes the last address of the header, which is the address that your proxy added. Use
-`cf-connecting-ip` behind Cloudflare, or `x-real-ip` when your proxy sets it.
+`cf-connecting-ip` behind Cloudflare, or `x-real-ip` when your proxy sets it. The address can have a
+port, like `203.0.113.5:5678` or `[2001:db8::1]:443`. The server removes the port. When the last
+entry is not an address, the request counts for the address of the proxy.
 
 The server reads the header only when the request comes from a trusted proxy. By default, it trusts
 only the same machine: `127.0.0.0/8` and `::1`. When your proxy runs on another machine, give its

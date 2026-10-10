@@ -51,7 +51,8 @@ Without root, or without systemd, the server runs in the foreground, with the da
 `~/.imp-aly`. `--foreground` forces this. `Ctrl+C` stops it. `sudo imp-aly server --uninstall`
 removes the service. The data folder, the key file and the user `imp-aly` stay.
 
-The service updates itself once a day to the newest compatible version. See [Updates](update.md).
+The service updates itself once a day to a compatible release that is more than 7 days old. See
+[Updates](update.md).
 
 **Keep the key secret.** The key gives access to the queries and to the app registry. The `Collect`
 endpoint is public and needs no key.
@@ -90,10 +91,11 @@ A page on HTTPS cannot send records to a server on plain HTTP. Use one of these 
   serve HTTPS.
 
 The server checks the certificate files once an hour. When a file changes, for example after a
-renewal by certbot, the server restarts its listener with the new certificate. The service restarts
+renewal by certbot, the server in the foreground opens new listeners with the new certificate, and
+then closes the old ones. The port answers all the time, and running requests finish. When the new
+certificate does not work, the server keeps the old one and logs an error. The service restarts
 completely, because systemd gives it a copy of the files at each start. Requests that arrive during
-the restart fail, and a sink loses some records. When the new certificate does not work, the server
-in the foreground keeps the old one and logs an error.
+the restart fail, and a sink loses some records.
 
 ## Register an app
 
@@ -184,8 +186,8 @@ from the menu of the browser. Or run `imp-aly console` and open `http://localhos
 admin port, see [Serve HTTPS](#serve-https).
 
 The console shows the visits of your apps, and the pages, zones, outcomes and errors of each app, in
-charts. It also has a query builder, and pages for the apps, the servers and the backups. See
-[Console](console.md).
+charts. It also has pages for the apps and the servers. Make backups with `imp-aly backup`, see
+[Backup](backup.md). See [Console](console.md).
 
 ## Next
 
@@ -194,7 +196,7 @@ charts. It also has a query builder, and pages for the apps, the servers and the
 - [Queries](query.md) - the query API
 - [Storage](storage.md) - how the server stores the records and removes old ones
 - [Backup](backup.md) - save the daily, week or month summaries, restore them, and keep them safe
-- [Console](console.md) - the web app with charts, a query builder, apps, servers and backups
+- [Console](console.md) - the web app with charts of your apps, and pages for apps and servers
 - [Security](security.md) - the key, the tokens and the limits
 - [Updates](update.md) - the daily update, and how to control it
 - [CLI](cli.md) - every command and option

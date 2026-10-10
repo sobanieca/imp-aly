@@ -32,6 +32,8 @@ export const addMonths = (day, count) => {
   return dayOf(first.getTime())
 }
 
+export const dayCount = (from, to) => Math.round((Date.parse(to) - Date.parse(from)) / DAY_MS) + 1
+
 export const PERIOD_KINDS = ['weeks', 'months']
 
 export const PERIOD_NAMES = { weeks: 'week', months: 'month' }

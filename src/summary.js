@@ -1,5 +1,5 @@
 import { BASE_COLUMNS, MAX_SEGMENTS, RESERVED_NAMES, SEGMENT_NAME_PATTERN } from './names.js'
-import { isCountry, isName, isSegmentValue, TYPE_FIELDS } from './records.js'
+import { isCountry, isName, isRoutePattern, isSegmentValue, TYPE_FIELDS } from './records.js'
 
 export const SUMMARY_FILES = {
   counts: 'summary-counts.tsv',
@@ -246,7 +246,7 @@ const optional = (check) => (value) => value === '' || check(value)
 
 const CELL_CHECKS = {
   type: (value) => Object.hasOwn(TYPE_FIELDS, value),
-  page: (value) => value !== '',
+  page: isRoutePattern,
   zone: optional(isName),
   name: optional(isName),
   country: optional(isCountry),

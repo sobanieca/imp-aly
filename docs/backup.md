@@ -6,9 +6,13 @@ another disk or another machine. You can restore the summaries into any imp-aly 
 server answers most queries from them.
 
 ```sh
-imp-aly backup imp-aly-2026-09.tar.gz --last 30d
-imp-aly restore imp-aly-2026-09.tar.gz
+ssh myvps
+sudo imp-aly backup imp-aly-2026-09.tar.gz --last 30d
+sudo imp-aly restore imp-aly-2026-09.tar.gz
 ```
+
+Make and restore backups with the CLI: on the VPS over SSH, or on another machine. The console does
+not make backups. See [Back up on the VPS](#back-up-on-the-vps).
 
 You choose three things for a backup:
 
@@ -78,16 +82,17 @@ of that source into its own backups.
 ## Make a backup
 
 ```sh
-imp-aly backup <file> [--last <period>] [--by <granularity>] [-s <name>]
+imp-aly backup [<file>] [--last <period>] [--by <granularity>] [-s <name>]
 ```
 
-| Option               | Value                                        | Default      |
-| -------------------- | -------------------------------------------- | ------------ |
-| `--last <period>`    | `1d`, `7d`, `30d`, `3m`, `6m`, `1y` or `all` | `all`        |
-| `--by <granularity>` | `day`, `week` or `month`                     | `day`        |
-| `-s <name>`          | a saved server                               | the default  |
-| `--url <url>`        | the URL of the server                        | local server |
-| `-a`, `--auth`       | the key, or a file with it                   | the key file |
+| Option               | Value                                        | Default                                                 |
+| -------------------- | -------------------------------------------- | ------------------------------------------------------- |
+| `<file>`             | the backup file to write                     | `imp-aly-backup-<period>-by-<granularity>-<day>.tar.gz` |
+| `--last <period>`    | `1d`, `7d`, `30d`, `3m`, `6m`, `1y` or `all` | `all`                                                   |
+| `--by <granularity>` | `day`, `week` or `month`                     | `day`                                                   |
+| `-s <name>`          | a saved server                               | the default                                             |
+| `--url <url>`        | the URL of the server                        | the local server                                        |
+| `-a`, `--auth`       | the key, or a file with it                   | the key file of the local server                        |
 
 The period ends at the last sealed day. `--last 1d` is the last sealed day. `--last 7d` is that day
 and the 6 days before it. `--last 3m` starts on the day after the same day 3 months before. For
@@ -110,6 +115,40 @@ Saved 30 daily summaries of 2 apps and 1 source to imp-aly-2026-09.tar.gz (5.8 M
 
 The command calls the API like `imp-aly query`. So you can run it on another machine with a saved
 server, or with `--url` and `-a`. The file goes directly to that machine.
+
+## Back up on the VPS
+
+On the VPS, the commands need no server option. They call the local service:
+
+```sh
+ssh myvps
+sudo imp-aly backup
+```
+
+```
+Saved 45 daily summaries of 2 apps and 1 source to imp-aly-backup-all-by-day-2026-10-09.tar.gz (8.1 MB)
+```
+
+The command reads the admin port, the bind address and the key file from the unit file of the
+service, `/etc/systemd/system/imp-aly.service`. Only root can read the key file of the service, so
+use `sudo`. The file goes to the current folder. Copy it from the VPS to another machine:
+
+```sh
+scp myvps:imp-aly-backup-all-by-day-2026-10-09.tar.gz .
+```
+
+To restore, copy the file to the VPS, then send it to the local service:
+
+```sh
+scp imp-aly-backup-all-by-day-2026-10-09.tar.gz myvps:
+ssh myvps
+sudo imp-aly restore imp-aly-backup-all-by-day-2026-10-09.tar.gz
+```
+
+When root has a saved default server or group, the command calls it instead of the local service.
+Then give `--url` and `-a` for the local service. When the service uses TLS, give
+`--url https://<host in the certificate>:<admin port>`, because the certificate does not name
+`127.0.0.1`.
 
 ## Restore a backup
 
@@ -208,9 +247,10 @@ mkdir -p /var/backups/imp-aly
 imp-aly backup "/var/backups/imp-aly/$day.tar.gz" --last 1d
 ```
 
-`--last 1d` is the last sealed day. The server seals a day at 01:10 UTC of the next day, so the last
-sealed day is the day of 25 hours and 10 minutes ago. The script gives the file the name of that
-day. On macOS, use `date -u -v-1510M +%F`.
+cron runs the script as root, so the command finds the local service and its key file. `--last 1d`
+is the last sealed day. The server seals a day at 01:10 UTC of the next day, so the last sealed day
+is the day of 25 hours and 10 minutes ago. The script gives the file the name of that day. On macOS,
+use `date -u -v-1510M +%F`.
 
 To keep a long history in small files, also make a backup of the months, once a month:
 
@@ -292,4 +332,5 @@ The commands call these endpoints. Each one needs a token, see [Security](securi
 
 `last` and `by` take the values of `--last` and `--by`. `GET /backup` answers `400` for another
 option or value. `POST /restore` answers `400` when the file is not a valid backup, and `413` when
-it is too large.
+it is too large. When the upload sends no byte for 30 seconds, the server stops it and answers
+`408`.

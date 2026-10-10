@@ -4,7 +4,7 @@ import { BACKUP_KINDS, BACKUP_PERIODS, countBackup } from '../backup.js'
 import { removeIfExists } from '../fs-utils.js'
 import { logger } from '../logger.js'
 
-const USAGE = 'use: imp-aly backup <file> [--last <period>] [--by day|week|month] [-s <name>]'
+const USAGE = 'use: imp-aly backup [<file>] [--last <period>] [--by day|week|month] [-s <name>]'
 
 const plural = (count, word, many = `${word}s`) => `${count} ${count === 1 ? word : many}`
 
@@ -33,12 +33,16 @@ const formatBytes = (bytes) => {
   return `${unit ? value.toFixed(1) : value} ${units[unit]}`
 }
 
+export const defaultFileName = (last, by, now = new Date()) =>
+  `imp-aly-backup-${last}-by-${by}-${now.toISOString().slice(0, 10)}.tar.gz`
+
 export const backup = async ({ positional, flags }) => {
   requireOnlyFlags(flags, ['auth', 'url', 'server', 'last', 'by'], 'backup')
-  const [, file, ...rest] = positional
-  if (!file || rest.length) throw new Error(USAGE)
+  const [, chosen, ...rest] = positional
+  if (rest.length) throw new Error(USAGE)
   const last = flags.last ?? 'all'
   const by = flags.by ?? 'day'
+  const file = chosen ?? defaultFileName(last, by)
   if (!Object.hasOwn(BACKUP_PERIODS, last)) {
     throw new Error(`--last is one of ${Object.keys(BACKUP_PERIODS).join(', ')}`)
   }
@@ -52,6 +56,7 @@ export const backup = async ({ positional, flags }) => {
     server: flags.server,
     method: 'GET',
     path: `/backup?${params}`,
+    timeoutMs: 0,
   })
   const temporary = `${file}.tmp`
   const [toFile, toCheck] = response.body.tee()

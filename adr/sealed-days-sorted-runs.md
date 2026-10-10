@@ -18,18 +18,21 @@ rows and writes each field as a run file.**
 
 - The sort keys are `page`, `type`, `zone`, `name`, `visit` and `at`. The worker computes one order
   from these columns and applies it to every column, so the rows stay aligned.
-- To keep memory low, the worker sorts the day in chunks of 250,000 rows. It turns each key column
-  of a chunk into numbers by rank, and sorts an index array. It writes each sorted chunk to
-  `sort-<chunk>-<field>.txt` files in the `.tmp` folder, and keeps only the last chunk in memory. A
-  day of more than 64 chunks gets larger chunks, so the merge never opens more than 64 chunks.
+- To keep memory low, the worker sorts the day in chunks of 250,000 rows. It turns each text key
+  column of a chunk into numbers by rank, reads `at` as a number, and sorts an index array. It
+  writes each sorted chunk to `sort-<chunk>-<column>.txt` files in the `.tmp` folder, where
+  `<column>` is the position of the field in the row. It keeps only the last chunk in memory. A day
+  of more than 64 chunks of 250,000 rows gets larger chunks of rows / 64. Each part of the day, the
+  sealed folder and each raw folder, starts a new chunk. So the merge opens at most 64 chunks plus
+  one chunk for each part.
 - The worker then merges the sorted chunks. It reads each chunk file in blocks of 4,096 rows, takes
   the smallest row of all chunks, and appends each field to its run file. Rows with equal keys keep
   the order of arrival.
 - A run file has one line per run: the count, a tab, and the value. An empty value is null.
 - A field with more runs than half its rows gets a plain `.txt` file with one line per row, because
   runs of one row only add the counts.
-- `meta.json` holds the number of rows, the fields, the plain fields, and the largest log part id of
-  the day.
+- `meta.json` holds the number of rows, the fields, the plain fields, the largest log part id of the
+  day, `summary: true` for the daily summary in the folder, and the sort keys in `sortedBy`.
 - The worker reads each part of the day in blocks of 256 KiB, chunk by chunk, and adds each row to
   the daily summary on the way, see `daily-summaries.md`. It writes each file in pieces of about 1
   MiB.
@@ -39,7 +42,10 @@ rows and writes each field as a run file.**
   older sealed folder and the raw folders up to `n`. `n` is the highest raw generation that the seal
   took in.
 - New records for a sealed day go to `raw-<n+1>/`. A reader reads the highest sealed folder and the
-  raw folders above it. The next maintenance seals the day again.
+  raw folders above it. The day joins the list of unsealed days of the worker, see
+  `single-writer-storage-worker.md`, and the next seal step seals the day again.
+- When the raw folders of a day hold no row, the worker removes them and writes no new sealed
+  folder.
 - A leftover `.tmp` folder, an older sealed folder, or a raw folder at or below the sealed
   generation is removed before the next seal.
 

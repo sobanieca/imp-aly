@@ -1,12 +1,13 @@
 import { queryServers } from './client.js'
-import { presetPrevious } from './days.js'
+import { presetPrevious } from './ranges.js'
 
 export const messageOf = (error) => error?.body?.error ?? error?.message ?? String(error)
 
 export const runQuery = (api, scope, query) =>
   queryServers(api, scope.servers, { app: scope.app, from: scope.from, to: scope.to, ...query })
 
-const previousScope = (scope) => scope.preset ? { ...scope, ...presetPrevious(scope.preset) } : null
+const previousScope = (scope) =>
+  scope.preset ? { ...scope, ...presetPrevious(scope.preset, scope.today) } : null
 
 export const runPrevious = (api, scope, query) => {
   const earlier = previousScope(scope)
@@ -32,15 +33,4 @@ export const problemsOf = (answers) => {
     skipped: [...skipped.values()],
     warnings: [...warnings],
   }
-}
-
-export const downloadText = (name, text, type) => downloadBlob(name, new Blob([text], { type }))
-
-export const downloadBlob = (name, blob) => {
-  const url = URL.createObjectURL(blob)
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = name
-  anchor.click()
-  setTimeout(() => URL.revokeObjectURL(url), 1000)
 }

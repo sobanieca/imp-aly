@@ -259,6 +259,8 @@ Deno.test('a summary with a value that a record cannot have fails the check', ()
     'outcome\t/\t\tsent\t\t',
     'seen\t/\t\t\tpl\t',
     'seen\t/\t\t\t\t<script>',
+    'seen\tinvoices\t\t\t\t',
+    `seen\t/${'x'.repeat(512)}\t\t\t\t`,
   ]
   for (const count of counts) {
     assertThrows(() => checkSummary(summary(count, 'seen\t/\tPL\tpro')), /line that is not valid/)
@@ -267,6 +269,11 @@ Deno.test('a summary with a value that a record cannot have fails the check', ()
     () => checkSummary(summary(good, 'seen\t/\tPL\ta b')),
     /line that is not valid/,
   )
+  assertThrows(
+    () => checkSummary(summary(good, 'seen\tno-slash\tPL\tpro')),
+    /line that is not valid/,
+  )
+  assertEquals(checkSummary(summary('seen\t/invoices/:id\t\t\t\t', 'seen\t/\tPL\tpro')), 1)
   const page = 'page\t/\t\t\tPL\tpro'
   assertEquals(checkSummary(summary(page, 'page\t/\tPL\tpro', '2')), 2)
   for (const records of ['0', '-1', '1.5', '01', '', '2\t420']) {

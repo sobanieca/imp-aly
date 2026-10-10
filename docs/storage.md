@@ -144,6 +144,15 @@ When the worker cannot read a log part 3 times, it renames the part to `<part>.u
 continues. `imp-aly status` counts these parts under `unreadableSegments`. The worker never deletes
 them. Copy the records that you can read into a new part, or delete the file.
 
+Some records cannot be stored at all:
+
+- A line of a log part that is not a valid record, such as the last line of a part after a crash.
+- The records of a day that holds only its daily summary. The retention or a restore can make a day
+  a summary while its records wait aside. A summary-only day takes no new records.
+
+The worker drops these records and logs an error. `imp-aly status` counts them under
+`droppedRecords`, since the start of the server. The console shows the count on the Servers screen.
+
 ## Each record once
 
 The commit also holds the number of the last log part that it stored. When the worker reads a part a

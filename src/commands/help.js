@@ -1,6 +1,7 @@
 import { DEFAULT_LIMITS, DEFAULT_TRUSTED_PROXIES } from '../rate-limit.js'
 import { DEFAULT_MIN_FREE } from '../retention.js'
 import { DEFAULT_CONSOLE_PORT } from '../console.js'
+import { CALL_TIMEOUT_MS, QUERY_TIMEOUT_MS } from '../multi-server.js'
 import { DEFAULT_ADMIN_PORT, DEFAULT_MAX_REQUESTS, DEFAULT_PORT } from '../server.js'
 import { version } from '../version.js'
 import { SERVICE_DATA_DIR } from '../service.js'
@@ -11,6 +12,10 @@ const limitLines = DEFAULT_LIMITS.map((window) =>
   `records per address in ${window.name} (default ${window.limit})`
 ).join('\n')
 
+const queryTimeout = QUERY_TIMEOUT_MS / 1000
+
+const callTimeout = CALL_TIMEOUT_MS / 1000
+
 export const helpText = () => `
 imp-aly ${version} - collect the analytics records of imp apps on your own VPS.
 
@@ -18,12 +23,12 @@ Usage:
 
   imp-aly server [options]              start the server (on the VPS)
   imp-aly server --uninstall            remove the systemd service
-  imp-aly update [--check]              install the newest compatible version
+  imp-aly update [--check] [--auto]     install a newer version
   imp-aly key rotate [-a <file>]        change the key, and the server does not stop
   imp-aly app add <name> <app url|build folder> [--segments plan,role]
   imp-aly app ls | show <name> | refresh <name> | rm <name>
   imp-aly query '<json>' | query <file.json> [--json]
-  imp-aly backup <file> [--last <period>] [--by day|week|month] [-s <name>]
+  imp-aly backup [<file>] [--last <period>] [--by day|week|month] [-s <name>]
   imp-aly restore <file>                put the summaries of a backup back
   imp-aly status
   imp-aly console [--port <port>]       serve the console, a web app with reports, on this machine
@@ -61,7 +66,8 @@ Server (on the VPS):
                             addresses or networks, like 10.0.0.0/8,::1
                             (default ${DEFAULT_TRUSTED_PROXIES.join(',')})
   --max-requests <n>        requests in progress on each port; above it, the server
-                            answers 503 (default ${DEFAULT_MAX_REQUESTS})
+                            answers 503 (default ${DEFAULT_MAX_REQUESTS}); one address can
+                            have 1/32 of them, then 429
   --country-header <name>   store the country from this header (cf-ipcountry, ...)
   --allow-origin <list>     accept records only from these browser origins, like
                             https://myapp.example,https://www.myapp.example
@@ -80,18 +86,22 @@ ${limitLines}
 
 Updates (on the VPS):
 
-  sudo imp-aly update                       install the newest compatible version now
-  imp-aly update --check                    show it, and install nothing
+  sudo imp-aly update                       install the newest version now
+  sudo imp-aly update --auto                install what the timer installs
+  imp-aly update --check                    show both, and install nothing
 
   "sudo imp-aly server" also installs the systemd timer "imp-aly-update". Once
-  a day, at a random time, it runs "imp-aly update". The command installs only
-  a version that reads the same data folder: before 1.0.0 a patch release of
-  the same minor version, from 1.0.0 a release of the same major version. It
-  checks the SHA-256 of the download, replaces the binary in one step and
-  restarts the service. When the service does not stay running for 15 seconds,
-  it puts the old binary back, restarts the service again and does not try
-  that version again. The old binary stays next to the new one, as
-  .imp-aly.previous. Without the service, restart the server yourself.
+  a day, at a random time, it runs "imp-aly update --auto". It installs only a
+  newer version that reads the same data folder, in the same major version
+  (before 1.0.0: the same minor version), that GitHub published more than 7
+  days ago. Without --auto, update skips the last two rules, so it can install
+  a new major version. Then run your "sudo imp-aly server" command again.
+  An update never installs an older version. It checks the SHA-256 of the
+  download with the SHA-256 file of the release. It replaces the binary in one step and restarts the
+  service. When the service does not stay running for 15 seconds, it puts the
+  old binary back, restarts the service again and does not try that version
+  again. The old binary stays next to the new one, as .imp-aly.previous.
+  Without the service, restart the server yourself.
 
 Change the key (on the VPS):
 
@@ -108,16 +118,27 @@ Client commands (app, query, backup, restore, status, token):
 
   -s, --server <name>       a saved server (default: the default saved server);
                             app and query take a list, like -s eu-1,eu-2, or a
-                            group: app runs on each server, query adds up the
-                            answers of all
-  --url <url>               server URL (default: the default saved server, or
-                            http://127.0.0.1:${DEFAULT_ADMIN_PORT} when no server is saved)
+                            group: app runs on all servers at the same time,
+                            query adds up the answers of all
+  --url <url>               server URL (default: the default saved server; with no
+                            saved server, the local service, or
+                            http://127.0.0.1:${DEFAULT_ADMIN_PORT} when it is not installed)
   -a, --auth <key|file>     key, or a file with the key (default: the key of the
-                            saved server, or ~/.secret/imp-aly-key)
+                            saved server, the key file of the local service, or
+                            ~/.secret/imp-aly-key)
+  --timeout <seconds>       app, query and status: wait this long for each
+                            server (default ${queryTimeout} for query, ${callTimeout} for the others);
+                            a server that does not answer in time counts as failed
   --json                    print the raw JSON answer
 
-Backup:
+  On the VPS, the local service needs no option: the command reads the admin
+  port and the key file from the unit file of the service. Only root can
+  read that key file, so run the command with sudo.
 
+Backup (on the VPS, over SSH, or on another machine):
+
+  sudo imp-aly backup                               all the days of the local service
+  sudo imp-aly restore imp-aly-backup-all-by-day-2026-10-09.tar.gz
   imp-aly backup day.tar.gz --last 1d               the last sealed day
   imp-aly backup year.tar.gz --last 1y --by month   the months of the last year
   imp-aly backup all.tar.gz -s eu                   all the days of the server "eu"
@@ -127,6 +148,8 @@ Backup:
   --by <granularity>        day, week or month (default day): a summary of each
                             sealed day, UTC week (Monday to Sunday) or UTC month
 
+  Without <file>, the command writes the file
+  imp-aly-backup-<period>-by-<granularity>-<day>.tar.gz in the current folder.
   A backup holds all the apps and all the sources of one server. A week or a
   month is in the backup when it is complete and its last day is in the
   period. A day is sealed at 01:10 UTC of the next day. A restored week
@@ -174,10 +197,11 @@ Console (a web app for your phone or your machine):
   imp-aly console --port 9000               on another port
 
   The console is a web app with reports on the visits, the pages, the
-  zones, the outcomes and the errors, a query builder, and pages for the
-  apps, the servers and the backups. It calls the admin ports of the
-  servers directly. Add each server with its URL and its key in the page.
-  The page keeps the keys in the browser, and no script can read them back.
+  zones, the outcomes and the errors, and pages for the apps and the
+  servers. It asks each server for its apps, and a report asks the servers
+  that have the app. It calls the admin ports of the servers directly.
+  Make backups with the CLI. Add each server with its URL and its key in
+  the page. The page keeps the keys in the browser, and no script can read them back.
   An installed console on https needs servers with https.
   "imp-aly console" listens on 127.0.0.1 and ::1 only. Stop it with Ctrl+C.
 

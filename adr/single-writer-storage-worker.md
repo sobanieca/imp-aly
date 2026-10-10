@@ -20,12 +20,22 @@ the days and removes old days. It does them one after the other.**
   `source-folders-per-server.md`.
 - Each day seals on its own. A day that fails to seal is logged and stays raw, and the other days
   still seal.
+- The worker keeps the list of the days of its source that have raw records in memory. It makes the
+  list once, from the folders, at its start and after a restore. Each day that gets records joins
+  the list, and a day leaves it when it is sealed. So the seal step of each minute reads only the
+  folders of these days, also with years of data. A raw folder that appears in another way is sealed
+  after the next start.
 - The server wakes the worker when it closes a part. Without a wake-up, the worker checks every
   second.
 - When the worker cannot store the records of one app and day, it keeps them aside in
   `wal/held/<app>/<day>/`, one file per log part, and stores the other days of the part. Later parts
   of that day go aside too, so the order stays. Once a minute, the worker tries the kept parts
   again, oldest first. When they are all stored, the day goes back to the normal path.
+- Records of a day that holds only its daily summary cannot be stored, because a summary-only day
+  takes no new records. This happens when the retention or a restore made the day a summary while
+  its records waited aside. The worker drops them, logs an error, and counts them in
+  `droppedRecords` of `GET /status`. It counts the unreadable lines of a log part there too. Kept
+  records that fail for another reason stay aside and are never dropped.
 - When another step fails, such as a full disk, the worker logs the error and tries again in 5
   seconds. When a log part cannot be read 3 times, the worker renames it to `<part>.unreadable` and
   continues. It never deletes such a part.
@@ -37,6 +47,8 @@ the days and removes old days. It does them one after the other.**
 - No lock exists between writers, because there is one writer.
 - One broken day folder does not stop the storing of the other days. `imp-aly status` names each day
   with kept records, and the last error of the day.
+- A record is never lost without a count. `droppedRecords` counts the records since the start of the
+  worker. The log names the day of each drop.
 - Readers need no lock either. They read committed sizes and immutable sealed folders, see
   `append-transaction-with-revert.md`.
 - Sealing a large day blocks the storing of new parts for the time of the sort. The log holds the

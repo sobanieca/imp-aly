@@ -1,4 +1,4 @@
-import { isName, isSafeText } from './records.js'
+import { isName, isRoutePattern } from './records.js'
 
 export const BUILD_FILE = 'app-analytics.json'
 
@@ -6,12 +6,7 @@ export const MAX_FILE_BYTES = 3_145_728
 
 export const MAX_LIST_ENTRIES = 10_000
 
-const MAX_PATTERN_LENGTH = 512
-
 const FETCH_TIMEOUT_MS = 10_000
-
-const isRoutePattern = (value) =>
-  value.startsWith('/') && value.length <= MAX_PATTERN_LENGTH && isSafeText(value)
 
 const LISTS = {
   pages: {

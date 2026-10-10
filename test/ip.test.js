@@ -1,4 +1,4 @@
-import { inNetwork, parseIp, parseNetwork } from '../src/ip.js'
+import { formatIp, inNetwork, parseClientAddress, parseIp, parseNetwork } from '../src/ip.js'
 import { assertEquals, assertThrows } from './assert.js'
 
 Deno.test('parses IPv4 and IPv6 addresses', () => {
@@ -38,4 +38,22 @@ Deno.test('refuses a wrong network', () => {
   assertThrows(() => parseNetwork('10.0.0.0/x'), /prefix length/)
   assertThrows(() => parseNetwork('localhost'), /not an address/)
   assertThrows(() => parseNetwork('10.0.0.0/8/8'), /not an address/)
+})
+
+Deno.test('parses a client address with a port, in brackets or bare', () => {
+  const v4 = { version: 4, parts: [1, 2, 3, 4] }
+  for (const text of ['1.2.3.4', ' 1.2.3.4:5678 ', '[::ffff:1.2.3.4]:80', '::ffff:1.2.3.4']) {
+    assertEquals(parseClientAddress(text), v4, text)
+  }
+  const v6 = [0x2001, 0xdb8, 0, 0, 0, 0, 0, 1]
+  for (const text of ['2001:db8::1', '[2001:db8::1]', '[2001:DB8::1]:443']) {
+    assertEquals(parseClientAddress(text).parts, v6, text)
+  }
+  for (
+    const bad of ['', 'unknown', '1.2.3.4:', '1.2.3.4:123456', '[1.2.3.4]:80', '[::1', 'a:b:c']
+  ) {
+    assertEquals(parseClientAddress(bad), null, bad)
+  }
+  assertEquals(formatIp(parseClientAddress('001.002.003.004:9')), '1.2.3.4')
+  assertEquals(formatIp(parseClientAddress('[2001:db8::1]:9')), '2001:db8:0:0:0:0:0:1')
 })

@@ -4,9 +4,9 @@ import { table } from 'imp/std/data'
 import { stack } from 'imp/std/layout'
 import { OUTCOME_TERMS } from '../lib/terms.js'
 import { problemsOf, runPrevious, runQuery } from '../lib/api.js'
-import { barOf, bucketsOf } from '../lib/days.js'
+import { barOf, bucketsOf } from '../lib/ranges.js'
 import { formatCount, formatPercent } from '../lib/format.js'
-import { changeOf, MAX_ROWS, shareOf, withoutFields } from '../lib/reports.js'
+import { changeOf, MAX_ROWS, outcomeTableRows, shareOf, withoutFields } from '../lib/reports.js'
 import { indexBy, labelOf } from '../lib/rows.js'
 import { stackedSeries, TOP, topKeys } from '../lib/series.js'
 import {
@@ -20,6 +20,7 @@ import {
   reportLoading,
   reportScreen,
   statTile,
+  tableNote,
   tileGrid,
   trendChart,
 } from '../parts/report.js'
@@ -64,17 +65,16 @@ const outcomesReport = component('aly-outcomes-report', {
     const total = sumRecords(current.rows)
     const earlier = before ? sumRecords(before.rows) : null
     const previous = before ? indexBy(before.rows, 'name') : null
-    const shown = chosen.length ? current.rows : current.rows.slice(0, TOP)
-    const rows = shown.map((row) => {
-      const name = labelOf(row.name)
+    const outcomeTable = outcomeTableRows(current.rows, chosen, TOP)
+    const rows = outcomeTable.rows.map(({ name, records }) => {
       const last = previous ? previous.get(name)?.records ?? 0 : null
       return {
         id: name,
         name,
-        records: row.records,
-        share: shareOf(row.records, total),
+        records,
+        share: shareOf(records, total),
         previous: last,
-        change: previous ? changeOf(row.records, last) : null,
+        change: previous ? changeOf(records, last) : null,
       }
     })
     const visits = indexBy(reach.rows, 'type')
@@ -123,6 +123,7 @@ const outcomesReport = component('aly-outcomes-report', {
           title: chosen.length ? 'Chosen outcomes' : 'Top outcomes',
           description: 'The share is the part of all the outcomes that match the filters.',
         },
+        tableNote(outcomeTable.note),
         table({
           label: 'Outcomes',
           rows,

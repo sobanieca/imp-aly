@@ -18,6 +18,7 @@ const FLAGS = {
   segments: 'string',
   last: 'string',
   by: 'string',
+  timeout: 'string',
   'limit-5s': 'string',
   'limit-1m': 'string',
   'limit-1h': 'string',
@@ -25,6 +26,7 @@ const FLAGS = {
   foreground: 'boolean',
   'no-auto-update': 'boolean',
   check: 'boolean',
+  auto: 'boolean',
   init: 'boolean',
   uninstall: 'boolean',
   json: 'boolean',
@@ -100,3 +102,6 @@ export const parsePositiveInteger = (value, flag) => {
   }
   return number
 }
+
+export const parseTimeout = (value) =>
+  value === undefined ? undefined : parsePositiveInteger(value, '--timeout') * 1000

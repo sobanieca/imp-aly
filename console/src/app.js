@@ -7,13 +7,11 @@ import { toast } from 'imp/std/feedback'
 import { flex } from 'imp/std/layout'
 import { appLogo, orgSelect, shell, themeSelect } from 'imp/std/shell'
 import {
-  luArchive,
   luChartColumn,
   luFiles,
   luGauge,
   luMousePointerClick,
   luPackage,
-  luSearch,
   luServer,
   luTarget,
   luTriangleAlert,
@@ -22,13 +20,13 @@ import { app } from './app-map.js'
 import { messageOf } from './lib/api.js'
 import { appNamesOf } from './lib/catalog.js'
 import { appsOf, CLIENT_OPTIONS } from './lib/client.js'
+import { failuresOf, keepServers, onHealthChange } from './lib/health.js'
+import { serversTag } from './lib/nav-tags.js'
 import { initScope } from './lib/scope.js'
 import { loadServers } from './lib/vault.js'
 import { alyDark, alyLight } from './themes.js'
 import { installButton } from './parts/install-button.js'
-import { backupScreen } from './screens/backup.js'
 import { errorsScreen } from './screens/errors.js'
-import { exploreScreen } from './screens/explore.js'
 import { outcomesScreen } from './screens/outcomes.js'
 import { overviewScreen } from './screens/overview.js'
 import { pagesScreen } from './screens/pages.js'
@@ -36,52 +34,47 @@ import { registryScreen } from './screens/registry.js'
 import { serversScreen } from './screens/servers.js'
 import { zonesScreen } from './screens/zones.js'
 
-const loadCatalog = async (api, servers) => {
+const loadCatalog = async (api) => {
   const saved = await loadServers()
-  const names = new Set(saved.servers.map(({ name }) => name))
-  const chosen = servers.filter((name) => names.has(name))
-  if (!saved.servers.length) {
-    return { servers: saved, chosen, apps: [], failedServers: [], error: null }
-  }
+  if (!saved.servers.length) return { servers: saved, apps: [], failedServers: [], error: null }
   try {
-    const { apps, failedServers } = await appsOf(api, chosen)
-    return { servers: saved, chosen, apps, failedServers, error: null }
+    const { apps, failedServers } = await appsOf(api, saved.servers.map(({ name }) => name))
+    return { servers: saved, apps, failedServers, error: null }
   } catch (error) {
-    return { servers: saved, chosen, apps: [], failedServers: [], error: messageOf(error) }
+    return { servers: saved, apps: [], failedServers: [], error: messageOf(error) }
   }
 }
 
-const appOrgs = (catalog) =>
-  appNamesOf(catalog).map((name) => ({
-    id: name,
-    name,
-    description: catalog.apps.filter((entry) => entry.name === name).map(({ server }) => server)
-      .join(', '),
-  }))
+const appOrgs = (catalog) => appNamesOf(catalog).map((name) => ({ id: name, name }))
 
 export const root = component('aly-root', {
   setup: (self) => {
     const api = initHttpClient(self, 'aly.api', CLIENT_OPTIONS)
-    const { servers, app: chosenApp } = initScope(self)
+    const { app: chosenApp } = initScope(self)
     const catalog = initState(self, 'aly.catalog', undefined)
     const revision = initState(self, 'aly.revision', 0)
+    const health = initState(self, 'aly.health', failuresOf())
+    onHealthChange(() => health.set(failuresOf()), self.abortSignal)
     const orgs = computed([catalog], appOrgs)
+    const serversNavTag = computed(
+      [catalog, chosenApp, health],
+      (value, name, failures) => serversTag({ catalog: value, app: name, failures }),
+    )
     let latest = 0
     const reload = async () => {
       const run = ++latest
       let next
       try {
-        next = await loadCatalog(api, servers.get())
+        next = await loadCatalog(api)
       } catch (error) {
-        next = { servers: null, chosen: [], apps: [], failedServers: [], error: messageOf(error) }
+        next = { servers: null, apps: [], failedServers: [], error: messageOf(error) }
       }
       if (run !== latest || self.abortSignal.aborted) return
-      if (next.chosen.length !== servers.get().length) servers.set(next.chosen)
+      if (next.servers) keepServers(next.servers.servers.map(({ name }) => name))
       catalog.set(next)
       const names = appNamesOf(next)
       if (!next.error && !names.includes(chosenApp.get())) chosenApp.set(names[0])
     }
-    servers.watch(self, reload)
     revision.watch(self, reload)
     return shell(
       {
@@ -111,11 +104,10 @@ export const root = component('aly-root', {
             [app.console.zones]: luMousePointerClick,
             [app.console.outcomes]: luTarget,
             [app.console.errors]: luTriangleAlert,
-            [app.console.explore]: luSearch,
             [app.console.registry]: luPackage,
             [app.console.servers]: luServer,
-            [app.console.backup]: luArchive,
           },
+          tags: { [app.console.servers]: serversNavTag },
         },
         extras: [
           installButton(),
@@ -136,10 +128,8 @@ export const root = component('aly-root', {
           [app.console.zones]: () => zonesScreen(),
           [app.console.outcomes]: () => outcomesScreen(),
           [app.console.errors]: () => errorsScreen(),
-          [app.console.explore]: () => exploreScreen(),
           [app.console.registry]: () => registryScreen(),
           [app.console.servers]: () => serversScreen(),
-          [app.console.backup]: () => backupScreen(),
         },
         title: ({ crumbs }) => `${crumbs.at(-1)} - imp-aly console`,
       }),

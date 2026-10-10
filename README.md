@@ -45,9 +45,10 @@ And read the numbers:
 imp-aly query '{"app": "myapp", "groupBy": ["page", "type"], "measures": ["records", "visits"]}'
 ```
 
-Or open the console, a web app with charts, a query builder, and the apps, servers and backups.
+Or open the console, a web app with charts of your apps, and pages for the apps and the servers.
 Install it on your phone from https://sobanieca.github.io/imp-aly/console/, add your servers with
-their keys, and switch between them. Or serve it on your machine:
+their keys, and choose an app. Each report asks the servers that have the app. Or serve it on your
+machine:
 
 ```sh
 imp-aly console
@@ -64,14 +65,14 @@ To let an AI agent query your analytics, run `imp-aly skill --init`. Then ask th
 You need [Deno](https://deno.com/) 2, and [imp](https://github.com/sobanieca/imp-ui) to build the
 page of the console.
 
-| Task                      | What it does                                                                                                                      |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `deno task start`         | starts a demo: a server on ports 44890 and 44889 (admin) with 45 days of sample data and new visits, and the console on port 8010 |
-| `deno task server`        | runs the server from source in the foreground on ports 2980 and 2981                                                              |
-| `deno task console`       | builds the page of the console, and runs the console from source on port 8010                                                     |
-| `deno task console:build` | builds the page of the console into `console/dist`                                                                                |
-| `deno task test`          | runs the tests                                                                                                                    |
-| `deno task check`         | runs `deno fmt`, `deno lint` and the tests, then `imp fmt`, `imp lint` and `imp test --unit` in `console/`                        |
-| `deno task compile`       | builds the page of the console and the binary `./imp-aly`                                                                         |
+| Task                      | What it does                                                                                                                                      |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `deno task start`         | starts a demo: a server on ports 44890 and 44889 (admin) with 45 days of sample data in `.dev-data/` and new visits, and the console on port 8010 |
+| `deno task server`        | runs the server from source in the foreground on ports 2980 and 2981                                                                              |
+| `deno task console`       | builds the page of the console, and runs the console from source on port 8010                                                                     |
+| `deno task console:build` | builds the page of the console into `console/dist`                                                                                                |
+| `deno task test`          | runs the tests                                                                                                                                    |
+| `deno task check`         | runs `deno fmt`, `deno lint` and the tests, then `imp fmt`, `imp lint` and `imp test --unit` in `console/`                                        |
+| `deno task compile`       | builds the page of the console and the binary `./imp-aly`                                                                                         |
 
 The decisions behind the design are in [`adr/`](adr/).

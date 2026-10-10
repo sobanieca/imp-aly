@@ -31,6 +31,11 @@ must cost almost nothing per request. Its memory must stay the same when many ad
 - `--ip-header` reads the address from a proxy header, and takes its last entry. The server reads
   the header only when the connection comes from `--trusted-proxy`, by default `127.0.0.0/8` and
   `::1`.
+- The server parses the entry as an IPv4 address, an IPv4 address with a port (`1.2.3.4:5678`), an
+  IPv6 address, or an IPv6 address in brackets with or without a port (`[2001:db8::1]:443`). It
+  removes the port and writes the address in one form, also for an IPv4-mapped IPv6 address. So a
+  port that a proxy adds does not give each connection its own limit. An entry that is not an
+  address counts for the address of the proxy.
 
 ## Consequences
 

@@ -8,6 +8,13 @@ export const DOWNLOAD_URL = 'https://github.com/sobanieca/imp-aly/releases/downl
 
 export const RELEASES_URL = 'https://github.com/sobanieca/imp-aly/releases'
 
+export const RELEASES_API_URL =
+  'https://api.github.com/repos/sobanieca/imp-aly/releases?per_page=100'
+
+export const MIN_RELEASE_AGE_DAYS = 7
+
+const DAY_MS = 86_400_000
+
 export const UPDATE_STATE_DIR = '/var/lib/imp-aly-update'
 
 const MANIFEST_TIMEOUT_MS = 30_000
@@ -34,7 +41,7 @@ export const compareVersions = (a, b) => {
   return 0
 }
 
-export const isCompatible = (current, candidate) => {
+export const isAutoCompatible = (current, candidate) => {
   const [major, minor] = parseVersion(current)
   const [candidateMajor, candidateMinor] = parseVersion(candidate)
   if (major === 0) return candidateMajor === 0 && candidateMinor === minor
@@ -51,19 +58,46 @@ export const parseManifest = (value) => {
   )
 }
 
-export const pickUpdate = ({ current, format, versions, skipped = [] }) => {
+export const parseReleases = (value) => {
+  if (!Array.isArray(value)) throw new Error('the GitHub API sent no list of releases')
+  const published = new Map()
+  for (const release of value) {
+    const tag = release?.tag_name
+    const at = Date.parse(release?.published_at ?? '')
+    if (typeof tag !== 'string' || !tag.startsWith('v') || !parseVersion(tag.slice(1))) continue
+    if (release.draft || release.prerelease || !Number.isFinite(at)) continue
+    published.set(tag.slice(1), at)
+  }
+  return published
+}
+
+export const withPublishDates = (versions, published) =>
+  versions.map((entry) => ({ ...entry, published: published.get(entry.version) ?? null }))
+
+const releaseAgeReady = (published, now) =>
+  published !== null && published !== undefined && now - published > MIN_RELEASE_AGE_DAYS * DAY_MS
+
+const holdReason = ({ current, format, entry, skipped = [], auto = false, now }) => {
+  if (entry.format !== format) return 'format'
+  if (auto && !isAutoCompatible(current, entry.version)) return 'major'
+  if (auto && !releaseAgeReady(entry.published, now)) return 'age'
+  if (skipped.includes(entry.version)) return 'skipped'
+  return null
+}
+
+export const pickUpdate = (
+  { current, format, versions, skipped = [], auto = false, now = Date.now() },
+) => {
   const newer = versions
     .filter((entry) => compareVersions(entry.version, current) > 0)
     .sort((a, b) => compareVersions(b.version, a.version))
-  const compatible = newer.filter((entry) =>
-    isCompatible(current, entry.version) && entry.format === format
-  )
-  const target = compatible.find((entry) => !skipped.includes(entry.version))
-  return {
-    target: target?.version ?? null,
-    skipped: compatible.filter((entry) => skipped.includes(entry.version)).map((e) => e.version),
-    newest: newer[0]?.version ?? null,
+  const held = []
+  for (const entry of newer) {
+    const reason = holdReason({ current, format, entry, skipped, auto, now })
+    if (!reason) return { target: entry.version, held }
+    held.push({ version: entry.version, reason, published: entry.published ?? null })
   }
+  return { target: null, held }
 }
 
 export const assetName = (os = Deno.build.os, arch = Deno.build.arch) => {
@@ -85,8 +119,8 @@ export const stateDir = () => {
   return join(base, 'imp-aly')
 }
 
-const get = async (fetcher, url, timeoutMs) => {
-  const response = await fetcher(url, { signal: AbortSignal.timeout(timeoutMs) })
+const get = async (fetcher, url, timeoutMs, headers = {}) => {
+  const response = await fetcher(url, { headers, signal: AbortSignal.timeout(timeoutMs) })
   if (!response.ok) {
     await response.body?.cancel()
     throw new Error(`${url} answered ${response.status}`)
@@ -97,6 +131,15 @@ const get = async (fetcher, url, timeoutMs) => {
 export const fetchVersions = async ({ fetcher = fetch, manifestUrl = MANIFEST_URL } = {}) => {
   const response = await get(fetcher, manifestUrl, MANIFEST_TIMEOUT_MS)
   return parseManifest(await response.json())
+}
+
+export const fetchPublishDates = async (
+  { fetcher = fetch, releasesUrl = RELEASES_API_URL } = {},
+) => {
+  const response = await get(fetcher, releasesUrl, MANIFEST_TIMEOUT_MS, {
+    accept: 'application/vnd.github+json',
+  })
+  return parseReleases(await response.json())
 }
 
 export const readSkipped = async (dir) =>
@@ -118,6 +161,17 @@ export const lockUpdates = async (dir) => {
     throw new Error('another imp-aly update runs now')
   }
   return file
+}
+
+export const checkInstalled = async (binary, running) => {
+  const installed = await reportedVersion(binary)
+  if (installed !== running) {
+    throw new Error(
+      `${binary} is imp-aly ${
+        installed ?? 'of an unknown version'
+      } now, not ${running} - another update replaced it, run imp-aly update again`,
+    )
+  }
 }
 
 export const reportedVersion = async (binary) => {
@@ -163,9 +217,11 @@ export const stageBinary = async ({
   }
   try {
     const url = `${downloadUrl}/v${version}/${asset}`
-    const sums = await get(fetcher, `${url}.sha256`, DOWNLOAD_TIMEOUT_MS)
-    const expected = (await sums.text()).trim().split(/\s+/)[0]
-    if (!SHA256_HEX.test(expected)) throw new Error(`${url}.sha256 holds no SHA-256`)
+    const sums = await (await get(fetcher, `${url}.sha256`, DOWNLOAD_TIMEOUT_MS)).text()
+    const [expected, name] = sums.trim().split(/\s+/)
+    if (!SHA256_HEX.test(expected) || name?.replace(/^\*/, '') !== asset) {
+      throw new Error(`${url}.sha256 holds no SHA-256 of ${asset}`)
+    }
     const hash = createSha256()
     const response = await get(fetcher, url, DOWNLOAD_TIMEOUT_MS)
     for await (const chunk of response.body) {

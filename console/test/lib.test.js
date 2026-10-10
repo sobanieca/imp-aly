@@ -1,51 +1,84 @@
 import { expect, test } from 'imp/test'
-import { mapPagesOf, segmentsOf } from '../src/lib/catalog.js'
 import {
-  addDays,
-  addMonths,
+  appNamesOf,
+  knownSegments,
+  mapPagesOf,
+  registryRows,
+  segmentsOf,
+  serversOfApp,
+} from '../src/lib/catalog.js'
+import {
   barOf,
   bucketsOf,
-  dayCount,
-  mondayOf,
   presetPrevious,
   presetRange,
   previousLabel,
   todayUtc,
-} from '../src/lib/days.js'
+} from '../src/lib/ranges.js'
 import { pageTree } from '../src/lib/page-tree.js'
-import { periodOf } from '../src/lib/scope.js'
-import { draftToQuery, parseQueryText, queryToDraft } from '../src/lib/query-draft.js'
+import { periodOf, rangeOf, syncToday } from '../src/lib/scope.js'
 import {
   activeFilters,
   changeOf,
+  cutListHelp,
   emptyFilters,
   errorRows,
+  errorTableNote,
   leastUsed,
   NEVER_REACHED,
   NEVER_USED,
+  outcomeTableRows,
   pageFlag,
   pageRows,
   RARELY,
   RARELY_VIEWED,
+  shownNote,
+  usesTitle,
   withoutFields,
   zoneFlag,
   zoneRows,
 } from '../src/lib/reports.js'
-import { cliCommand, resultChart, toCsv } from '../src/lib/rows.js'
 import { OTHER, stackedSeries, topKeys, usedSeries } from '../src/lib/series.js'
 
 const NOW = Date.parse('2026-10-03T12:00:00Z')
 
+const TODAY = '2026-10-03'
+
 test('days count in UTC and presets end today', () => {
   expect(todayUtc(NOW)).toEqual('2026-10-03')
-  expect(addDays('2026-02-28', 1)).toEqual('2026-03-01')
-  expect(addMonths('2026-03-31', -1)).toEqual('2026-02-28')
-  expect(addMonths('2026-10-03', -60)).toEqual('2021-10-03')
-  expect(dayCount('2026-09-29', '2026-10-02')).toEqual(4)
-  expect(presetRange('30d', NOW)).toEqual({ start: '2026-09-04', end: '2026-10-03' })
-  expect(presetRange('3m', NOW)).toEqual({ start: '2026-07-04', end: '2026-10-03' })
-  expect(presetRange('1y', NOW)).toEqual({ start: '2025-10-04', end: '2026-10-03' })
-  expect(presetRange('7d', NOW)).toEqual({ start: '2026-09-27', end: '2026-10-03' })
+  expect(presetRange('30d', TODAY)).toEqual({ start: '2026-09-04', end: '2026-10-03' })
+  expect(presetRange('3m', TODAY)).toEqual({ start: '2026-07-04', end: '2026-10-03' })
+  expect(presetRange('1y', TODAY)).toEqual({ start: '2025-10-04', end: '2026-10-03' })
+  expect(presetRange('7d', TODAY)).toEqual({ start: '2026-09-27', end: '2026-10-03' })
+})
+
+test('a preset follows the day of today, and the day moves at midnight UTC', () => {
+  expect(rangeOf({ preset: '7d' }, '2026-10-03')).toEqual({
+    start: '2026-09-27',
+    end: '2026-10-03',
+  })
+  expect(rangeOf({ preset: '7d' }, '2026-10-04')).toEqual({
+    start: '2026-09-28',
+    end: '2026-10-04',
+  })
+  expect(rangeOf({ start: '2026-01-01', end: '2026-01-31' }, '2026-10-04')).toEqual({
+    start: '2026-01-01',
+    end: '2026-01-31',
+  })
+  let value = '2026-10-03'
+  let sets = 0
+  const today = {
+    get: () => value,
+    set: (day) => {
+      value = day
+      sets++
+    },
+  }
+  syncToday(today, Date.parse('2026-10-03T23:59:59Z'))
+  expect(sets).toEqual(0)
+  syncToday(today, Date.parse('2026-10-04T00:00:01Z'))
+  expect(value).toEqual('2026-10-04')
+  expect(sets).toEqual(1)
 })
 
 test('the bar size follows the length of the range', () => {
@@ -57,11 +90,12 @@ test('the bar size follows the length of the range', () => {
 })
 
 test('the previous period of a preset has the same length and ends the day before', () => {
-  expect(presetPrevious('30d', NOW)).toEqual({ from: '2026-08-05', to: '2026-09-03' })
-  expect(presetPrevious('3m', NOW)).toEqual({ from: '2026-04-04', to: '2026-07-03' })
-  expect(presetPrevious('1y', NOW)).toEqual({ from: '2024-10-04', to: '2025-10-03' })
-  expect(previousLabel('30d')).toEqual('-60 to -30 days')
-  expect(previousLabel('3m')).toEqual('-6 to -3 months')
+  expect(presetPrevious('30d', TODAY)).toEqual({ from: '2026-08-05', to: '2026-09-03' })
+  expect(presetPrevious('3m', TODAY)).toEqual({ from: '2026-04-04', to: '2026-07-03' })
+  expect(presetPrevious('1y', TODAY)).toEqual({ from: '2024-10-04', to: '2025-10-03' })
+  expect(previousLabel('30d')).toEqual('Previous 30 days')
+  expect(previousLabel('3m')).toEqual('Previous 3 months')
+  expect(previousLabel('1y')).toEqual('Previous year')
   expect(previousLabel(undefined)).toEqual(null)
 })
 
@@ -104,8 +138,6 @@ test('the pages form a tree under the nearest page that is a prefix', () => {
 })
 
 test('the buckets of a range follow the bar', () => {
-  expect(mondayOf('2026-10-04')).toEqual('2026-09-28')
-  expect(mondayOf('2026-09-28')).toEqual('2026-09-28')
   expect(bucketsOf('2026-09-30', '2026-10-02', 'day')).toEqual([
     '2026-09-30',
     '2026-10-01',
@@ -255,54 +287,120 @@ test('the catalog joins the app maps and the segments of all servers', () => {
   expect(segmentsOf(catalog, 'shop')).toEqual(['plan', 'role'])
 })
 
-test('a result exports as CSV and as a command', () => {
-  expect(toCsv(['page', 'records'], [{ page: '/a,b', records: 2 }, { page: null, records: 1 }]))
-    .toEqual('page,records\n"/a,b",2\n,1\n')
-  expect(cliCommand({ app: 'shop', where: { name: "it's" } }, ['eu', 'us'])).toEqual(
-    `imp-aly query '{"app":"shop","where":{"name":"it'\\''s"}}' -s eu,us`,
+test('the app list has each app once, and an app asks only the servers that have it', () => {
+  const catalog = {
+    apps: [
+      { server: 'eu', name: 'shop' },
+      { server: 'eu', name: 'crm' },
+      { server: 'us', name: 'shop' },
+      { server: 'us', name: 'docs' },
+    ],
+  }
+  expect(appNamesOf(catalog)).toEqual(['crm', 'docs', 'shop'])
+  expect(serversOfApp(catalog, 'shop')).toEqual(['eu', 'us'])
+  expect(serversOfApp(catalog, 'docs')).toEqual(['us'])
+  expect(serversOfApp(catalog, 'crm')).toEqual(['eu'])
+  expect(serversOfApp(catalog, 'gone')).toEqual([])
+  expect(serversOfApp(undefined, 'shop')).toEqual([])
+})
+
+test('the registry has one row per app, with its servers and the sum of its records', () => {
+  const entry = (server, more) => ({
+    server,
+    name: 'shop',
+    pages: ['/'],
+    zones: [],
+    outcomes: [],
+    segments: [],
+    accepted: 1,
+    rejected: 0,
+    appUrl: null,
+    buildError: null,
+    ...more,
+  })
+  const [crm, shop] = registryRows({
+    apps: [
+      entry('eu', { appUrl: 'https://shop.example/', pages: ['/', '/cart'], accepted: 5 }),
+      entry('us', { segments: ['plan'], rejected: 2, buildError: 'no file' }),
+      entry('us', { name: 'crm' }),
+    ],
+  })
+  expect(crm.servers).toEqual(['us'])
+  expect({
+    servers: shop.servers,
+    fromUrl: shop.fromUrl,
+    pages: shop.pages,
+    segments: shop.segments,
+    accepted: shop.accepted,
+    rejected: shop.rejected,
+    buildErrors: shop.buildErrors,
+  }).toEqual({
+    servers: ['eu', 'us'],
+    fromUrl: ['eu'],
+    pages: ['/', '/cart'],
+    segments: ['plan'],
+    accepted: 6,
+    rejected: 2,
+    buildErrors: 1,
+  })
+})
+
+test('the known segments name the apps that declare them', () => {
+  const catalog = {
+    apps: [
+      { name: 'shop', server: 'eu-1', segments: ['plan', 'role'] },
+      { name: 'shop', server: 'us-2', segments: ['plan'] },
+      { name: 'crm', server: 'us-2', segments: ['role'] },
+      { name: 'docs', server: 'us-2' },
+    ],
+  }
+  expect(knownSegments(catalog)).toEqual([
+    { segment: 'plan', apps: ['shop'] },
+    { segment: 'role', apps: ['crm', 'shop'] },
+  ])
+  expect(knownSegments(undefined)).toEqual([])
+})
+
+test('a table that leaves out rows says so', () => {
+  expect(shownNote(10, 10, 'outcomes')).toEqual(null)
+  expect(shownNote(10, 1234, 'outcomes')).toEqual('Showing 10 of 1,234 outcomes.')
+  expect(errorTableNote({ chosen: 0, withErrors: 25, shown: 10 })).toEqual(
+    'Showing 10 of 25 pages with errors.',
+  )
+  expect(errorTableNote({ chosen: 0, withErrors: 4, shown: 4 })).toEqual(null)
+  expect(errorTableNote({ chosen: 3, withErrors: 3, shown: 3 })).toEqual(null)
+  expect(errorTableNote({ chosen: 3, withErrors: 2, shown: 2 })).toEqual(
+    'Showing 2 of 3 chosen pages. The table leaves out 1 chosen page with no errors.',
   )
 })
 
-test('the chart of a result follows the first group', () => {
-  const daily = resultChart({
-    rows: [{ day: '2026-10-02', visits: 3 }, { day: '2026-10-01', visits: 1 }],
-    groupBy: ['day'],
-    measures: ['visits'],
-  })
-  expect(daily.type).toEqual('line')
-  expect(daily.labels).toEqual(['2026-10-01', '2026-10-02'])
-  expect(daily.series[0].values).toEqual([1, 3])
-  const bars = resultChart({
-    rows: [{ page: '/', type: 'page', records: 4 }],
-    groupBy: ['page', 'type'],
-    measures: ['records'],
-  })
-  expect(bars.type).toEqual('bar')
-  expect(bars.labels).toEqual(['/ / page'])
-  const weekly = resultChart({
-    rows: [{ week: '2026-09-28', records: 2 }],
-    groupBy: ['week'],
-    measures: ['records'],
-  })
-  expect(weekly.type).toEqual('line')
-  expect(weekly.labels).toEqual(['2026-09-28'])
+test('the outcomes table shows the top outcomes, or every chosen outcome', () => {
+  const rows = Array.from({ length: 12 }, (_, index) => ({
+    name: index ? `o${index}` : null,
+    records: 100 - index,
+  }))
+  const top = outcomeTableRows(rows, [], 10)
+  expect(top.rows.length).toEqual(10)
+  expect(top.rows[0]).toEqual({ name: '(none)', records: 100 })
+  expect(top.note).toEqual('Showing 10 of 12 outcomes.')
+  const chosen = outcomeTableRows([{ name: 'paid', records: 4 }], ['paid', 'signup', null], 10)
+  expect(chosen.rows).toEqual([
+    { name: 'paid', records: 4 },
+    { name: 'signup', records: 0 },
+    { name: '(none)', records: 0 },
+  ])
+  expect(chosen.note).toEqual(null)
 })
 
-test('a draft and a query convert both ways', () => {
-  const draft = {
-    groupBy: ['page'],
-    measures: ['records'],
-    filters: [{ field: 'zone', values: ['(none)', 'a'] }, { field: 'type', values: [] }],
-    limit: 50,
-  }
-  const query = draftToQuery(draft)
-  expect(query).toEqual({
-    where: { zone: [null, 'a'] },
-    groupBy: ['page'],
-    measures: ['records'],
-    limit: 50,
-  })
-  expect(queryToDraft(query).filters).toEqual([{ field: 'zone', values: ['(none)', 'a'] }])
-  expect(() => parseQueryText('[1]')).toThrow('JSON object')
-  expect(() => parseQueryText('{')).toThrow('not valid JSON')
+test('a filter list that the servers cut says so', () => {
+  expect(cutListHelp(false)).toEqual(undefined)
+  expect(cutListHelp(true)).toEqual('The list shows the 300 values with the most records.')
+  expect(cutListHelp(true, { canType: true })).toEqual(
+    'The list shows the 300 values with the most records. Type another value and press Enter.',
+  )
+})
+
+test('the chart of the (none) zone names it as the filter does', () => {
+  expect(usesTitle(null)).toEqual('Uses of (none)')
+  expect(usesTitle('shop.cart')).toEqual('Uses of shop.cart')
 })

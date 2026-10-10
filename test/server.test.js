@@ -478,6 +478,114 @@ Deno.test('answers 503 above the requests in progress', async () => {
   }
 })
 
+Deno.test('one address holds only its share of the requests in progress', async () => {
+  const { base, call, admin, stop } = await start({ maxRequests: 8, maxClientRequests: 2 })
+  try {
+    await admin('PUT', '/apps/myapp', BUILD)
+    const senders = []
+    const open = () => {
+      let send
+      const body = new ReadableStream({ start: (controller) => (send = controller) })
+      const response = fetch(`${base}/collect/myapp`, { method: 'POST', body, duplex: 'half' })
+      senders.push({ send: () => send, response })
+    }
+    open()
+    open()
+    const rootStatus = async () => {
+      const response = await fetch(`${base}/`)
+      await response.body?.cancel()
+      return response.status
+    }
+    await waitFor(async () => (await rootStatus()) === 429)
+    const refused = await call('POST', '/collect/myapp', [record({ type: 'error' })])
+    assertEquals(refused.status, 429)
+    assertEquals(refused.body.error, 'too many requests in progress from this address')
+    assertEquals(refused.headers.get('retry-after'), '5')
+    for (const sender of senders) {
+      sender.send().enqueue(new TextEncoder().encode(JSON.stringify([record({ type: 'error' })])))
+      sender.send().close()
+      const done = await sender.response
+      assertEquals(done.status, 202)
+      await done.body?.cancel()
+    }
+    assertEquals(await rootStatus(), 200)
+  } finally {
+    await stop()
+  }
+})
+
+Deno.test('a collect body that is too slow gets 408 and frees its place', async () => {
+  const { base, call, admin, stop } = await start({ collectTimeoutMs: 150 })
+  try {
+    await admin('PUT', '/apps/myapp', BUILD)
+    let sender
+    const body = new ReadableStream({
+      start: (controller) => {
+        sender = controller
+        controller.enqueue(new TextEncoder().encode('['))
+      },
+    })
+    const slow = await fetch(`${base}/collect/myapp`, { method: 'POST', body, duplex: 'half' })
+    assertEquals(slow.status, 408)
+    await slow.body?.cancel()
+    sender.close()
+    assertEquals((await call('POST', '/collect/myapp', [record({ type: 'error' })])).status, 202)
+    assertEquals((await admin('GET', '/status')).body.activeRequests, { public: 0, admin: 1 })
+  } finally {
+    await stop()
+  }
+})
+
+Deno.test('a restore upload that stops sending gets 408 and leaves no file', async () => {
+  const { adminBase, dataDir, stop } = await start({ restoreIdleMs: 150 })
+  try {
+    const token = await createToken(KEY, {
+      method: 'POST',
+      path: '/restore',
+      bodyHash: sha256Hex(new TextEncoder().encode('never sent')),
+    })
+    let sender
+    const body = new ReadableStream({
+      start: (controller) => {
+        sender = controller
+        controller.enqueue(new TextEncoder().encode('half'))
+      },
+    })
+    const stalled = await fetch(`${adminBase}/restore`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${token}` },
+      body,
+      duplex: 'half',
+    })
+    assertEquals(stalled.status, 408)
+    assert(/no bytes for 0.15 s/.test((await stalled.json()).error))
+    sender.close()
+    assertEquals([...Deno.readDirSync(`${dataDir}/restore`)], [])
+  } finally {
+    await stop()
+  }
+})
+
+Deno.test('a second server cannot take a port that a server uses', async () => {
+  const first = await start()
+  const dataDir = await temporaryDir()
+  try {
+    const error = await startServer({
+      port: Number(new URL(first.base).port),
+      adminPort: 0,
+      hostname: '127.0.0.1',
+      dataDir,
+      key: KEY,
+      minFree: null,
+      quiet: true,
+    }).catch((reason) => reason)
+    assert(error instanceof Deno.errors.AddrInUse, String(error))
+  } finally {
+    await first.stop()
+    await Deno.remove(dataDir, { recursive: true })
+  }
+})
+
 Deno.test('the registry and the data survive a restart', async () => {
   const first = await start()
   await first.admin('PUT', '/apps/myapp', BUILD)

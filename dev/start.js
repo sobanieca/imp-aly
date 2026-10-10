@@ -1,6 +1,5 @@
 import { callServer } from '../src/api-client.js'
 import { parseArgs, parsePort, requireOnlyFlags } from '../src/args.js'
-import { generateKey } from '../src/auth.js'
 import { startConsole } from '../src/console.js'
 import { logger } from '../src/logger.js'
 import { startServer } from '../src/server.js'
@@ -8,6 +7,7 @@ import { openSource } from '../src/source.js'
 import { applySegment } from '../src/storage.js'
 import { version } from '../src/version.js'
 import { createRandom, DEMO_APPS, seedLines, visitRecords } from './demo-data.js'
+import { openDevData } from './dev-data.js'
 
 const DAYS = 45
 
@@ -19,20 +19,25 @@ const DEMO_ADMIN_PORT = 44889
 
 const DEMO_PORT = 44890
 
-const { flags } = parseArgs(Deno.args)
+const RESET = '--reset'
+
+const reset = Deno.args.includes(RESET)
+const { flags } = parseArgs(Deno.args.filter((argument) => argument !== RESET))
 requireOnlyFlags(flags, ['port'], 'start')
 const port = flags.port === undefined ? undefined : parsePort(flags.port)
 
-const root = await Deno.makeTempDir({ prefix: 'imp-aly-start-' })
-const dataDir = `${root}/data`
-await Deno.mkdir(dataDir)
+const { root, dataDir, key, fresh } = await openDevData(undefined, { reset })
 
-const random = createRandom(42)
-const lines = seedLines({ random, now: Date.now(), days: DAYS })
-const source = await openSource(dataDir)
-await applySegment({ dataDir, source, segment: 1, text: `${lines.join('\n')}\n` })
+const started = Date.now()
+const random = createRandom(fresh ? 42 : started % 2147483648)
+let seeded = 0
+if (fresh) {
+  const lines = seedLines({ random, now: Date.now(), days: DAYS })
+  const source = await openSource(dataDir)
+  await applySegment({ dataDir, source, segment: 1, text: `${lines.join('\n')}\n` })
+  seeded = lines.length
+}
 
-const key = generateKey()
 const server = await startServer({
   port: DEMO_PORT,
   adminPort: DEMO_ADMIN_PORT,
@@ -45,12 +50,14 @@ const server = await startServer({
 })
 const adminUrl = `http://127.0.0.1:${server.adminPort}`
 const collectUrl = (app) => `http://127.0.0.1:${server.port}/collect/${app.name}`
-for (const app of DEMO_APPS) {
-  await callServer({ label: 'demo', server: 'demo', url: adminUrl, auth: key }, {
-    method: 'PUT',
-    path: `/apps/${app.name}`,
-    body: { build: JSON.stringify(app.build), segments: app.segments },
-  })
+if (fresh) {
+  for (const app of DEMO_APPS) {
+    await callServer({ label: 'demo', server: 'demo', url: adminUrl, auth: key }, {
+      method: 'PUT',
+      path: `/apps/${app.name}`,
+      body: { build: JSON.stringify(app.build), segments: app.segments },
+    })
+  }
 }
 
 let sent = 0
@@ -59,7 +66,7 @@ const sendVisit = async () => {
   const { country, records } = visitRecords({
     app,
     random,
-    visit: `live${sent++}`,
+    visit: `live${started.toString(36)}-${sent++}`,
     start: Date.now(),
     recent: true,
   })
@@ -82,7 +89,6 @@ try {
 } catch (error) {
   clearInterval(timer)
   await server.shutdown()
-  await Deno.remove(root, { recursive: true })
   throw error
 }
 
@@ -92,7 +98,7 @@ imp-aly ${version} - demo
   Console:  ${running.url}
   Collect:  http://127.0.0.1:${server.port}/collect/<app>
   Apps:     ${DEMO_APPS.map(({ name }) => name).join(', ')}
-  Data:     ${lines.length} records in ${DAYS + 1} days,
+  Data:     ${fresh ? `${seeded} new records in ${DAYS + 1} days` : 'the records of the last runs'},
             and a new visit every ${VISIT_EVERY_MS / 1000} seconds
   Folder:   ${root}
 
@@ -103,7 +109,8 @@ and type these values:
   URL:      ${adminUrl}
   Key:      ${key}
 
-Press Ctrl+C to stop. The demo removes its folder.
+Press Ctrl+C to stop. The folder stays for the next start.
+To start again with new sample data, run "deno task start --reset".
 `)
 
 let stopping = false
@@ -113,7 +120,6 @@ const stop = async () => {
   clearInterval(timer)
   await running.shutdown()
   await server.shutdown()
-  await Deno.remove(root, { recursive: true })
   Deno.exit(0)
 }
 Deno.addSignalListener('SIGINT', stop)

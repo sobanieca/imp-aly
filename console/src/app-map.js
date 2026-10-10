@@ -8,19 +8,11 @@ export const app = appMap({
     zones: { description: 'How often each zone was seen and used', group: 'Reports' },
     outcomes: { description: 'How often the visits reached each outcome', group: 'Reports' },
     errors: { description: 'The pages with errors, and the errors per view', group: 'Reports' },
-    explore: {
-      description: 'Build a query, run it, and see a table and a chart',
-      group: 'Manage',
-    },
     registry: {
       label: 'Registered apps',
       description: 'Register, check, refresh and remove apps',
       group: 'Manage',
     },
     servers: { description: 'The saved servers and their state', group: 'Manage' },
-    backup: {
-      description: 'Download a backup of the summaries, or restore one',
-      group: 'Manage',
-    },
   },
 })

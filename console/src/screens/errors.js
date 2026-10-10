@@ -6,9 +6,10 @@ import { stack } from 'imp/std/layout'
 import { luCircleCheck } from 'imp/icons'
 import { ERROR_TERMS } from '../lib/terms.js'
 import { problemsOf, runPrevious, runQuery } from '../lib/api.js'
-import { barOf, bucketsOf } from '../lib/days.js'
+import { barOf, bucketsOf } from '../lib/ranges.js'
 import { formatCount } from '../lib/format.js'
-import { changeOf, errorRows, MAX_ROWS } from '../lib/reports.js'
+import { changeOf, errorRows, errorTableNote, MAX_ROWS } from '../lib/reports.js'
+import { labelOf } from '../lib/rows.js'
 import { stackedSeries, TOP, topKeys } from '../lib/series.js'
 import {
   changeHint,
@@ -21,6 +22,7 @@ import {
   reportLoading,
   reportScreen,
   statTile,
+  tableNote,
   tileGrid,
   trendChart,
 } from '../parts/report.js'
@@ -66,11 +68,16 @@ const errorsReport = component('aly-errors-report', {
     const earlier = previous
       ? [...previous.values()].reduce((total, count) => total + count, 0)
       : null
-    const rows = pages.filter((row) => row.errors > 0).sort((a, b) => b.errors - a.errors)
-      .slice(0, TOP).map((row) => {
-        const last = previous ? previous.get(row.page) ?? 0 : null
-        return { ...row, previous: last, change: previous ? changeOf(row.errors, last) : null }
-      })
+    const withErrors = pages.filter((row) => row.errors > 0).sort((a, b) => b.errors - a.errors)
+    const rows = (chosen.length ? withErrors : withErrors.slice(0, TOP)).map((row) => {
+      const last = previous ? previous.get(row.page) ?? 0 : null
+      return { ...row, previous: last, change: previous ? changeOf(row.errors, last) : null }
+    })
+    const note = errorTableNote({
+      chosen: chosen.length,
+      withErrors: withErrors.length,
+      shown: rows.length,
+    })
     const known = chosen.length ? chosen : mapPages.length ? mapPages : pages.map((row) => row.page)
     const failing = known.filter((name) => pages.some((row) => row.page === name && row.errors))
     const keys = chosen.length ? chosen : topKeys(trend.rows, 'page')
@@ -104,7 +111,7 @@ const errorsReport = component('aly-errors-report', {
       reportCard(
         {
           title: one
-            ? `Errors of ${chosen[0]}`
+            ? `Errors of ${labelOf(chosen[0])}`
             : chosen.length
             ? 'Errors of the chosen pages'
             : 'Errors of the top pages',
@@ -121,6 +128,7 @@ const errorsReport = component('aly-errors-report', {
           title: chosen.length ? 'The chosen pages with errors' : 'Pages with the most errors',
           description: 'The errors per 100 views come from the same query as the views.',
         },
+        rows.length ? tableNote(note) : null,
         rows.length
           ? table({
             label: 'Pages with the most errors',

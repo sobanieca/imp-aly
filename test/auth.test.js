@@ -1,6 +1,8 @@
 import {
   findOrCreateKey,
   generateKey,
+  handOverKey,
+  KEY_LOADED_FILE,
   NEW_KEY_FILE,
   resolveKey,
   takeNewKey,
@@ -76,7 +78,7 @@ Deno.test('the server saves a key as text only when the key file is empty', asyn
   await Deno.remove(dir, { recursive: true })
 })
 
-Deno.test('a new key replaces the key file with owner access, and a handed over key is taken once', async () => {
+Deno.test('a new key replaces the key file with owner access', async () => {
   const dir = await temporaryDir()
   const path = `${dir}/key`
   await Deno.writeTextFile(`${path}.tmp`, 'left over', { mode: 0o644 })
@@ -85,18 +87,55 @@ Deno.test('a new key replaces the key file with owner access, and a handed over 
   assertEquals(await Deno.readTextFile(path), 'second-key-value\n')
   assertEquals((await Deno.stat(path)).mode & 0o777, 0o600)
   assertThrows(() => Deno.statSync(`${path}.tmp`))
+  await Deno.remove(dir, { recursive: true })
+})
 
+Deno.test('the handed over key is in a folder of its owner, readable by the group only', async () => {
+  const root = await temporaryDir()
+  const owner = { uid: Deno.uid(), gid: Deno.gid() }
+  const dir = `${root}/run`
+  const path = handOverKey({ dir, key: 'handed-over-key', ...owner })
+  assertEquals(path, `${dir}/${NEW_KEY_FILE}`)
+  assertEquals(await Deno.readTextFile(path), 'handed-over-key\n')
+  const file = await Deno.lstat(path)
+  assertEquals([file.mode & 0o777, file.uid, file.gid], [0o640, owner.uid, owner.gid])
+  const folder = await Deno.lstat(dir)
+  assertEquals([folder.mode & 0o777, folder.uid, folder.gid], [0o750, owner.uid, owner.gid])
+  handOverKey({ dir, key: 'second-key', ...owner })
+  assertEquals(await Deno.readTextFile(path), 'second-key\n')
+  assertThrows(() => Deno.statSync(`${path}.tmp`))
+
+  assertThrows(
+    () => handOverKey({ dir, key: 'k', uid: owner.uid + 1, gid: owner.gid }),
+    /must be a folder of the user/,
+  )
+  await Deno.mkdir(`${root}/elsewhere`)
+  await Deno.symlink(`${root}/elsewhere`, `${root}/link`)
+  assertThrows(
+    () => handOverKey({ dir: `${root}/link`, key: 'k', ...owner }),
+    /must be a folder of the user/,
+  )
+  assertThrows(() => Deno.statSync(`${root}/elsewhere/${NEW_KEY_FILE}`))
+  await Deno.remove(root, { recursive: true })
+})
+
+Deno.test('the service takes the handed over key, leaves the file, and writes the loaded mark', async () => {
+  const handoverDir = await temporaryDir()
+  const dataDir = await temporaryDir()
+  const place = { handoverDir, dataDir }
   const taken = []
-  assertEquals(takeNewKey(dir, (key) => taken.push(key)), '')
-  writeKeyFile(`${dir}/${NEW_KEY_FILE}`, 'handed-over-key')
-  assertEquals(takeNewKey(dir, (key) => taken.push(key)), 'handed-over-key')
-  assertEquals(takeNewKey(dir, (key) => taken.push(key)), '')
-  assertEquals(taken, ['handed-over-key'])
-  writeKeyFile(`${dir}/${NEW_KEY_FILE}`, 'kept-key')
+  assertEquals(takeNewKey(place, (key) => taken.push(key)), '')
+  assertThrows(() => Deno.statSync(`${dataDir}/${KEY_LOADED_FILE}`))
+  await Deno.writeTextFile(`${handoverDir}/${NEW_KEY_FILE}`, 'handed-over-key\n')
   assertThrows(() =>
-    takeNewKey(dir, () => {
+    takeNewKey(place, () => {
       throw new Error('refused')
     }), /refused/)
-  assertEquals(await Deno.readTextFile(`${dir}/${NEW_KEY_FILE}`), 'kept-key\n')
-  await Deno.remove(dir, { recursive: true })
+  assertThrows(() => Deno.statSync(`${dataDir}/${KEY_LOADED_FILE}`))
+  assertEquals(takeNewKey(place, (key) => taken.push(key)), 'handed-over-key')
+  assertEquals(taken, ['handed-over-key'])
+  assert(Deno.statSync(`${dataDir}/${KEY_LOADED_FILE}`).isFile)
+  assertEquals(await Deno.readTextFile(`${handoverDir}/${NEW_KEY_FILE}`), 'handed-over-key\n')
+  await Deno.remove(handoverDir, { recursive: true })
+  await Deno.remove(dataDir, { recursive: true })
 })

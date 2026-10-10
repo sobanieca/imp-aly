@@ -1,5 +1,5 @@
 import { requireOnlyFlags } from '../args.js'
-import { apiFetch } from '../api-client.js'
+import { fetchServer, readJson, resolveOne } from '../api-client.js'
 import { logger } from '../logger.js'
 import { hashStream } from '../sha256.js'
 import { formatTable } from '../table.js'
@@ -14,17 +14,15 @@ export const restore = async ({ positional, flags }) => {
     })
   const bodyHash = await hashStream((await open()).readable)
   const input = await open()
-  const response = await apiFetch({
-    url: flags.url,
-    auth: flags.auth,
-    server: flags.server,
-    method: 'POST',
-    path: '/restore',
+  const target = resolveOne(flags)
+  const request = { method: 'POST', path: '/restore', timeoutMs: 0 }
+  const response = await fetchServer(target, {
+    ...request,
     body: input.readable,
     bodyHash,
     contentType: 'application/gzip',
   })
-  const result = await response.json()
+  const result = await readJson(response, target, request)
   if (flags.json) return console.log(JSON.stringify(result, null, 2))
   logger.plain(`Restored ${result.restored.length} summaries. Skipped ${result.skipped.length}.`)
   if (result.skipped.length) {

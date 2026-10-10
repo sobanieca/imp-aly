@@ -258,9 +258,11 @@ To stop a server and keep its history on another server, see
 [Storage](storage.md#move-from-several-servers-to-one-server).
 
 When a server does not answer, the command prints the rows of the other servers, then an error, and
-exits with code 1. The `servers` table shows the server with no numbers. When the app has different
-builds or different segments on the servers, the command prints a warning. Register the app again on
-every server with the same command.
+exits with code 1. A server also fails when it does not answer in 130 seconds, or when its answer is
+not JSON or not a query answer, for example the login page of a proxy. `--timeout <seconds>` changes
+the time. The `servers` table shows the server with no numbers. When the app has different builds or
+different segments on the servers, the command prints a warning. Register the app again on every
+server with the same command.
 
 ## The API
 

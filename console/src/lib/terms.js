@@ -7,7 +7,7 @@ const VISIT = [
 
 const CHANGE = [
   'Change',
-  'The difference from the previous period of the same length, just before this one. For "Last 30 days", that is the days -60 to -30. For "Last 3 months", that is the months -6 to -3. A custom period shows no change.',
+  'The difference from the previous period of the same length, just before this one. For "Last 30 days", that is "Previous 30 days": the 30 days before them. For "Last 3 months", that is "Previous 3 months". A custom period shows no change.',
 ]
 
 const RARELY =
@@ -74,16 +74,4 @@ export const ERROR_TERMS = [
   ['Page views', 'How many times people opened the page.'],
   ['Errors per 100 views', 'The errors, divided by the page views, times 100.'],
   CHANGE,
-]
-
-export const EXPLORE_TERMS = [
-  ['records', 'The number of records that match the query.'],
-  [
-    'visits',
-    'The number of different visits on each day, added up over the days. A visit is one browser tab.',
-  ],
-  [
-    'type',
-    'page: a page view. seen: a zone came into view. used: a click, tap or key, with no zone for the page. outcome: a completed task. error: a failure.',
-  ],
 ]

@@ -1,5 +1,7 @@
-import { NEW_KEY_FILE, writeKeyFile } from './auth.js'
+import { parseArgs } from './args.js'
+import { handOverKey, KEY_LOADED_FILE, removeFile } from './auth.js'
 import { logger } from './logger.js'
+import { formatHost } from './net.js'
 import { dirname, join } from './paths.js'
 
 export const SERVICE_NAME = 'imp-aly'
@@ -11,6 +13,8 @@ export const SERVICE_ENV = 'IMP_ALY_SERVICE'
 export const SERVICE_USER = 'imp-aly'
 
 export const SERVICE_DATA_DIR = '/var/lib/imp-aly'
+
+export const KEY_HANDOVER_DIR = '/run/imp-aly'
 
 export const UPDATE_NAME = 'imp-aly-update'
 
@@ -120,6 +124,41 @@ export const unitSettings = (unit) => {
   return { keyPath, dataDir }
 }
 
+const UNIT_ARGUMENT = /"(?:\\.|[^"\\])*"|\S+/g
+
+const EXEC_START = 'ExecStart='
+
+const execArguments = (unit) => {
+  const line = unit.split('\n').find((entry) => entry.startsWith(EXEC_START))
+  return line ? (line.slice(EXEC_START.length).match(UNIT_ARGUMENT) ?? []).map(unquote) : null
+}
+
+const WILDCARD_HOSTS = { '0.0.0.0': '127.0.0.1', '::': '::1' }
+
+export const serviceTarget = (unit) => {
+  if (!unit) return null
+  const command = execArguments(unit)
+  const start = command?.indexOf('server') ?? -1
+  if (start < 1) return null
+  const { flags } = parseArgs(command.slice(start + 1))
+  const { keyPath } = unitSettings(unit)
+  if (!flags.adminPort) return null
+  const bound = flags.adminBind ?? flags.bind ?? '127.0.0.1'
+  const host = formatHost(WILDCARD_HOSTS[bound] ?? bound)
+  const scheme = flags.tlsCert ? 'https' : 'http'
+  return { url: `${scheme}://${host}:${flags.adminPort}`, keyPath }
+}
+
+const readUnitSync = () => {
+  try {
+    return Deno.readTextFileSync(UNIT_PATH)
+  } catch {
+    return null
+  }
+}
+
+export const localService = () => serviceTarget(readUnitSync())
+
 export const unitFile = ({ args, dataDir, ports, keyPath, tlsCert = null, tlsKey = null }) => {
   const capabilities = ports.some((port) => port < PRIVILEGED_PORTS) ? 'CAP_NET_BIND_SERVICE' : ''
   const credentials = [
@@ -158,10 +197,16 @@ ProtectKernelLogs=true
 ProtectControlGroups=true
 ProtectClock=true
 ProtectHostname=true
+ProtectProc=invisible
 RestrictNamespaces=true
 RestrictRealtime=true
 RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 LockPersonality=true
+RemoveIPC=true
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
 CapabilityBoundingSet=${capabilities}
 AmbientCapabilities=${capabilities}
 
@@ -173,13 +218,13 @@ WantedBy=multi-user.target
 export const updateServiceFile = () => {
   const command = selfCommand()
   return `[Unit]
-Description=imp-aly update to the newest compatible version
+Description=imp-aly automatic update in the same major version
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=${[...command, 'update'].map(quote).join(' ')}
+ExecStart=${[...command, 'update', '--auto'].map(quote).join(' ')}
 StateDirectory=${UPDATE_NAME}
 ReadWritePaths=${quote(dirname(command[0]))}
 ProtectSystem=strict
@@ -189,7 +234,19 @@ PrivateDevices=true
 NoNewPrivileges=true
 ProtectKernelTunables=true
 ProtectKernelModules=true
+ProtectKernelLogs=true
 ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LockPersonality=true
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+CapabilityBoundingSet=CAP_DAC_OVERRIDE CAP_FOWNER
 `
 }
 
@@ -264,8 +321,6 @@ const idOf = (flag) => {
   if (code !== 0 || !Number.isInteger(id)) throw new Error(`the user ${SERVICE_USER} is missing`)
   return id
 }
-
-const serviceIds = () => [idOf('-u'), idOf('-g')]
 
 const ensureUser = async () => {
   if ((await run('id', ['-u', SERVICE_USER])).code === 0) return
@@ -436,18 +491,31 @@ export const restartService = async () => {
 
 const KEY_LOAD_MS = 5_000
 
-export const sendKeyToService = async ({ dataDir, key }) => {
-  const path = join(dataDir, NEW_KEY_FILE)
-  writeKeyFile(path, key, {
-    beforeRename: (temporary) => Deno.chownSync(temporary, ...serviceIds()),
-  })
-  await systemctl('kill', '--kill-whom=main', '--signal=SIGHUP', SERVICE_NAME)
-  const start = Date.now()
-  while (Date.now() - start < KEY_LOAD_MS) {
-    if (!(await exists(path))) return true
-    await sleep(HEALTH_POLL_MS)
+const lexists = (path) => {
+  try {
+    Deno.lstatSync(path)
+    return true
+  } catch (error) {
+    if (error instanceof Deno.errors.NotFound) return false
+    throw error
   }
-  return false
+}
+
+export const sendKeyToService = async ({ dataDir, key, handoverDir = KEY_HANDOVER_DIR }) => {
+  const loaded = join(dataDir, KEY_LOADED_FILE)
+  removeFile(loaded)
+  const path = handOverKey({ dir: handoverDir, key, uid: 0, gid: idOf('-g') })
+  try {
+    await systemctl('kill', '--kill-whom=main', '--signal=SIGHUP', SERVICE_NAME)
+    const start = Date.now()
+    while (Date.now() - start < KEY_LOAD_MS) {
+      if (lexists(loaded)) return true
+      await sleep(HEALTH_POLL_MS)
+    }
+    return false
+  } finally {
+    removeFile(path)
+  }
 }
 
 export const uninstallService = async () => {

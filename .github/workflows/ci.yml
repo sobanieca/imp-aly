@@ -8,6 +8,10 @@ on:
     branches:
       - main
 
+concurrency:
+  group: ${{ github.event_name == 'push' && 'release' || format('check-{0}', github.run_id) }}
+  cancel-in-progress: false
+
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -138,9 +142,6 @@ jobs:
   release:
     needs: [version, build]
     runs-on: ubuntu-latest
-    concurrency:
-      group: release
-      cancel-in-progress: false
     permissions:
       contents: write
     steps:

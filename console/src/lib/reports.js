@@ -1,6 +1,9 @@
+import { formatCount } from './format.js'
 import { labelOf, NULL_LABEL } from './rows.js'
 
 export const MAX_ROWS = 100_000
+
+export const MAX_VALUES = 300
 
 export const RARELY_USED = { minShown: 100, maxShare: 5 }
 
@@ -120,3 +123,36 @@ export const activeFilters = (values) => {
 
 export const withoutFields = (where, fields) =>
   Object.fromEntries(Object.entries(where).filter(([field]) => !fields.includes(field)))
+
+export const shownNote = (shown, total, noun) =>
+  shown < total ? `Showing ${formatCount(shown)} of ${formatCount(total)} ${noun}.` : null
+
+export const errorTableNote = ({ chosen, withErrors, shown }) => {
+  if (!chosen) return shownNote(shown, withErrors, 'pages with errors')
+  const clean = chosen - withErrors
+  return clean > 0
+    ? `Showing ${formatCount(shown)} of ${formatCount(chosen)} chosen pages. The table leaves out ${
+      formatCount(clean)
+    } chosen ${clean === 1 ? 'page' : 'pages'} with no errors.`
+    : null
+}
+
+export const outcomeTableRows = (rows, chosen, top) => {
+  const names = rows.map((row) => labelOf(row.name))
+  const shown = chosen.length
+    ? [...new Set([...names, ...chosen.map(labelOf)])]
+    : names.slice(0, top)
+  const counts = new Map(rows.map((row) => [labelOf(row.name), row.records]))
+  return {
+    rows: shown.map((name) => ({ name, records: counts.get(name) ?? 0 })),
+    note: chosen.length ? null : shownNote(shown.length, names.length, 'outcomes'),
+  }
+}
+
+export const cutListHelp = (truncated, { canType = false } = {}) => {
+  if (!truncated) return undefined
+  const shown = `The list shows the ${formatCount(MAX_VALUES)} values with the most records.`
+  return canType ? `${shown} Type another value and press Enter.` : shown
+}
+
+export const usesTitle = (value) => `Uses of ${labelOf(value)}`

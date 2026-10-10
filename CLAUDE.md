@@ -30,9 +30,9 @@ that a library would give is a small module in `src/` with a test.
 There is one exception, for the console page only:
 
 - `console/` is an imp project. It imports `imp` and its subpaths, its own modules, and the shared
-  modules of `src/`: `token.js`, `sha256.js`, `query-core.js`, `multi-server.js` and the modules
-  that they import. Follow `imp skill` there, and use `imp fmt`, `imp lint` and `imp test`, not the
-  Deno tools. `deno fmt` and `deno lint` exclude `console/`.
+  modules of `src/`: `token.js`, `sha256.js`, `query-core.js`, `multi-server.js`, `days.js` and the
+  modules that they import. Follow `imp skill` there, and use `imp fmt`, `imp lint` and `imp test`,
+  not the Deno tools. `deno fmt` and `deno lint` exclude `console/`.
 - **A shared module of `src/` must not use a Deno API**, also not in a module that it imports.
   `imp build` bundles it into the page.
 
@@ -48,6 +48,7 @@ See `adr/plain-javascript-dependency-free-server.md` and `adr/console-web-app.md
 | `src/records.js`                      | the checks of one imp record                                                                                                                 |
 | `src/apps.js`, `src/app-build.js`     | the app registry in `apps.json`, and reading `app-analytics.json`                                                                            |
 | `src/rate-limit.js`                   | the sliding windows per client address                                                                                                       |
+| `src/in-flight.js`                    | the requests in progress of a port, and the share of one client address                                                                      |
 | `src/origins.js`                      | the allowed browser origins of the public endpoint                                                                                           |
 | `src/wal.js`                          | the write-ahead log with group commit and parts                                                                                              |
 | `src/storage.js`, `storage-worker.js` | the single writer: log parts to columns, restore, seal, retention                                                                            |
@@ -60,16 +61,18 @@ See `adr/plain-javascript-dependency-free-server.md` and `adr/console-web-app.md
 | `src/query-core.js`                   | the query parser, the groups and the merge of the answers of servers, with no Deno API (shared with the page)                                |
 | `src/query.js`, `query-worker.js`     | the query engine over the day folders and the daily, week and month summaries, run in a worker                                               |
 | `src/retention.js`                    | `df`, the free space rule, old days to summaries, then removal of days, weeks and months                                                     |
-| `src/auth.js`                         | the key, the key file, and the new key that the service takes on SIGHUP                                                                      |
+| `src/auth.js`                         | the key, the key file, and the new key that root hands over in `/run/imp-aly` and the service takes on SIGHUP                                |
+| `src/days.js`                         | the UTC days, weeks and months, with no Deno API (shared with the page)                                                                      |
 | `src/token.js`, `src/sha256.js`       | the one-time tokens signed per request, and a streaming SHA-256, with no Deno API (shared with the page)                                     |
 | `src/servers.js`, `src/api-client.js` | the saved servers and groups of the CLI, and the calls of the CLI to the API                                                                 |
 | `src/multi-server.js`                 | the calls to several servers and the sum of their answers, with no Deno API (shared with the page)                                           |
 | `src/console.js`                      | the local console: a listener that serves the built page, the host check and the security headers                                            |
 | `src/static-files.js`                 | the files of the built page of the console, with the fallback to `index.html`                                                                |
 | `dev/start.js`, `dev/demo-data.js`    | the demo of `deno task start`, and the sample records of the apps `shop`, `crm` and `docs`                                                   |
+| `dev/dev-data.js`                     | the folder `.dev-data/` of the demo: its data folder and its key, kept between starts                                                        |
 | `console/`                            | the imp project of the PWA: `src/app.js`, `src/screens/`, `src/parts/`, `src/lib/` (`vault.js`, `client.js`), `test/`                        |
-| `src/service.js`                      | the systemd unit, the service user and its limits, the update timer, the restart with a check, the new key sent to the service               |
-| `src/update.js`                       | the version list, the choice of the update, the download with its checks, the swap of the binary                                             |
+| `src/service.js`                      | the systemd unit, the service user and its limits, the update timer, the restart with a check, the new key, the local service of the client  |
+| `src/update.js`                       | the version list, the publish dates, the rules of the choice, the download with its checks, the swap of the binary                           |
 | `src/data-format.js`                  | the data format in `format.json`, which the server checks at start                                                                           |
 | `src/source.js`                       | the random source id of the server in `source.json`; a day has one folder per source                                                         |
 | `dev/versions-manifest.js`            | writes `versions.json` for GitHub Pages from the release tags                                                                                |
@@ -100,29 +103,31 @@ Rules that keep the data correct:
   page from finished rows of two answers. Ask with one query instead.
 - **The page never keeps a key as text.** `console/src/lib/vault.js` imports the key as a
   non-extractable `CryptoKey` and stores that in IndexedDB. Never write a key to `localStorage`, a
-  state, a log or the DOM.
+  state, a log or the DOM. A form field for a key takes `secret: true`, as in
+  `console/src/parts/key-field.js`, so the key stays out of the form state.
 - **The admin port allows CORS from every origin.** The token protects each call. Never add a cookie
   or an address check that a browser could use without the key.
 
 ## Commands
 
-| Command                   | What it does                                                                                                                                                          |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `deno task start`         | starts a demo: a server on ports 44890 and 44889 (admin) in a temporary folder with 45 days of sample data, a new visit every 3 seconds, and the console on port 8010 |
-| `deno task server`        | runs the server from source in the foreground on ports 2980 and 2981                                                                                                  |
-| `deno task console`       | builds the page, then runs the console from source on port 8010                                                                                                       |
-| `deno task console:build` | runs `imp build --pwa` in `console/`, which writes `console/dist`                                                                                                     |
-| `deno task test`          | runs `test/`                                                                                                                                                          |
-| `deno task check`         | runs `deno fmt`, `deno lint`, the tests, then `imp fmt`, `imp lint` and `imp test --unit` in `console/`                                                               |
-| `deno task compile`       | builds the page and `./imp-aly` with both workers and the page included                                                                                               |
+| Command                   | What it does                                                                                                                                                    |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `deno task start`         | starts a demo: a server on ports 44890 and 44889 (admin) in `.dev-data/` with 45 days of sample data, a new visit every 3 seconds, and the console on port 8010 |
+| `deno task server`        | runs the server from source in the foreground on ports 2980 and 2981                                                                                            |
+| `deno task console`       | builds the page, then runs the console from source on port 8010                                                                                                 |
+| `deno task console:build` | runs `imp build --pwa` in `console/`, which writes `console/dist`                                                                                               |
+| `deno task test`          | runs `test/`                                                                                                                                                    |
+| `deno task check`         | runs `deno fmt`, `deno lint`, the tests, then `imp fmt`, `imp lint` and `imp test --unit` in `console/`                                                         |
+| `deno task compile`       | builds the page and `./imp-aly` with both workers and the page included                                                                                         |
 
 After a batch of changes, run `deno task check` and fix every issue. Keep every change that
 `deno fmt` and `imp fmt` make. When you change a worker, the server start or the CLI, also run
 `deno task compile` and try the binary: start it with `server --foreground -d <temp folder>`,
 register an app, post a record, and query it. When you change the console, run `deno task start`,
 open the link that it prints, add the demo server with the name, the URL and the key that it prints,
-and look at each screen that you changed in a browser. The demo keeps its server and its data in a
-temporary folder, and removes the folder when it stops.
+and look at each screen that you changed in a browser. The demo keeps its data and its key in
+`.dev-data/` of the repo, which git ignores. The folder stays after a stop, so the next start uses
+the same data and key. `deno task start --reset` removes the folder and writes new sample data.
 
 Tests use `Deno.test` and the helpers in `test/assert.js`. A test that starts a server uses port
 `0`, a temporary data folder, `minFree: null` and `quiet: true`, and shuts the server down.
@@ -178,5 +183,5 @@ binaries for Linux and macOS on x64 and arm64 when the tag `v<version>` does not
 test of each binary, and publishes them with SHA-256 files to a GitHub Release. Then GitHub Pages
 serves `install.sh`, the landing page in `site/` and `versions.json`, the list of released versions
 with their data format. The update timer on each server reads that list. Before `1.0.0`, it installs
-only a patch version of the same minor version. See `adr/binary-distribution.md` and
-`adr/automatic-updates.md`.
+only a patch version of the same minor version, and only 7 days after GitHub published it. See
+`adr/binary-distribution.md` and `adr/automatic-updates.md`.

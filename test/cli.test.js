@@ -108,6 +108,15 @@ Deno.test('the unit file runs the server as a restricted user', () => {
       'ProtectSystem=strict',
       'ProtectHome=true',
       'NoNewPrivileges=true',
+      'PrivateTmp=true',
+      'PrivateDevices=true',
+      'ProtectKernelTunables=true',
+      'ProtectControlGroups=true',
+      'RestrictNamespaces=true',
+      'RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6',
+      'LockPersonality=true',
+      'SystemCallArchitectures=native',
+      'SystemCallFilter=@system-service',
       'CapabilityBoundingSet=',
       'AmbientCapabilities=',
       'WantedBy=multi-user.target',
@@ -115,6 +124,7 @@ Deno.test('the unit file runs the server as a restricted user', () => {
   ) {
     assert(unit.includes(line), line)
   }
+  assert(!unit.some((line) => line.startsWith('MemoryDenyWriteExecute')))
   assert(!unit.some((line) => line.startsWith('LoadCredential=tls')))
   assert(!unit.some((line) => line.startsWith('Environment=HOME')))
 

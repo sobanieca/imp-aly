@@ -177,6 +177,6 @@ the key can register apps and run queries.
 - [Queries](query.md) - the query API, and queries of several servers
 - [Storage](storage.md) - the data folder, sealing and retention in detail
 - [Backup](backup.md) - save the daily summaries, restore them, and keep them safe
-- [Console](console.md) - the web app with charts, a query builder, apps, servers and backups
+- [Console](console.md) - the web app with charts of your apps, and pages for apps and servers
 - [Security](security.md) - the key, the tokens and the limits
 - [CLI](cli.md) - every command and option

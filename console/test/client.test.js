@@ -6,18 +6,15 @@ const EMPTY = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
 
 const ABC = 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'
 
-test('the body hash covers no body, a text and a file', async () => {
-  expect(await hashBody(null)).toEqual(EMPTY)
-  expect(await hashBody('abc')).toEqual(ABC)
-  expect(await hashBody(new Blob(['a', 'bc']))).toEqual(ABC)
+test('the body hash covers no body and a text', () => {
+  expect(hashBody(null)).toEqual(EMPTY)
+  expect(hashBody('abc')).toEqual(ABC)
+  expect(() => hashBody(new Blob(['abc']))).toThrow('only a text')
 })
 
 test('the signed path leaves out the path of the server URL and keeps the query', () => {
   expect(signedPath('https://a.example:2981/query', 'https://a.example:2981')).toEqual('/query')
-  expect(signedPath('https://a.example/aly/backup?last=7d&by=week', 'https://a.example/aly'))
-    .toEqual(
-      '/backup?last=7d&by=week',
-    )
+  expect(signedPath('https://a.example/aly/apps?x=1', 'https://a.example/aly')).toEqual('/apps?x=1')
 })
 
 test('a server URL is http or https, and an https page calls only https', () => {

@@ -3,12 +3,12 @@
 ```
 imp-aly server [options]              start the server
 imp-aly server --uninstall            remove the systemd service
-imp-aly update [--check]              install the newest compatible version
+imp-aly update [--check] [--auto]     install a newer version
 imp-aly key rotate [-a <file>]        change the key, and the server does not stop
 imp-aly app add <name> <app url|build folder> [--segments plan,role]
 imp-aly app ls | show <name> | refresh <name> | rm <name>
 imp-aly query '<json>' | query <file.json> [--json]
-imp-aly backup <file> [--last <period>] [--by <granularity>] [-s <name>]
+imp-aly backup [<file>] [--last <period>] [--by <granularity>] [-s <name>]
 imp-aly restore <file>
 imp-aly status
 imp-aly console [--port <port>]
@@ -28,30 +28,30 @@ imp-aly help | version
 sudo imp-aly server --port 2980
 ```
 
-| Option                     | Value                                            | Default                       |
-| -------------------------- | ------------------------------------------------ | ----------------------------- |
-| `-p`, `--port <port>`      | the public port, for `/collect/<app>`            | `2980`                        |
-| `--admin-port <port>`      | the port of the private API                      | `2981`                        |
-| `-d`, `--data <folder>`    | the data folder                                  | see below                     |
-| `-a`, `--auth <key\|file>` | the key, or a file with the key                  | `~/.secret/imp-aly-key`       |
-| `--bind <address>`         | listen on this address only                      | all addresses                 |
-| `--admin-bind <address>`   | listen on this address only, on the admin port   | the `--bind` address          |
-| `--ip-header <name>`       | read the client address from this header         | the address of the connection |
-| `--trusted-proxy <list>`   | read the header only from these addresses        | `127.0.0.0/8,::1`             |
-| `--max-requests <n>`       | requests in progress on each port, then `503`    | `1024`                        |
-| `--country-header <name>`  | store the country from this header               | no country                    |
-| `--allow-origin <list>`    | accept records only from these browser origins   | every origin                  |
-| `--min-free <size>`        | the free disk space to keep, as `10%` or `5GB`   | `10%`                         |
-| `--tls-cert <file>`        | serve HTTPS with this certificate, in PEM        | plain HTTP                    |
-| `--tls-key <file>`         | the private key of the certificate, in PEM       |                               |
-| `--limit-5s <n>`           | records per address in 5 seconds                 | `200`                         |
-| `--limit-1m <n>`           | records per address in 1 minute                  | `1500`                        |
-| `--limit-1h <n>`           | records per address in 1 hour                    | `30000`                       |
-| `--limit-24h <n>`          | records per address in 24 hours                  | `200000`                      |
-| `--foreground`             | do not touch systemd, run in the foreground      |                               |
-| `--no-auto-update`         | do not install the update timer                  | the timer updates daily       |
-| `--uninstall`              | stop and remove the service and the update timer |                               |
-| `--debug`                  | log each rejected record, in the foreground only |                               |
+| Option                     | Value                                                                                        | Default                       |
+| -------------------------- | -------------------------------------------------------------------------------------------- | ----------------------------- |
+| `-p`, `--port <port>`      | the public port, for `/collect/<app>`                                                        | `2980`                        |
+| `--admin-port <port>`      | the port of the private API                                                                  | `2981`                        |
+| `-d`, `--data <folder>`    | the data folder                                                                              | see below                     |
+| `-a`, `--auth <key\|file>` | the key, or a file with the key                                                              | `~/.secret/imp-aly-key`       |
+| `--bind <address>`         | listen on this address only                                                                  | all addresses                 |
+| `--admin-bind <address>`   | listen on this address only, on the admin port                                               | the `--bind` address          |
+| `--ip-header <name>`       | read the client address from this header                                                     | the address of the connection |
+| `--trusted-proxy <list>`   | read the header only from these addresses                                                    | `127.0.0.0/8,::1`             |
+| `--max-requests <n>`       | requests in progress on each port, then `503`; one address can have 1/32 of them, then `429` | `1024`                        |
+| `--country-header <name>`  | store the country from this header                                                           | no country                    |
+| `--allow-origin <list>`    | accept records only from these browser origins                                               | every origin                  |
+| `--min-free <size>`        | the free disk space to keep, as `10%` or `5GB`                                               | `10%`                         |
+| `--tls-cert <file>`        | serve HTTPS with this certificate, in PEM                                                    | plain HTTP                    |
+| `--tls-key <file>`         | the private key of the certificate, in PEM                                                   |                               |
+| `--limit-5s <n>`           | records per address in 5 seconds                                                             | `200`                         |
+| `--limit-1m <n>`           | records per address in 1 minute                                                              | `1500`                        |
+| `--limit-1h <n>`           | records per address in 1 hour                                                                | `30000`                       |
+| `--limit-24h <n>`          | records per address in 24 hours                                                              | `200000`                      |
+| `--foreground`             | do not touch systemd, run in the foreground                                                  |                               |
+| `--no-auto-update`         | do not install the update timer                                                              | the timer updates daily       |
+| `--uninstall`              | stop and remove the service and the update timer                                             |                               |
+| `--debug`                  | log each rejected record, in the foreground only                                             |                               |
 
 As root on Linux with systemd, the command writes `/etc/systemd/system/imp-aly.service` with the
 options that you give, starts the service, prints the address and the key, and exits. When the unit
@@ -68,18 +68,20 @@ A size for `--min-free` is a number with `B`, `KB`, `MB`, `GB` or `TB`, in units
 
 Read the log of the service with `journalctl -u imp-aly -f`.
 
-The command also installs the systemd timer `imp-aly-update`, which runs `imp-aly update` once a
-day. `--no-auto-update` removes it. See [Updates](update.md).
+The command also installs the systemd timer `imp-aly-update`, which runs `imp-aly update --auto`
+once a day. `--no-auto-update` removes it. See [Updates](update.md).
 
 ## Update
 
 ```sh
-imp-aly update --check     # show the installed version and the update
-sudo imp-aly update        # install the newest compatible version and restart the service
+imp-aly update --check       # show the installed version, the update and the choice of the timer
+sudo imp-aly update          # install the newest version and restart the service
+sudo imp-aly update --auto   # install what the timer installs
 ```
 
-The update installs only a version that reads the same data folder. When the service does not stay
-running, it puts the old binary back. See [Updates](update.md).
+The update installs only a newer version that reads the same data folder. With `--auto`, it also
+stays in the major version (before `1.0.0`: the minor version), and waits 7 days after the release.
+When the service does not stay running, it puts the old binary back. See [Updates](update.md).
 
 ### The service user
 
@@ -119,6 +121,7 @@ The commands `app`, `query`, `backup`, `restore` and `status` take these options
 | `-s`, `--server <name>`    | a saved server, or a list `a,b,c` or a group for `app` and `query` | the default saved server                      |
 | `--url <url>`              | the URL of the admin port of the server                            | the default saved server, or the local server |
 | `-a`, `--auth <key\|file>` | the key, or a file with the key                                    | the key of the server, or the key file        |
+| `--timeout <seconds>`      | the time to wait for each server (`app`, `query`, `status`)        | `130` for `query`, `30` for the others        |
 | `--json`                   | print the JSON answer (`app ls`, `app show`, `query`, `restore`)   |                                               |
 
 The command finds the server in this order:
@@ -126,16 +129,26 @@ The command finds the server in this order:
 1. `--server <name>`: the saved server or the group with this name, with the saved keys.
 2. `--url <url>`: this URL. Do not give `--server` and `--url` together.
 3. The default saved server or group, with the saved keys.
-4. The admin port of the local server, `http://127.0.0.1:2981`.
+4. The local service, when this machine runs the systemd service of imp-aly. The command reads the
+   admin port, the bind address, TLS and the key file from `/etc/systemd/system/imp-aly.service`.
+5. The admin port of a local server in the foreground, `http://127.0.0.1:2981`.
 
-`-a` replaces the saved key. Without `-a` and without a saved key, the command reads
-`~/.secret/imp-aly-key`.
+`-a` replaces the saved key. Without `-a` and without a saved key, the command reads the key file of
+the local service, or `~/.secret/imp-aly-key`.
+
+On the VPS, a command needs no option for the local service. Only root can read the key file of the
+service, so run the command with `sudo`, such as `sudo imp-aly backup`. When the service uses TLS,
+give `--url` with the host name of the certificate.
 
 `app` and `query` take a list of saved servers, such as `-s eu-1,eu-2,eu-3`, or a group, such as
 `-s prod`. A list can name groups and servers, such as `-s prod,us-1`. It must not name a server two
-times. `app` runs on each server in turn. `query` asks all servers at the same time and adds up
-their answers. When one server fails, the command continues with the others, then exits with code 1.
-The other commands take one server. See [Several servers](query.md#several-servers).
+times. `app` runs on all servers at the same time. `query` asks all servers at the same time and
+adds up their answers. When one server fails, the command continues with the others, then exits with
+code
+
+1. A server fails when it cannot be reached, when it answers with an error, when its answer is not
+   JSON or not a query answer, or when it does not answer before `--timeout`. The other commands
+   take one server. See [Several servers](query.md#several-servers).
 
 `token` takes only `-s` and `-a`. It prints a one-time token for one request to the API, such as
 `imp-aly token GET /status`. For a request with a body, give the file of the body. The token is
@@ -145,14 +158,16 @@ valid for 60 seconds. See [Security](security.md).
 id, the number of apps, the number of addresses in the rate limit, the requests in progress on each
 port, and the state of the storage worker. The storage state holds the number of log parts that
 wait, the number of stored records since the start, the last error, and the free disk space. It also
-lists the days whose records the worker keeps aside (`heldDays`), and counts the log parts that it
-cannot read (`unreadableSegments`). See [Storage](storage.md#a-day-that-the-worker-cannot-store).
+lists the days whose records the worker keeps aside (`heldDays`), counts the log parts that it
+cannot read (`unreadableSegments`), and counts the records that it could not store since the start
+(`droppedRecords`). See [Storage](storage.md#a-day-that-the-worker-cannot-store).
 
-`backup` saves the summaries of all the apps and sources of one server to a compressed file.
-`--last` sets the period: `1d`, `7d`, `30d`, `3m`, `6m`, `1y` or `all` (the default). The period
-ends at the last sealed day. `--by` sets the granularity: `day` (the default), `week` or `month`. A
-week or a month is in the backup when it is complete and all its days are in the period. `restore`
-sends such a file to the server. See [Backup](backup.md).
+`backup` saves the summaries of all the apps and sources of one server to a compressed file. Without
+a file name, it writes `imp-aly-backup-<period>-by-<granularity>-<day>.tar.gz` in the current
+folder. `--last` sets the period: `1d`, `7d`, `30d`, `3m`, `6m`, `1y` or `all` (the default). The
+period ends at the last sealed day. `--by` sets the granularity: `day` (the default), `week` or
+`month`. A week or a month is in the backup when it is complete and all its days are in the period.
+`restore` sends such a file to the server. See [Backup](backup.md).
 
 See [Apps](apps.md) for `app`, and [Queries](query.md) for `query`.
 
@@ -212,9 +227,9 @@ imp-aly query report.json
 ## Console
 
 `imp-aly console` serves the console web app on your machine, at `http://localhost:8010`. It shows
-the reports of your apps in charts, and it does the work of the client commands. Add the servers and
-their keys in the page. The page does not use the saved servers of the CLI. `--port <port>` changes
-the port. The same app is at `https://sobanieca.github.io/imp-aly/console/`, ready to install on a
+the reports of your apps in charts, and it registers and removes apps. Add the servers and their
+keys in the page. The page does not use the saved servers of the CLI. `--port <port>` changes the
+port. The same app is at `https://sobanieca.github.io/imp-aly/console/`, ready to install on a
 phone. See [Console](console.md).
 
 ## AI agents

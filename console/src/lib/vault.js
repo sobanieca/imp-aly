@@ -4,8 +4,6 @@ const DB_NAME = 'imp-aly-console'
 
 const SERVERS = 'servers'
 
-const SETTINGS = 'settings'
-
 export const SERVER_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$/
 
 let opened = null
@@ -15,7 +13,6 @@ const openDb = () => {
     const request = indexedDB.open(DB_NAME, 1)
     request.onupgradeneeded = () => {
       request.result.createObjectStore(SERVERS, { keyPath: 'name' })
-      request.result.createObjectStore(SETTINGS)
     }
     request.onsuccess = () => resolve(request.result)
     request.onerror = () => {
@@ -32,32 +29,46 @@ const done = (request) =>
     request.onerror = () => reject(request.error)
   })
 
-const transaction = async (mode, run) => {
-  const db = await openDb()
-  const tx = db.transaction([SERVERS, SETTINGS], mode)
+const abortOf = (tx) => {
+  try {
+    tx.abort()
+    return null
+  } catch (error) {
+    return error
+  }
+}
+
+export const runTransaction = async (tx, run) => {
   const finished = new Promise((resolve, reject) => {
     tx.oncomplete = resolve
     tx.onerror = () => reject(tx.error)
     tx.onabort = () => reject(tx.error ?? new Error('the browser storage refused the change'))
   })
-  const result = await run(tx.objectStore(SERVERS), tx.objectStore(SETTINGS))
-  await finished
-  return result
+  try {
+    const result = await run(tx.objectStore(SERVERS))
+    await finished
+    return result
+  } catch (error) {
+    finished.catch(() => null)
+    abortOf(tx)
+    throw error
+  }
 }
 
-const readAll = async () =>
-  transaction('readonly', async (servers, settings) => {
+const transaction = async (mode, run) => {
+  const db = await openDb()
+  return runTransaction(db.transaction(SERVERS, mode), run)
+}
+
+const readAll = () =>
+  transaction('readonly', async (servers) => {
     const entries = await done(servers.getAll())
-    const chosen = await done(settings.get('default'))
-    return { entries: entries.sort((a, b) => a.added - b.added), chosen: chosen ?? '' }
+    return entries.sort((a, b) => a.added - b.added)
   })
 
-const publicStore = ({ entries, chosen }) => ({
-  default: entries.some(({ name }) => name === chosen) ? chosen : (entries.at(-1)?.name ?? ''),
-  servers: entries.map(({ name, url }) => ({ name, url })),
+export const loadServers = async () => ({
+  servers: (await readAll()).map(({ name, url }) => ({ name, url })),
 })
-
-export const loadServers = async () => publicStore(await readAll())
 
 export const parseServerUrl = (value, pageProtocol = globalThis.location?.protocol) => {
   let url
@@ -86,7 +97,7 @@ export const saveServer = async ({ name, url, key }) => {
   const href = parseServerUrl(url)
   const text = String(key ?? '').trim()
   const signingKey = text ? await importSigningKey(text) : null
-  await transaction('readwrite', async (servers, settings) => {
+  await transaction('readwrite', async (servers) => {
     const found = await done(servers.get(name))
     if (!signingKey && !found) throw new Error('a new server needs its key')
     servers.put({
@@ -95,33 +106,20 @@ export const saveServer = async ({ name, url, key }) => {
       key: signingKey ?? found.key,
       added: found?.added ?? Date.now(),
     })
-    settings.put(name, 'default')
   })
   await navigator.storage?.persist?.().catch(() => false)
   return { name, url: href }
 }
 
 export const removeServer = (name) =>
-  transaction('readwrite', async (servers, settings) => {
+  transaction('readwrite', (servers) => {
     servers.delete(name)
-    const chosen = await done(settings.get('default'))
-    if (chosen !== name) return
-    const left = (await done(servers.getAll())).sort((a, b) => a.added - b.added)
-    settings.put(left.at(-1)?.name ?? '', 'default')
   })
 
-export const useServer = (name) =>
-  transaction('readwrite', async (servers, settings) => {
-    if (!(await done(servers.get(name)))) throw new Error(`no server named "${name}"`)
-    settings.put(name, 'default')
-  })
-
-export const targetsOf = async (names = []) => {
-  const { entries, chosen } = await readAll()
-  const store = publicStore({ entries, chosen })
-  const wanted = names.length ? names : [store.default].filter(Boolean)
-  if (!wanted.length) throw new Error('no server is saved - add one in Servers')
-  return wanted.map((name) => {
+export const targetsOf = async (names) => {
+  if (!names.length) throw new Error('no server is chosen - add one in Servers')
+  const entries = await readAll()
+  return names.map((name) => {
     const entry = entries.find((item) => item.name === name)
     if (!entry) throw new Error(`no server named "${name}" - see Servers`)
     return { label: name, name, url: entry.url, key: entry.key }

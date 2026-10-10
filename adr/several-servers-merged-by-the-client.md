@@ -33,6 +33,11 @@ and adds up the counts of each group.**
   splits the visits of a fixture over two data folders and checks this for every query.
 - A server that fails does not stop the query. The client prints the result of the other servers,
   lists the failed server, and exits with code 1.
+- Each call to a server has a timeout, with `AbortSignal.timeout`: 130 seconds for a query, and 30
+  seconds for the other calls. So a stalled server fails, and the others still answer. `--timeout`
+  changes it. A backup and a restore have no timeout, because they move large files.
+- An answer that is not JSON, or a query answer without its days, groups and counts, fails only that
+  server. A proxy that answers `200` with a login page does not break the sum of the others.
 - The answer of a server has a hash of the build file and the segments. The client warns when the
   hashes differ. `app` takes a list of servers, so one command registers the app on all of them.
 - **imp-aly does not count returning users, and it will not.** A returning user needs an id that

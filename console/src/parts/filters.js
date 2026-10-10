@@ -6,13 +6,11 @@ import { button } from 'imp/std'
 import { notice, skeleton } from 'imp/std/feedback'
 import { comboBox, form, resetForm, select, treeSelect } from 'imp/std/inputs'
 import { messageOf, runQueries } from '../lib/api.js'
-import { emptyFilters } from '../lib/reports.js'
+import { cutListHelp, emptyFilters, MAX_VALUES } from '../lib/reports.js'
 import { pageTree } from '../lib/page-tree.js'
 import { labelOf } from '../lib/rows.js'
 
 const LOOKUPS = { zone: 'seen', name: 'outcome', country: null }
-
-const MAX_VALUES = 300
 
 const filterKeeper = component('aly-filter-keeper', {
   setup: (self, app) => {
@@ -88,6 +86,13 @@ export const filterBar = component('aly-filter-bar', {
         answers[index].rows.map((row) => labelOf(row[field])),
       ]),
     )
+    const cut = Object.fromEntries(
+      lookups.map((field, index) => [field, Boolean(answers[index].truncated)]),
+    )
+    const typed = (field) => ({
+      custom: cut[field],
+      help: cutListHelp(cut[field], { canType: true }),
+    })
     const values = initialValues(filters.get(), scope.app, segments)
     const controls = []
     if (fields.includes('page')) {
@@ -104,6 +109,7 @@ export const filterBar = component('aly-filter-bar', {
         field: 'zone',
         label: 'Zone',
         options: choices('All zones', found.zone, values.zone),
+        help: cutListHelp(cut.zone),
       }))
     }
     if (fields.includes('name')) {
@@ -113,6 +119,7 @@ export const filterBar = component('aly-filter-bar', {
         multiple: true,
         options: multiChoices(found.name, values.name),
         placeholder: 'All outcomes',
+        ...typed('name'),
       }))
     }
     if (fields.includes('segments')) {
@@ -123,6 +130,7 @@ export const filterBar = component('aly-filter-bar', {
           multiple: true,
           options: multiChoices(found[segment], values.segment[segment]),
           placeholder: 'All',
+          ...typed(segment),
         }))
       }
     }
@@ -133,6 +141,7 @@ export const filterBar = component('aly-filter-bar', {
         multiple: true,
         options: multiChoices(found.country, values.country),
         placeholder: 'All countries',
+        ...typed('country'),
       }))
     }
     return form(

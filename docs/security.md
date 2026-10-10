@@ -69,9 +69,11 @@ sudo imp-aly key rotate
 ```
 
 The command makes a new key, writes it to the key file of the service and prints it. The service
-loads the new key and does not stop. From then on, it refuses each token that the old key signed.
-`/collect` does not stop, so no record is lost. When the service does not load the new key within 5
-seconds, the command shows an error. Then restart the service: `sudo systemctl restart imp-aly`.
+loads the new key and does not stop. The command gives the key to the service in `/run/imp-aly`, a
+folder that only root can write. The service can read the key there, but cannot change a file of
+root. From then on, it refuses each token that the old key signed. `/collect` does not stop, so no
+record is lost. When the service does not load the new key within 5 seconds, the command shows an
+error. Then restart the service: `sudo systemctl restart imp-aly`.
 
 The command runs only as root on the VPS. The API has no endpoint that changes the key. So somebody
 who has the old key cannot change the key and lock you out.
@@ -112,12 +114,13 @@ Anybody can send records to `/collect/<app>`. The server limits what a sender ca
   with an unknown field fails. See [Collecting records](collect.md).
 - **Plain characters only.** A zone, an outcome name and a segment value hold only ASCII letters,
   digits and a few signs. HTML, a script, a shell command or a Unicode trick fails the checks.
-- **The size limits.** A request has at most 64 KiB. The server reads a body for at most 10 seconds.
+- **The size limits.** A request has at most 64 KiB. The server reads a body for at most 5 seconds.
 - **The rate limit.** Each address can send a limited number of records in 5 seconds, 1 minute, 1
   hour and 24 hours. Over a limit, the server answers `429` without reading the body. An IPv6 `/48`
   network has a limit too.
 - **The requests in progress.** The server works on at most 1,024 requests at one time on each port.
-  Above this number, it answers `503` at once.
+  Above this number, it answers `503` at once. One address can have at most 32 of them, then the
+  server answers `429`.
 - **The allowed origins.** With `--allow-origin`, the server refuses records from a browser page of
   another site. So a script on another site cannot use the browsers of its visitors to send records.
   See [Collecting records](collect.md#cors-and-allowed-origins).

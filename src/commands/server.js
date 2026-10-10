@@ -14,6 +14,7 @@ import {
   ensureService,
   isCompiled,
   isInsideService,
+  KEY_HANDOVER_DIR,
   SERVICE_DATA_DIR,
   SERVICE_NAME,
   serviceBlocker,
@@ -151,7 +152,7 @@ export const serviceArgs = (options) => {
 
 const updateLine = (autoUpdate) =>
   autoUpdate
-    ? 'Updates: once a day, to the newest compatible version. Turn off: add --no-auto-update'
+    ? 'Updates: once a day, to a compatible release that is 7 days old. Turn off: add --no-auto-update'
     : 'Updates: off. Run sudo imp-aly update to update'
 
 const printBanner = ({ options, key, keyPath, mode, autoUpdate = false }) => {
@@ -196,7 +197,7 @@ ${serviceLines}`)
 const KEY_CHANGED = 'The key changed. The server refuses tokens signed with the old key.'
 
 const readNewKey = ({ server, dataDir, keyPath }) => {
-  if (!keyPath) return takeNewKey(dataDir, server.setKey)
+  if (!keyPath) return takeNewKey({ handoverDir: KEY_HANDOVER_DIR, dataDir }, server.setKey)
   const key = readKeyFile(keyPath)
   if (key) server.setKey(key)
   return key
@@ -205,7 +206,7 @@ const readNewKey = ({ server, dataDir, keyPath }) => {
 const reloadKey = (place) => {
   try {
     if (readNewKey(place)) logger.info(KEY_CHANGED)
-    else logger.warn(`SIGHUP: ${place.keyPath ?? join(place.dataDir, NEW_KEY_FILE)} has no key`)
+    else logger.warn(`SIGHUP: ${place.keyPath ?? join(KEY_HANDOVER_DIR, NEW_KEY_FILE)} has no key`)
   } catch (error) {
     logger.error(`SIGHUP: the key did not change (${error.message})`)
   }
@@ -274,10 +275,7 @@ export const server = async ({ positional, flags }) => {
   const debug = Boolean(flags.debug)
   if (isInsideService()) {
     const inService = { ...options, dataDir: options.dataDir ?? SERVICE_DATA_DIR }
-    let key = findKey(credentialPath(CREDENTIALS.key))
-    takeNewKey(inService.dataDir, (next) => {
-      key = next
-    })
+    const key = findKey(credentialPath(CREDENTIALS.key))
     return await run({ options: inService, key, keyPath: null, debug, service: true })
   }
   const { key, path: keyPath } = findOrCreateKey(flags.auth)

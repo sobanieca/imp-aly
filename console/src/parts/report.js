@@ -11,7 +11,7 @@ import { luBox, luCalendarX, luCircleQuestionMark, luServer } from 'imp/icons'
 import { app } from '../app-map.js'
 import { messageOf } from '../lib/api.js'
 import { mapPagesOf, segmentsOf } from '../lib/catalog.js'
-import { bucketLabel, previousLabel } from '../lib/days.js'
+import { bucketLabel, previousLabel } from '../lib/ranges.js'
 import { formatCount } from '../lib/format.js'
 import { activeFilters, changeOf } from '../lib/reports.js'
 import { useScope } from '../lib/scope.js'
@@ -170,6 +170,9 @@ export const reportLoading = () => stack({ gap: 4 }, skeleton({ lines: 2 }), ske
 export const reportError = (error) =>
   notice({ kind: 'error', title: 'The report did not load' }, messageOf(error))
 
+export const failureText = (failedServers) =>
+  failedServers.map(({ server, reason }) => `${server}: ${reason}`).join(' ')
+
 const plural = (count, word) => `${formatCount(count)} ${word}${count === 1 ? '' : 's'}`
 
 export const problemNotices = ({ failed, skipped, warnings }) =>
@@ -177,9 +180,7 @@ export const problemNotices = ({ failed, skipped, warnings }) =>
     failed.length
       ? notice(
         { kind: 'warning', title: 'The numbers are not complete' },
-        `${plural(failed.length, 'server')} did not answer. ${
-          failed.map(({ server, reason }) => `${server}: ${reason}`).join(' ')
-        }`,
+        `${plural(failed.length, 'server')} did not answer. ${failureText(failed)}`,
       )
       : null,
     skipped.length
@@ -201,6 +202,8 @@ export const dataNote = (answer) =>
     } matched.`,
   )
 
+export const tableNote = (note) => (note ? text({ tone: 'secondary', size: 'sm' }, note) : null)
+
 export const noRecords = (answer) =>
   emptyState({
     icon: luCalendarX,
@@ -209,7 +212,7 @@ export const noRecords = (answer) =>
       `The servers hold no record of ${answer.app} from ${answer.from} to ${answer.to}. Choose other days.`,
   })
 
-export const noApp = (catalog) =>
+const noApp = (catalog) =>
   catalog.view((value) => {
     if (value === undefined) return loader({ label: 'Loading the apps' })
     if (value.error) {
@@ -242,6 +245,18 @@ export const noApp = (catalog) =>
     )
   })
 
+export const catalogNotice = (catalog) =>
+  catalog.view((value) =>
+    value?.failedServers?.length
+      ? notice(
+        { kind: 'warning', title: 'Some servers did not answer' },
+        `The list of apps and the numbers leave out these servers. ${
+          failureText(value.failedServers)
+        }`,
+      )
+      : null
+  )
+
 const changeTag = (change, { upIsBad = false } = {}) => {
   const good = change.direction === 'up' ? !upIsBad : upIsBad
   const color = change.direction === 'same' ? 'neutral' : good ? 'green' : 'red'
@@ -252,7 +267,7 @@ export const changeHint = (current, previous, scope, options) =>
   previous === null || previous === undefined ? null : span(
     changeTag(changeOf(current, previous), options),
     ` from ${formatCount(previous)}`,
-    span({ style: 'display: block' }, `in ${previousLabel(scope.preset)}`),
+    span({ style: 'display: block' }, `in the ${previousLabel(scope.preset).toLowerCase()}`),
   )
 
 export const compareColumns = (scope, { upIsBad = false } = {}) =>
@@ -306,7 +321,7 @@ export const reportScreen = (
     [filters, scope],
     (saved, current) => (saved && saved.app === current.app ? activeFilters(saved.values) : {}),
   )
-  const ready = (current) => current.app && current.from
+  const ready = (current) => current.app && current.from && current.servers.length
   return page(
     stack(
       { gap: 5 },
@@ -314,6 +329,7 @@ export const reportScreen = (
         screenHeader({ title, description, terms: termsFor(terms, { preset: compared }) })
       ),
       scopeBar(),
+      catalogNotice(catalog),
       fields.length
         ? div(
           computed([scope, meta], (current, info) => ({ current, info })).view((

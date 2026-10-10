@@ -5,7 +5,7 @@ import { tag } from 'imp/std/display'
 import { stack } from 'imp/std/layout'
 import { PAGE_TERMS } from '../lib/terms.js'
 import { problemsOf, runPrevious, runQuery } from '../lib/api.js'
-import { barOf, bucketsOf } from '../lib/days.js'
+import { barOf, bucketsOf } from '../lib/ranges.js'
 import { formatCount, formatPercent } from '../lib/format.js'
 import {
   leastUsed,
@@ -16,6 +16,7 @@ import {
   RARELY_USED,
   RARELY_VIEWED,
   shareOf,
+  usesTitle,
 } from '../lib/reports.js'
 import { stackedSeries, TOP, topKeys, usedSeries } from '../lib/series.js'
 import {
@@ -143,7 +144,7 @@ const pagesReport = component('aly-pages-report', {
         ...problemNotices(problemsOf([current, before, trend])),
         tiles,
         chartCard(
-          `Uses of ${chosen[0]}`,
+          usesTitle(chosen[0]),
           'The page views where the page was used, and where it was viewed but not used.',
         ),
         dataNote(current),

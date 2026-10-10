@@ -25,9 +25,15 @@ shows the systemd service.**
   of root, and the key is not in the unit file. A new key reaches the running service in the data
   folder, see `key-rotation.md`.
 - The unit limits the service: `ProtectSystem=strict` with `ReadWritePaths=` for the data folder,
-  `ProtectHome`, `PrivateTmp`, `PrivateDevices`, `NoNewPrivileges`, the kernel protections, and an
-  empty capability set, or only `CAP_NET_BIND_SERVICE` for a port below 1024. `UMask=0077` keeps new
-  files private. `MemoryDenyWriteExecute` is not set, because the JIT of V8 needs it.
+  `ProtectHome`, `PrivateTmp`, `PrivateDevices`, `NoNewPrivileges`, the kernel, clock, hostname and
+  control group protections, `ProtectProc=invisible`, `RestrictNamespaces`, `RestrictRealtime`,
+  `RestrictSUIDSGID`, `LockPersonality` and `RemoveIPC`. `RestrictAddressFamilies=` allows only
+  `AF_UNIX`, `AF_INET` and `AF_INET6`. `SystemCallArchitectures=native` and
+  `SystemCallFilter=@system-service` limit the system calls, and a blocked call fails with `EPERM`.
+  The capability set is empty, or only `CAP_NET_BIND_SERVICE` for a port below 1024. `UMask=0077`
+  keeps new files private. `MemoryDenyWriteExecute` is not set, because the JIT of V8 needs it.
+- `ProtectSystem=strict` makes `/run` read-only for the service. The service only reads the new key
+  that root puts in `/run/imp-aly`, see `key-rotation.md`, so the handover still works.
 - The command refuses a data folder in `/root`, a binary in `/root` or `/home`, which the unit
   hides, and a credential path that `LoadCredential=` cannot take. It checks with `runuser` that the
   service user can reach the parent folder before it creates the data folder, and can write the data

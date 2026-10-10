@@ -5,9 +5,9 @@ import { tag } from 'imp/std/display'
 import { stack } from 'imp/std/layout'
 import { ZONE_TERMS } from '../lib/terms.js'
 import { problemsOf, runPrevious, runQuery } from '../lib/api.js'
-import { barOf, bucketsOf } from '../lib/days.js'
+import { barOf, bucketsOf } from '../lib/ranges.js'
 import { formatCount, formatPercent } from '../lib/format.js'
-import { MAX_ROWS, NEVER_USED, RARELY, RARELY_USED, zoneRows } from '../lib/reports.js'
+import { MAX_ROWS, NEVER_USED, RARELY, RARELY_USED, usesTitle, zoneRows } from '../lib/reports.js'
 import { stackedSeries, TOP, topKeys, totalsBy, usedSeries } from '../lib/series.js'
 import {
   changeHint,
@@ -132,7 +132,7 @@ const zonesReport = component('aly-zones-report', {
       ),
       reportCard(
         {
-          title: one ? `Uses of ${filters.zone}` : 'Uses of the top zones',
+          title: one ? usesTitle(filters.zone) : 'Uses of the top zones',
           description: one
             ? 'The page views where the zone was used, and where it was seen but not used.'
             : 'The 10 most used zones, and the uses of all other zones as "Other". One visit can use several zones.',

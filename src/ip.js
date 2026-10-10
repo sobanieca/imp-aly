@@ -68,6 +68,21 @@ export const parseIp = (text) => {
   return { version: 6, parts: groups }
 }
 
+const BRACKETED_WITH_PORT = /^\[([^\]]+)\](?::\d{1,5})?$/
+
+const IPV4_WITH_PORT = /^([\d.]+):\d{1,5}$/
+
+export const parseClientAddress = (text) => {
+  const plain = String(text ?? '').trim()
+  const bracketed = BRACKETED_WITH_PORT.exec(plain)
+  if (bracketed) return bracketed[1].includes(':') ? parseIp(bracketed[1]) : null
+  const withPort = IPV4_WITH_PORT.exec(plain)
+  return parseIp(withPort ? withPort[1] : plain)
+}
+
+export const formatIp = (ip) =>
+  ip.version === 4 ? ip.parts.join('.') : ip.parts.map((part) => part.toString(16)).join(':')
+
 export const parseNetwork = (text) => {
   const [address, length, ...rest] = String(text).trim().split('/')
   const ip = rest.length ? null : parseIp(address)

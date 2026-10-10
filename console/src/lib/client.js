@@ -1,28 +1,22 @@
 import { HttpError } from 'imp/http'
-import { eachServer, queryEach, requireAnswer } from '../../../src/multi-server.js'
-import { createSha256, sha256Hex } from '../../../src/sha256.js'
+import {
+  CALL_TIMEOUT_MS,
+  eachServer,
+  QUERY_TIMEOUT_MS,
+  queryEach,
+  requireAnswer,
+} from '../../../src/multi-server.js'
+import { sha256Hex } from '../../../src/sha256.js'
 import { createToken, EMPTY_BODY_HASH } from '../../../src/token.js'
+import { markAnswered, noteOutcome } from './health.js'
 import { targetsOf } from './vault.js'
 
-const QUERY_TIMEOUT_MS = 130_000
-
 const encoder = new TextEncoder()
-
-const hashBlob = async (blob) => {
-  const hash = createSha256()
-  const reader = blob.stream().getReader()
-  for (;;) {
-    const { done, value } = await reader.read()
-    if (done) return hash.digest()
-    hash.update(value)
-  }
-}
 
 export const hashBody = (body) => {
   if (body === null || body === undefined) return EMPTY_BODY_HASH
   if (typeof body === 'string') return sha256Hex(encoder.encode(body))
-  if (body instanceof Blob) return hashBlob(body)
-  throw new Error('the console signs only a text or a file as the body')
+  throw new Error('the console signs only a text as the body')
 }
 
 export const signedPath = (requestUrl, serverUrl) => {
@@ -37,7 +31,7 @@ const signRequest = async (request) => {
   const token = await createToken(target.key, {
     method: request.method,
     path: signedPath(request.url, target.url),
-    bodyHash: await hashBody(request.body),
+    bodyHash: hashBody(request.body),
   })
   request.headers.authorization = `Bearer ${token}`
   return request
@@ -45,7 +39,7 @@ const signRequest = async (request) => {
 
 export const CLIENT_OPTIONS = {
   requestId: false,
-  timeout: QUERY_TIMEOUT_MS,
+  timeout: CALL_TIMEOUT_MS,
   onRequest: signRequest,
 }
 
@@ -54,50 +48,82 @@ const reachHint = (target) =>
     ? 'this page uses https, so the server must use https too'
     : 'is the server running, and does it allow the address of this page?'
 
+const notJson = (where, method, path, status) =>
+  new Error(`${method} ${path} on ${where} answered ${status} with a reply that is not JSON`)
+
 const serverError = (error, target, method, path) => {
   const where = `server "${target.name}" (${target.url})`
   if (!(error instanceof HttpError)) return error
   if (error.code === 'aborted') return error
   if (error.code === 'timeout') return new Error(`${where} did not answer in time`)
   if (error.code === 'network') return new Error(`cannot reach ${where} - ${reachHint(target)}`)
+  if (error.code === 'parse') return notJson(where, method, path, error.status)
   const message = error.body?.error ?? (typeof error.body === 'string' ? error.body.trim() : '')
   const failure = new Error(`${method} ${path} on ${where} answered ${error.status}: ${message}`)
   failure.status = error.status
   return failure
 }
 
-const callServer = async (api, target, { method, path, body, ...options }) => {
+const isObject = (value) =>
+  value !== null && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Blob)
+
+const callServer = async (api, target, { method, path, body, timeout = CALL_TIMEOUT_MS }) => {
+  let response
   try {
-    return await api.request(`${target.url}${path}`, {
+    response = await api.request(`${target.url}${path}`, {
       method,
       body,
+      timeout,
       meta: { target },
-      ...options,
-    }).then((response) => response.body)
+    })
   } catch (error) {
-    throw serverError(error, target, method, path)
+    const failure = serverError(error, target, method, path)
+    noteOutcome(target.name, failure)
+    throw failure
   }
+  if (!isObject(response.body)) {
+    const failure = notJson(
+      `server "${target.name}" (${target.url})`,
+      method,
+      path,
+      response.status,
+    )
+    noteOutcome(target.name, failure)
+    throw failure
+  }
+  markAnswered(target.name)
+  return response.body
 }
 
-export const queryServers = async (api, names, body, options = {}) => {
+export const queryServers = async (api, names, body) => {
   const targets = await targetsOf(names)
   const { result, warnings } = await queryEach(
     targets,
     body,
-    (target, request) => callServer(api, target, { ...request, ...options }),
+    (target, request) => callServer(api, target, { ...request, timeout: QUERY_TIMEOUT_MS }),
   )
   return { ...result, warnings }
 }
 
-const onServers = async (api, names, method, path, body) => {
+const onServers = async (api, names, run) => {
   const targets = await targetsOf(names)
-  return requireAnswer(
-    await eachServer(targets, (target) => callServer(api, target, { method, path, body })),
-  )
+  return requireAnswer(await eachServer(targets, (target) => run(target)))
+}
+
+const appListOf = async (api, target) => {
+  const result = await callServer(api, target, { method: 'GET', path: '/apps' })
+  if (!Array.isArray(result.apps)) {
+    throw new Error(`server "${target.name}" (${target.url}) sent no list of apps`)
+  }
+  return result
 }
 
 export const appsOf = async (api, names) => {
-  const { results, failedServers } = await onServers(api, names, 'GET', '/apps')
+  const { results, failedServers } = await onServers(
+    api,
+    names,
+    (target) => appListOf(api, target),
+  )
   const apps = results.flatMap(({ server, result }) =>
     result.apps.map((entry) => ({ server, ...entry }))
   )
@@ -105,33 +131,16 @@ export const appsOf = async (api, names) => {
 }
 
 export const appOnServers = async (api, names, method, path, body) => {
-  const { results, failedServers } = await onServers(api, names, method, path, body)
+  const { results, failedServers } = await onServers(
+    api,
+    names,
+    (target) => callServer(api, target, { method, path, body }),
+  )
   return { apps: results.map(({ server, result }) => ({ server, ...result })), failedServers }
 }
 
 export const statusOf = async (api, name) => {
-  const [target] = await targetsOf(name ? [name] : [])
+  const [target] = await targetsOf([name])
   const status = await callServer(api, target, { method: 'GET', path: '/status' })
   return { server: target.name, url: target.url, ...status }
-}
-
-export const downloadBackup = async (api, name, { last = 'all', by = 'day' } = {}) => {
-  const [target] = await targetsOf(name ? [name] : [])
-  const path = `/backup?${new URLSearchParams({ last, by })}`
-  const blob = await callServer(api, target, { method: 'GET', path, timeout: 0 })
-  const day = new Date().toISOString().slice(0, 10)
-  const label = target.name.replace(/[^A-Za-z0-9._-]+/g, '-')
-  return { blob, fileName: `imp-aly-backup-${label}-${last}-by-${by}-${day}.tar.gz` }
-}
-
-export const restoreBackup = async (api, name, file) => {
-  const [target] = await targetsOf(name ? [name] : [])
-  const answer = await callServer(api, target, {
-    method: 'POST',
-    path: '/restore',
-    body: file,
-    headers: { 'content-type': 'application/gzip' },
-    timeout: 0,
-  })
-  return { server: target.name, ...answer }
 }

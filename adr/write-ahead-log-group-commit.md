@@ -15,20 +15,24 @@ separate worker moves the log into the column files later.**
   record before it writes it, so the log holds only valid records.
 - Group commit: all the appends that arrive while a write runs go into the next single write and the
   next single `fdatasync`. The cost of a sync is shared by every request in the group.
-- The log is a series of parts, `<16-digit id>.open`. The server closes the current part every 2
-  seconds, or at 8 MiB, and renames it to `.log`. The worker reads only `.log` parts. An empty part
-  is deleted, so an idle server writes nothing.
+- The log is a series of parts, `<16-digit id>.open`. Every 2 seconds, the server closes the current
+  part when it holds records, and renames it to `.log`. It also closes a part after the write that
+  takes it to 8 MiB or more. The worker reads only `.log` parts. An empty part is deleted, so an
+  idle server writes nothing.
 - When a write fails, the server cuts the part back to its size before the write and closes it. So a
   torn line can only be the last line of a part, and no later record follows it. When the cut fails
   too, the server closes the part as `<id>-<size>.log`. The worker reads only the first `<size>`
   bytes. So the records before the failed write are stored, and records that a client got `503` for
   are not.
 - The server renames a part before it closes the file. When the rename fails, the part stays open
-  and the server logs an error. The timer, or the next full part, tries the rename again. A part cut
-  back after a failed write takes no new records until it has its `.log` name. So a part with
-  records never stays behind as `.open` while the server writes later parts.
+  and the server logs an error. The timer, or the next full part, tries the rename again. A part
+  that was cut back takes new records after its records, because its file ends at a full line. A
+  part whose cut failed takes no new records. The next write first tries to close it as
+  `<id>-<size>.log`, and fails with `503` while that rename fails. So a part with records never
+  stays behind as `.open` while the server writes later parts.
 - At start, the server renames a leftover `.open` part to `.log`. A torn last line after a crash is
-  not valid JSON, and the worker skips it.
+  not valid JSON. The worker skips it, logs a warning, and counts it in `droppedRecords` of
+  `GET /status`.
 - Part ids grow for ever. The id of a new part is the current time in milliseconds, or one more than
   the last id when that is larger. The worker writes the id of the last stored part to
   `wal/applied`, and the server starts after the largest id in the folder or in that file. The

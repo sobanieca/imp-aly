@@ -1,4 +1,4 @@
-import { requireOnlyFlags } from '../args.js'
+import { parseTimeout, requireOnlyFlags } from '../args.js'
 import { eachServer, resolveTargets } from '../api-client.js'
 import { BUILD_FILE } from '../app-build.js'
 import { logger } from '../logger.js'
@@ -19,8 +19,8 @@ const summary = (app) =>
     app.segments.length ? app.segments.join(', ') : '-'
   }, build ${app.appUrl ?? 'uploaded'}`
 
-const onEachServer = async (targets, run) => {
-  const { results, failed } = await eachServer(targets, run)
+const onEachServer = async (targets, run, options) => {
+  const { results, failed } = await eachServer(targets, run, options)
   for (const { server, reason } of failed) logger.error(`${server}: ${reason}`)
   return {
     results,
@@ -60,10 +60,11 @@ const readBody = async (source, segments) => {
 export const app = async ({ positional, flags }) => {
   const [, action, name, source, ...rest] = positional
   const targets = resolveTargets(flags)
+  const options = { timeoutMs: parseTimeout(flags.timeout) }
   const many = targets.length > 1
   const prefix = (server) => (many ? `${server}: ` : '')
   if (action === 'add') {
-    requireOnlyFlags(flags, ['auth', 'url', 'server', 'segments'], 'app add')
+    requireOnlyFlags(flags, ['auth', 'url', 'server', 'segments', 'timeout'], 'app add')
     if (!name || !source || rest.length) throw new Error(USAGE)
     const segments = flags.segments
       ? flags.segments.split(',').map((segment) => segment.trim()).filter(Boolean)
@@ -72,6 +73,7 @@ export const app = async ({ positional, flags }) => {
     const { results, finish } = await onEachServer(
       targets,
       (call) => call('PUT', `/apps/${encodeURIComponent(name)}`, body),
+      options,
     )
     for (const { server, result } of results) {
       logger.plain(`${prefix(server)}Registered ${summary(result)}`)
@@ -79,10 +81,14 @@ export const app = async ({ positional, flags }) => {
     if (results.length) logger.plain(`Send records to /collect/${results[0].result.name}`)
     return finish()
   }
-  requireOnlyFlags(flags, ['auth', 'url', 'server', 'json'], `app ${action ?? ''}`.trim())
+  requireOnlyFlags(
+    flags,
+    ['auth', 'url', 'server', 'json', 'timeout'],
+    `app ${action ?? ''}`.trim(),
+  )
   if (action === 'ls') {
     if (name) throw new Error(USAGE)
-    const { results, finish } = await onEachServer(targets, (call) => call('GET', '/apps'))
+    const { results, finish } = await onEachServer(targets, (call) => call('GET', '/apps'), options)
     const apps = results.flatMap(({ server, result }) =>
       result.apps.map((entry) => (many ? { server, ...entry } : entry))
     )
@@ -117,7 +123,7 @@ export const app = async ({ positional, flags }) => {
   if (!name || source) throw new Error(USAGE)
   const path = `/apps/${encodeURIComponent(name)}`
   if (action === 'show') {
-    const { results, finish } = await onEachServer(targets, (call) => call('GET', path))
+    const { results, finish } = await onEachServer(targets, (call) => call('GET', path), options)
     const shown = many
       ? results.map(({ server, result }) => ({ server, ...result }))
       : results[0].result
@@ -131,14 +137,14 @@ export const app = async ({ positional, flags }) => {
         throw new Error(`the build of ${name} could not be read: ${result.buildError}`)
       }
       return result
-    })
+    }, options)
     for (const { server, result } of results) {
       logger.plain(`${prefix(server)}Refreshed ${summary(result)}`)
     }
     return finish()
   }
   if (action === 'rm') {
-    const { results, finish } = await onEachServer(targets, (call) => call('DELETE', path))
+    const { results, finish } = await onEachServer(targets, (call) => call('DELETE', path), options)
     for (const { server } of results) {
       logger.plain(
         `${prefix(server)}Removed ${name}. Its stored data stays until the retention removes it.`,

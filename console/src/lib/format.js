@@ -19,8 +19,6 @@ export const formatBytes = (bytes) => {
   return `${unit ? value.toFixed(1) : value} ${units[unit]}`
 }
 
-export const measureLabel = (measure) => (measure === 'visits' ? 'Visits' : 'Records')
-
 export const formatDateTime = (value) => {
   if (!value) return '-'
   const date = new Date(value)

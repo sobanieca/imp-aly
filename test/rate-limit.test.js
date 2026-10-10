@@ -87,6 +87,34 @@ Deno.test('makes the keys of a client address', () => {
   assertEquals(clientKeys('2001:DB8:1:2::9')[0].key, '2001:db8:1:2::/64')
   assertEquals(clientKeys('2001:db8::1')[0].key, '2001:db8:0:0::/64')
   assertEquals(clientKeys('unknown'), one('unknown'))
+  assertEquals(clientKeys('203.0.113.5:5678'), one('203.0.113.5'))
+  assertEquals(clientKeys('[2001:db8:1:2::9]:443')[0].key, '2001:db8:1:2::/64')
+})
+
+Deno.test('a port, brackets or a mapped IPv4 in the proxy header give the same address', () => {
+  const local = { remoteAddr: { hostname: '127.0.0.1' } }
+  const options = {
+    ipHeader: 'x-forwarded-for',
+    trustedProxies: parseTrustedProxies(['127.0.0.0/8']),
+  }
+  const from = (value) =>
+    clientAddress(
+      new Request('http://x/', { headers: { 'x-forwarded-for': value } }),
+      local,
+      options,
+    )
+  for (
+    const value of ['1.2.3.4:5678', '9.9.9.9, 1.2.3.4:1', '[::ffff:1.2.3.4]:80', '::ffff:1.2.3.4']
+  ) {
+    assertEquals(from(value), '1.2.3.4', value)
+  }
+  assertEquals(from('[2001:db8::1]:443'), from('2001:DB8::1'))
+  assertEquals(from('unknown'), '127.0.0.1')
+  assertEquals(from('1.2.3.4:abc'), '127.0.0.1')
+  const limiter = createRateLimiter({ limits: [{ name: '5s', ms: 5_000, limit: 2 }] })
+  assertEquals(limiter.take(clientKeys(from('1.2.3.4:1')), 1), null)
+  assertEquals(limiter.take(clientKeys(from('1.2.3.4:2')), 1), null)
+  assertEquals(limiter.take(clientKeys(from('1.2.3.4:3')), 1)?.name, '5s')
 })
 
 Deno.test('reads the client address from the header of a trusted proxy only', () => {

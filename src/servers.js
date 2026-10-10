@@ -1,5 +1,6 @@
 import { resolveKey } from './auth.js'
 import { dirname, getHome, join } from './paths.js'
+import { localService } from './service.js'
 
 export const SERVER_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$/
 
@@ -174,7 +175,17 @@ const expandName = (store, name) => {
   })
 }
 
-export const resolveTargets = ({ url, auth, server }, path = serversPath()) => {
+const localTarget = (auth, local) => {
+  const service = local()
+  if (!service) return { url: undefined, auth, server: null }
+  return { url: service.url, auth: auth ?? service.keyPath, server: null, service: true }
+}
+
+export const resolveTargets = (
+  { url, auth, server },
+  path = serversPath(),
+  local = localService,
+) => {
   if (url !== undefined && server !== undefined) {
     throw new Error('give --server or --url, not both')
   }
@@ -182,16 +193,20 @@ export const resolveTargets = ({ url, auth, server }, path = serversPath()) => {
   const store = readStore(path)
   const names = server === undefined ? defaultNames(store) : serverNames(server)
   const saved = names.flatMap((name) => expandName(store, name))
-  if (!saved.length) return [{ url: undefined, auth, server: null }]
+  if (!saved.length) return [localTarget(auth, local)]
   const twice = saved.find((entry, index) => saved.indexOf(entry) !== index)
   if (twice) throw new Error(`"${server ?? store.default}" names the server "${twice.name}" twice`)
   return saved.map((entry) => ({ url: entry.url, auth: auth ?? entry.auth, server: entry.name }))
 }
 
-export const resolveTarget = ({ url, auth, server }, path = serversPath()) => {
+export const resolveTarget = (
+  { url, auth, server },
+  path = serversPath(),
+  local = localService,
+) => {
   const oneServer = () => new Error(`this command takes one server, not "${server}"`)
   if (server !== undefined && serverNames(server).length > 1) throw oneServer()
-  const targets = resolveTargets({ url, auth, server }, path)
+  const targets = resolveTargets({ url, auth, server }, path, local)
   if (targets.length === 1) return targets[0]
   if (server !== undefined) throw oneServer()
   throw new Error(

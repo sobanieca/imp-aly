@@ -15,7 +15,7 @@ status field. When a decision changes, replace its ADR. When a decision is dropp
 | [plain-javascript-dependency-free-server](plain-javascript-dependency-free-server.md) | Plain JavaScript on Deno, with no dependency in the server |
 | [single-binary-systemd-service](single-binary-systemd-service.md)                     | One binary that installs itself as a systemd service       |
 | [binary-distribution](binary-distribution.md)                                         | Binaries on GitHub Releases, with a checksum               |
-| [automatic-updates](automatic-updates.md)                                             | A systemd timer installs the newest compatible version     |
+| [automatic-updates](automatic-updates.md)                                             | A systemd timer installs a compatible release after 7 days |
 | [tls-certificate-check](tls-certificate-check.md)                                     | The server checks its TLS certificate once an hour         |
 
 ## Collection

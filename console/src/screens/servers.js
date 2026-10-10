@@ -11,7 +11,8 @@ import { luPlus, luServer } from 'imp/icons'
 import { messageOf } from '../lib/api.js'
 import { statusOf } from '../lib/client.js'
 import { formatBytes, formatCount, formatDateTime } from '../lib/format.js'
-import { parseServerUrl, removeServer, saveServer, SERVER_NAME, useServer } from '../lib/vault.js'
+import { parseServerUrl, removeServer, saveServer, SERVER_NAME } from '../lib/vault.js'
+import { keyField } from '../parts/key-field.js'
 import { columns, page, reportCard, screenHeader } from '../parts/report.js'
 
 const storageNotices = (storage) =>
@@ -32,6 +33,14 @@ const storageNotices = (storage) =>
       ? notice(
         { kind: 'warning', title: 'Some log parts cannot be read' },
         `${storage.unreadableSegments} log parts cannot be read.`,
+      )
+      : null,
+    storage.droppedRecords
+      ? notice(
+        { kind: 'warning', title: 'Some records could not be stored' },
+        `${
+          formatCount(storage.droppedRecords)
+        } records were dropped since the start. The log of the server names their days.`,
       )
       : null,
   ].filter(Boolean)
@@ -110,7 +119,11 @@ const serverForm = component('aly-server-form', {
         onSubmit: async (values) => {
           let saved
           try {
-            saved = await saveServer(values)
+            saved = await saveServer({
+              name: values.name,
+              url: values.url,
+              key: values.key,
+            })
           } catch (error) {
             throw new FormError(messageOf(error), { cause: error })
           }
@@ -119,8 +132,7 @@ const serverForm = component('aly-server-form', {
             notify({
               kind: 'success',
               title: `Saved the server ${saved.name}`,
-              description:
-                `It answers with imp-aly ${status.version}, and it is the active server now.`,
+              description: `It answers with imp-aly ${status.version}.`,
             })
           } catch (error) {
             notify({
@@ -152,28 +164,18 @@ const serverForm = component('aly-server-form', {
         placeholder: 'https://analytics.myapp.example:2981',
         validate: urlProblem,
       }),
-      textField({
-        field: 'key',
-        label: 'Key',
-        type: 'password',
-        autocomplete: 'off',
-        required: !editing,
-        help: editing
-          ? 'Empty: keep the saved key.'
-          : 'The key of the server, from ~/.secret/imp-aly-key on the server. This browser keeps it, and no script can read it back.',
-      }),
+      keyField({ editing }),
       flex(button({ variant: 'primary', events: { click: submitForm } }, 'Save the server')),
     )
   },
 })
 
-const EMPTY_SERVER = { name: '', url: '', key: '' }
+const EMPTY_SERVER = { name: '', url: '' }
 
 export const serversScreen = component('aly-servers', {
   setup: (self) => {
     const catalog = useState(self, 'aly.catalog')
     const revision = useState(self, 'aly.revision')
-    const scopeServers = useState(self, 'aly.scope.servers')
     const editing = initState(self, 'aly.servers.editing', null)
     const formOpen = initState(self, 'aly.servers.formOpen', false)
     const removing = initState(self, 'aly.servers.removing', null)
@@ -182,30 +184,12 @@ export const serversScreen = component('aly-servers', {
     formOpen.watch(self, (open) => {
       if (!open) editing.set(null)
     })
-    const reload = () => {
-      scopeServers.set((names) => names.filter((name) => name !== removing.get()))
-      revision.set((value) => value + 1)
-    }
+    const reload = () => revision.set((value) => value + 1)
     const openForm = (value) => {
       editing.set(value)
       formOpen.set(true)
     }
     const add = () => openForm({ initial: EMPTY_SERVER })
-
-    const makeActive = async (name) => {
-      try {
-        await useServer(name)
-        if (scopeServers.get().length) scopeServers.set([])
-        notify({ kind: 'success', title: `${name} is the active server now` })
-      } catch (error) {
-        notify({
-          kind: 'error',
-          title: 'The active server did not change',
-          description: messageOf(error),
-        })
-      }
-      reload()
-    }
 
     const remove = async () => {
       const name = removing.get()
@@ -227,7 +211,7 @@ export const serversScreen = component('aly-servers', {
             icon: luServer,
             title: 'No server is added',
             description:
-              'Add the URL of the admin port of an imp-aly server, and its key. Add more servers to switch between them, or to add up their numbers.',
+              'Add the URL of the admin port of an imp-aly server, and its key. With more servers, each report asks the servers that have the app.',
           },
           button({ variant: 'primary', events: { click: add } }, 'Add a server'),
         )
@@ -237,19 +221,7 @@ export const serversScreen = component('aly-servers', {
         rowKey: 'name',
         rows: store.servers,
         columns: [
-          {
-            key: 'name',
-            label: 'Name',
-            sortable: true,
-            render: (row) =>
-              row.name === store.default
-                ? flex(
-                  { gap: 2, verticalAlign: 'center' },
-                  row.name,
-                  tag({ color: 'blue', size: 'sm' }, 'active'),
-                )
-                : row.name,
-          },
+          { key: 'name', label: 'Name', sortable: true },
           { key: 'url', label: 'URL' },
           {
             key: 'actions',
@@ -260,16 +232,10 @@ export const serversScreen = component('aly-servers', {
                 label: `Actions for ${row.name}`,
                 items: [
                   {
-                    id: 'active',
-                    label: 'Make it the active server',
-                    disabled: row.name === store.default,
-                    onClick: () => makeActive(row.name),
-                  },
-                  {
                     id: 'edit',
                     label: 'Change the URL or the key',
                     onClick: () =>
-                      openForm({ initial: { name: row.name, url: row.url, key: '' }, edit: true }),
+                      openForm({ initial: { name: row.name, url: row.url }, edit: true }),
                   },
                   {
                     id: 'remove',
@@ -299,7 +265,7 @@ export const serversScreen = component('aly-servers', {
           screenHeader({
             title: 'Servers',
             description:
-              'The servers of this browser. The reports ask the active server, or the servers that you choose in the bar.',
+              'The servers of this browser. The console asks each server for its apps. A report asks the servers that have the app of the report.',
           }),
           button({ variant: 'primary', events: { click: add } }, icon(luPlus), 'Add a server'),
         ),

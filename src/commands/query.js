@@ -1,4 +1,4 @@
-import { requireOnlyFlags } from '../args.js'
+import { parseTimeout, requireOnlyFlags } from '../args.js'
 import { queryServers, resolveTargets } from '../api-client.js'
 import { logger } from '../logger.js'
 import { formatTable } from '../table.js'
@@ -17,14 +17,15 @@ const readQuery = async (argument) => {
 }
 
 export const query = async ({ positional, flags }) => {
-  requireOnlyFlags(flags, ['auth', 'url', 'server', 'json'], 'query')
+  requireOnlyFlags(flags, ['auth', 'url', 'server', 'json', 'timeout'], 'query')
   const [, argument, ...rest] = positional
   if (!argument || rest.length) {
     throw new Error(`use: imp-aly query '<json>' or query <file.json>`)
   }
+  const timeoutMs = parseTimeout(flags.timeout)
   const body = await readQuery(argument)
   const targets = resolveTargets(flags)
-  const { parsed, result, warnings } = await queryServers(targets, body)
+  const { parsed, result, warnings } = await queryServers(targets, body, { timeoutMs })
   const { failedServers } = result
   if (flags.json) {
     console.log(JSON.stringify(result, null, 2))

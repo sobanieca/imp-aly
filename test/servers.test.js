@@ -62,7 +62,11 @@ Deno.test('server names and URLs are checked', async () => {
 
 Deno.test('the target comes from --url, --server or the default server', async () => {
   const path = await storePath()
-  assertEquals(resolveTarget({}, path), { url: undefined, auth: undefined, server: null })
+  assertEquals(resolveTarget({}, path, () => null), {
+    url: undefined,
+    auth: undefined,
+    server: null,
+  })
   addServer({ name: 'eu', url: 'https://eu.example', auth: '/keys/eu' }, path)
   addServer({ name: 'us', url: 'https://us.example' }, path)
   assertEquals(resolveTarget({}, path), {

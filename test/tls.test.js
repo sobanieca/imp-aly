@@ -1,5 +1,7 @@
 import { logger } from '../src/logger.js'
 import { startServer } from '../src/server.js'
+import { sha256Hex } from '../src/sha256.js'
+import { createToken } from '../src/token.js'
 import { assert, assertEquals, temporaryDir, waitFor } from './assert.js'
 
 const hasOpenssl = (() => {
@@ -132,6 +134,119 @@ Deno.test({
       await new Promise((resolve) => setTimeout(resolve, 100))
       assertEquals(changes.length, 1)
     } finally {
+      await server.shutdown()
+      await Deno.remove(dir, { recursive: true })
+    }
+  },
+})
+
+const BUILD = JSON.stringify({ pages: ['/'], zones: [], outcomes: [] })
+
+const adminCall = async (server, cert, method, path, body) => {
+  const bodyHash = body === undefined ? undefined : sha256Hex(new TextEncoder().encode(body))
+  const token = await createToken('test-key', { method, path, ...(bodyHash ? { bodyHash } : {}) })
+  const client = Deno.createHttpClient({ caCerts: [cert] })
+  try {
+    const response = await fetch(`https://localhost:${server.adminPort}${path}`, {
+      method,
+      headers: { authorization: `Bearer ${token}` },
+      body,
+      client,
+    })
+    assertEquals(response.status, 200)
+    return await response.json()
+  } finally {
+    client.close()
+  }
+}
+
+const isRefused = (error) => /Connection refused/.test(String(error?.cause?.message ?? error))
+
+Deno.test({
+  name: 'a new certificate starts at once, with no gap, while running requests finish',
+  ignore: !hasOpenssl,
+  fn: async () => {
+    logger.setQuiet(true)
+    const dir = await temporaryDir()
+    const first = await makeCertificate(dir, 'first')
+    const second = await makeCertificate(dir, 'second')
+    await install(dir, first, 1_000)
+    const server = await startServer({
+      port: 0,
+      adminPort: 0,
+      hostname: '127.0.0.1',
+      dataDir: `${dir}/data`,
+      key: 'test-key',
+      minFree: null,
+      quiet: true,
+      tlsCert: `${dir}/cert.pem`,
+      tlsKey: `${dir}/key.pem`,
+      tlsCheckMs: 30,
+      collectTimeoutMs: 30_000,
+      fetchFile: () => Promise.resolve(BUILD),
+    })
+    const both = Deno.createHttpClient({ caCerts: [first.cert, second.cert] })
+    let polling = true
+    let refused = 0
+    let answered = 0
+    let poll = Promise.resolve()
+    let send = null
+    let bodyOpen = true
+    let slow = Promise.resolve()
+    try {
+      await adminCall(server, first.cert, 'PUT', '/apps/myapp', JSON.stringify({ build: BUILD }))
+      const body = new ReadableStream({ start: (controller) => (send = controller) })
+      let finished = false
+      slow = fetch(`https://localhost:${server.port}/collect/myapp`, {
+        method: 'POST',
+        body,
+        duplex: 'half',
+        client: both,
+      }).then((response) => ({ response }), (error) => ({ error }))
+        .finally(() => (finished = true))
+      await waitFor(async () => {
+        const status = await adminCall(server, first.cert, 'GET', '/status')
+        return status.activeRequests.public === 1
+      })
+      poll = (async () => {
+        while (polling) {
+          const client = Deno.createHttpClient({ caCerts: [first.cert, second.cert] })
+          try {
+            const response = await fetch(`https://localhost:${server.port}/`, { client })
+            await response.body?.cancel()
+            if (response.ok) answered++
+          } catch (error) {
+            if (isRefused(error)) refused++
+          } finally {
+            client.close()
+          }
+        }
+      })()
+      await install(dir, second, 2_000)
+      await waitFor(() => answers(server.port, second.cert))
+      assert(!(await answers(server.port, first.cert)))
+      assert(!finished, 'the running request still runs')
+      send.enqueue(
+        new TextEncoder().encode(
+          JSON.stringify({ type: 'page', visit: 'v1', at: Date.now(), page: '/' }),
+        ),
+      )
+      send.close()
+      bodyOpen = false
+      const { response, error } = await slow
+      assertEquals(error, undefined)
+      assertEquals(response.status, 202)
+      await response.body?.cancel()
+      polling = false
+      await poll
+      assert(answered > 0)
+      assertEquals(refused, 0)
+    } finally {
+      polling = false
+      await poll
+      if (bodyOpen) send?.close()
+      await slow
+      both.close()
       await server.shutdown()
       await Deno.remove(dir, { recursive: true })
     }

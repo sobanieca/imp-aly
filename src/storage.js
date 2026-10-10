@@ -1,5 +1,5 @@
 import { restoreBackup } from './backup.js'
-import { appendRecords, appendTarget, sealDay, sourceDir } from './column-store.js'
+import { appendRecords, appendTarget, readGenerations, sealDay, sourceDir } from './column-store.js'
 import { dayEndMs, isDay, PERIOD_KINDS, periodOf } from './days.js'
 import { listDirectory, removeIfExists, writeFileAtomic } from './fs-utils.js'
 import { isAppName, isColumnName, isSource } from './names.js'
@@ -30,7 +30,7 @@ const decoder = new TextDecoder()
 
 export const heldDir = (dataDir, app, day) => join(dataDir, 'wal', HELD_DIR, app, day)
 
-export const parseSegment = (text, log) => {
+export const parseSegment = (text, log, counts = {}) => {
   const groups = new Map()
   let skipped = 0
   for (const line of text.split('\n')) {
@@ -62,14 +62,17 @@ export const parseSegment = (text, log) => {
     groups.get(key).records.push(record)
   }
   if (skipped) log?.warn(`Skipped ${skipped} unreadable lines of the write-ahead log`)
+  counts.dropped = (counts.dropped ?? 0) + skipped
   return [...groups.values()]
 }
 
-const applyGroup = async ({ dataDir, source, segment, group, log }) => {
+const applyGroup = async ({ dataDir, source, segment, group, log, counts }) => {
+  const key = `${group.app}/${group.day}`
   const target = await appendTarget(sourceDir(dataDir, group.app, group.day, source))
   if (!target) {
-    log?.warn(
-      `Dropped ${group.records.length} records of ${group.app}/${group.day}: only the daily summary of the day is stored`,
+    counts.dropped = (counts.dropped ?? 0) + group.records.length
+    log?.error(
+      `Dropped ${group.records.length} records of ${key}: only the daily summary of the day is stored`,
     )
     return 0
   }
@@ -79,8 +82,11 @@ const applyGroup = async ({ dataDir, source, segment, group, log }) => {
     records: group.records,
     appliedWal: target.appliedWal,
   })
-  if (applied) return group.records.length
-  log?.warn(`Log part ${segment} is already stored in ${group.app}/${group.day}, skipped`)
+  if (applied) {
+    counts.stored?.add(key)
+    return group.records.length
+  }
+  log?.warn(`Log part ${segment} is already stored in ${key}, skipped`)
   return 0
 }
 
@@ -95,14 +101,16 @@ const checkSource = (source) => {
   if (!isSource(source)) throw new Error(`the storage needs a source id, not ${source}`)
 }
 
-export const applySegment = async ({ dataDir, source, segment, text, log, held = new Map() }) => {
+export const applySegment = async (
+  { dataDir, source, segment, text, log, held = new Map(), counts = {} },
+) => {
   checkSource(source)
   let rows = 0
-  for (const group of parseSegment(text, log)) {
+  for (const group of parseSegment(text, log, counts)) {
     const key = `${group.app}/${group.day}`
     if (!held.has(key)) {
       try {
-        rows += await applyGroup({ dataDir, source, segment, group, log })
+        rows += await applyGroup({ dataDir, source, segment, group, log, counts })
         continue
       } catch (error) {
         held.set(key, error.message)
@@ -127,7 +135,7 @@ export const listHeldDays = async (dataDir) => {
   return held
 }
 
-export const retryHeldDay = async ({ dataDir, source, key, log }) => {
+export const retryHeldDay = async ({ dataDir, source, key, log, counts = {} }) => {
   const [app, day] = key.split('/')
   const dir = heldDir(dataDir, app, day)
   let rows = 0
@@ -140,6 +148,7 @@ export const retryHeldDay = async ({ dataDir, source, key, log }) => {
       segment: segment.id,
       group: { app, day, records },
       log,
+      counts,
     })
     await removeIfExists(segment.path)
   }
@@ -147,23 +156,38 @@ export const retryHeldDay = async ({ dataDir, source, key, log }) => {
   return rows
 }
 
-export const sealDueDays = async ({ dataDir, source, now, sealDelayMs, log }) => {
-  const sealed = []
-  let days = []
-  try {
-    days = await listStoredDays(dataDir)
-  } catch (error) {
-    log?.error(`Cannot list the stored days: ${error.message}`)
+export const listUnsealedDays = async ({ dataDir, source }) => {
+  const unsealed = new Set()
+  for (const { app, day } of await listStoredDays(dataDir)) {
+    if ((await readGenerations(sourceDir(dataDir, app, day, source))).raws.length) {
+      unsealed.add(`${app}/${day}`)
+    }
   }
-  for (const { app, day } of days) {
+  return unsealed
+}
+
+export const sealDueDays = async ({ dataDir, source, now, sealDelayMs, unsealed, log }) => {
+  const sealed = []
+  let pending = unsealed
+  if (!pending) {
+    try {
+      pending = await listUnsealedDays({ dataDir, source })
+    } catch (error) {
+      log?.error(`Cannot list the stored days: ${error.message}`)
+      return sealed
+    }
+  }
+  for (const key of [...pending].sort()) {
+    const [app, day] = key.split('/')
     if (now < dayEndMs(day) + sealDelayMs) continue
     try {
       if (await sealDay(sourceDir(dataDir, app, day, source))) {
-        sealed.push(`${app}/${day}`)
-        log?.info(`Sealed ${app}/${day}`)
+        sealed.push(key)
+        log?.info(`Sealed ${key}`)
       }
+      pending.delete(key)
     } catch (error) {
-      log?.error(`Cannot seal ${app}/${day}: ${error.message}`)
+      log?.error(`Cannot seal ${key}: ${error.message}`)
     }
   }
   return sealed
@@ -220,6 +244,9 @@ export const createStorage = ({
   let lastSeal = -Infinity
   let lastHeldRetry = -Infinity
   let heldLoaded = false
+  let unsealed = null
+  const storedDays = new Set()
+  const counts = { dropped: 0, stored: storedDays }
   const held = new Map()
   const readFailures = new Map()
   const restores = []
@@ -236,6 +263,7 @@ export const createStorage = ({
 
   const snapshot = () => ({
     ...status,
+    droppedRecords: counts.dropped,
     heldDays: [...held].map(([day, error]) => ({ day, error })),
   })
 
@@ -305,6 +333,7 @@ export const createStorage = ({
             text,
             log,
             held,
+            counts,
           })
         }
         await writeAppliedSegment(walDir, segment.id)
@@ -319,6 +348,7 @@ export const createStorage = ({
     while (restores.length && !stopping) {
       const { path, resolve, reject } = restores.shift()
       checkedPeriods.clear()
+      unsealed = null
       try {
         resolve(
           await restoreBackup({
@@ -339,7 +369,7 @@ export const createStorage = ({
     for (const [key, previous] of [...held]) {
       if (stopping) return
       try {
-        status.processedRows += await retryHeldDay({ dataDir, source, key, log })
+        status.processedRows += await retryHeldDay({ dataDir, source, key, log, counts })
         held.delete(key)
         log?.info(`Stored the records of ${key} that were kept aside`)
       } catch (error) {
@@ -391,7 +421,19 @@ export const createStorage = ({
       await processRestores()
       if (!stopping && stored && now() - lastSeal >= maintenanceMs) {
         lastSeal = now()
-        const sealed = await sealDueDays({ dataDir, source, now: now(), sealDelayMs, log })
+        if (!unsealed) {
+          storedDays.clear()
+          try {
+            unsealed = await listUnsealedDays({ dataDir, source })
+          } catch (error) {
+            log?.error(`Cannot list the stored days: ${error.message}`)
+          }
+        }
+        for (const key of storedDays) unsealed?.add(key)
+        storedDays.clear()
+        const sealed = unsealed
+          ? await sealDueDays({ dataDir, source, now: now(), sealDelayMs, unsealed, log })
+          : []
         for (const key of periodKeysOf(sealed)) checkedPeriods.delete(key)
         await sealDuePeriods({
           dataDir,

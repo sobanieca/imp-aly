@@ -17,9 +17,27 @@ import {
 import { dialog, drawer, flex, stack } from 'imp/std/layout'
 import { luPlus } from 'imp/icons'
 import { messageOf } from '../lib/api.js'
-import { appOnServers } from '../lib/client.js'
+import { knownSegments, registryRows } from '../lib/catalog.js'
 import { formatCount, formatDateTime } from '../lib/format.js'
-import { page, reportCard, screenHeader, wide } from '../parts/report.js'
+import {
+  buildProblem,
+  refreshApp,
+  registerApp,
+  registerBody,
+  removeApp,
+  removeQuestion,
+  segmentProblem,
+  segmentsNote,
+  withoutOtherSources,
+} from '../lib/registry.js'
+import {
+  catalogNotice,
+  failureText,
+  page,
+  reportCard,
+  screenHeader,
+  wide,
+} from '../parts/report.js'
 import { scopeBar } from '../parts/scope-bar.js'
 
 const APP_NAME = /^[a-z0-9][a-z0-9-]{0,62}$/
@@ -30,9 +48,6 @@ const SOURCES = [
   { value: 'text', label: 'Text' },
 ]
 
-const failureText = (failedServers) =>
-  failedServers.map(({ server, reason }) => `${server}: ${reason}`).join(' ')
-
 const reportFailures = (title, failedServers) => {
   if (failedServers?.length) {
     notify({ kind: 'warning', title, description: failureText(failedServers), duration: 0 })
@@ -41,7 +56,7 @@ const reportFailures = (title, failedServers) => {
 
 const BUILD_FILE = 'app-analytics.json'
 
-const sourceFields = (source, setFiles) => {
+const sourceFields = (source, readFiles) => {
   if (source === 'url') {
     return textField({
       field: 'appUrl',
@@ -59,7 +74,7 @@ const sourceFields = (source, setFiles) => {
       label: `File of the build (${BUILD_FILE})`,
       accept: '.json,application/json',
       required: true,
-      onFiles: setFiles,
+      onFiles: readFiles,
       help: `imp build writes ${BUILD_FILE} next to the app.`,
     })
   }
@@ -70,16 +85,48 @@ const sourceFields = (source, setFiles) => {
     required: true,
     placeholder:
       '{\n  "pages": ["/", "/invoices/:id"],\n  "zones": ["myapp.send"],\n  "outcomes": []\n}',
+    validate: buildProblem,
     help:
-      'The route patterns in "pages", and the zone and outcome names in "zones" and "outcomes".',
+      'The route patterns in "pages", and the zone and outcome names in "zones" and "outcomes". A chosen file shows here, and you can change it.',
   })
 }
 
+const buildSource = component('aly-build-source', {
+  setup: (self, { onRead }) => {
+    const source = useState(self, 'aly.register.source')
+    const values = useState(self, 'imp.form')
+    const errors = useState(self, 'imp.form.errors')
+    source.watch(self, (value) => errors.set((all) => withoutOtherSources(all, value)))
+    const readFiles = (files) => {
+      const reading = files[0]?.text() ?? Promise.resolve('')
+      onRead(reading)
+      return reading.then((build) => values.set((all) => ({ ...all, build })))
+    }
+    return stack(
+      { gap: 4 },
+      segmented({ label: 'The build comes from', value: source, options: SOURCES }),
+      source.view((value) => sourceFields(value, readFiles)),
+    )
+  },
+})
+
+const serverChoice = (names) =>
+  names.length > 1
+    ? comboBox({
+      field: 'servers',
+      label: 'Servers',
+      multiple: true,
+      required: true,
+      options: names,
+      help: 'The servers that accept the records of the app.',
+      validate: (value) => (value?.length ? null : 'Choose one server or more.'),
+    })
+    : text({ size: 'sm', tone: 'secondary' }, `The console registers the app on ${names[0]}.`)
+
 const registerForm = component('aly-register-form', {
-  setup: (self, { onDone }) => {
+  setup: (self, { serverNames, segments: known, onDone }) => {
     const api = useHttpClient(self, 'aly.api')
-    const servers = useState(self, 'aly.scope.servers')
-    let files = []
+    let fileText = Promise.resolve('')
     const source = initState(self, 'aly.register.source', 'url')
     return form(
       {
@@ -89,21 +136,15 @@ const registerForm = component('aly-register-form', {
           build: '',
           files: [],
           segments: [],
+          servers: serverNames.length === 1 ? serverNames : [],
         },
         onSubmit: async (values) => {
-          const body = { segments: values.segments }
-          if (source.get() === 'url') body.appUrl = values.appUrl
-          else if (source.get() === 'file') body.build = (await files[0]?.text()) ?? ''
-          else body.build = values.build ?? ''
+          const build = source.get() === 'file' ? await fileText : values.build
+          const { body, fields } = registerBody(source.get(), { ...values, build })
+          if (fields) throw new FormError('', { fields })
           let answer
           try {
-            answer = await appOnServers(
-              api,
-              servers.get(),
-              'PUT',
-              `/apps/${encodeURIComponent(values.name)}`,
-              body,
-            )
+            answer = await registerApp(api, values.servers, values.name, body)
           } catch (error) {
             throw new FormError(messageOf(error), { cause: error })
           }
@@ -126,22 +167,20 @@ const registerForm = component('aly-register-form', {
         validate: (value) =>
           APP_NAME.test(value ?? '') ? null : 'Use 1 to 63 lowercase letters, digits and "-".',
       }),
-      segmented({ label: 'The build comes from', value: source, options: SOURCES }),
-      source.view((value) => sourceFields(value, (chosen) => (files = chosen))),
+      buildSource({ onRead: (reading) => (fileText = reading) }),
       comboBox({
         field: 'segments',
         label: 'Segments',
         multiple: true,
         custom: true,
+        options: known.map(({ segment }) => segment),
         placeholder: 'plan, role ...',
-        help: 'The extra fields that the records can carry. Type a name, then press Enter.',
+        help:
+          'The extra fields that the records can carry. Choose a segment from the list, or type a name and press Enter.',
+        validate: segmentProblem,
       }),
-      text(
-        { size: 'sm', tone: 'secondary' },
-        servers.get().length
-          ? `The console registers the app on: ${servers.get().join(', ')}.`
-          : 'The console registers the app on the active server.',
-      ),
+      text({ size: 'sm', tone: 'secondary' }, segmentsNote(known)),
+      serverChoice(serverNames),
       flex(button({ variant: 'primary', events: { click: submitForm } }, 'Register')),
     )
   },
@@ -153,7 +192,7 @@ const appDetails = (entries) =>
     ...entries.map((entry) =>
       stack(
         { gap: 3 },
-        entries.length > 1 ? text({ weight: 'bold' }, entry.server) : null,
+        text({ weight: 'bold' }, entry.server),
         entry.buildError
           ? notice(
             { kind: 'error', title: 'The server cannot read the build' },
@@ -194,11 +233,28 @@ const appDetails = (entries) =>
     ),
   )
 
+const filesTag = (row) => {
+  if (row.buildErrors) return tag({ color: 'red', dot: true }, 'Cannot read')
+  if (row.fromUrl.length === row.servers.length) {
+    return tag({ color: 'green', dot: true }, 'From URL')
+  }
+  if (!row.fromUrl.length) return tag({ color: 'green', dot: true }, 'Uploaded')
+  return tag({ color: 'green', dot: true }, 'URL and upload')
+}
+
+const countColumn = (key, label) => ({
+  key,
+  label,
+  align: 'end',
+  sortable: true,
+  sortValue: (row) => row[key].length,
+  render: (row) => formatCount(row[key].length),
+})
+
 export const registryScreen = component('aly-registry', {
   setup: (self) => {
     const api = useHttpClient(self, 'aly.api')
     const catalog = useState(self, 'aly.catalog')
-    const servers = useState(self, 'aly.scope.servers')
     const revision = useState(self, 'aly.revision')
     const adding = initState(self, 'aly.registry.adding', false)
     const shown = initState(self, 'aly.registry.shown', null)
@@ -206,24 +262,21 @@ export const registryScreen = component('aly-registry', {
     const busy = initState(self, 'aly.registry.busy', false)
     const showOpen = initState(self, 'aly.registry.showOpen', false)
     const removeOpen = initState(self, 'aly.registry.removeOpen', false)
+    const rows = computed([catalog], registryRows)
     const show = (name) => {
       shown.set(name)
       showOpen.set(true)
     }
-    const ask = (name) => {
-      removing.set(name)
+    const ask = (row) => {
+      removing.set({ name: row.name, servers: row.servers })
       removeOpen.set(true)
     }
     const reload = () => revision.set((value) => value + 1)
 
-    const refresh = async (name) => {
+    const refresh = async (row) => {
+      const { name } = row
       try {
-        const answer = await appOnServers(
-          api,
-          servers.get(),
-          'POST',
-          `/apps/${encodeURIComponent(name)}/refresh`,
-        )
+        const answer = await refreshApp(api, row)
         const errors = answer.apps.filter((entry) => entry.buildError)
         if (errors.length) {
           notify({
@@ -245,135 +298,99 @@ export const registryScreen = component('aly-registry', {
     }
 
     const remove = async () => {
-      const name = removing.get()
+      const row = removing.get()
       busy.set(true)
       try {
-        const answer = await appOnServers(
-          api,
-          servers.get(),
-          'DELETE',
-          `/apps/${encodeURIComponent(name)}`,
-        )
+        const answer = await removeApp(api, row)
         notify({
           kind: 'success',
-          title: `Removed ${name}`,
+          title: `Removed ${row.name} from ${answer.apps.map(({ server }) => server).join(', ')}`,
           description: 'The stored data stays until the retention removes it.',
         })
-        reportFailures(`${name} is not removed from every server`, answer.failedServers)
+        reportFailures(`${row.name} is not removed from every server`, answer.failedServers)
       } catch (error) {
-        notify({ kind: 'error', title: `${name} was not removed`, description: messageOf(error) })
+        notify({
+          kind: 'error',
+          title: `${row.name} was not removed`,
+          description: messageOf(error),
+        })
       }
       busy.set(false)
       removeOpen.set(false)
       reload()
     }
 
-    const appsTable = (value) => {
+    const appsTable = (value, list) => {
       if (value === undefined) return text({ tone: 'secondary' }, 'Loading the apps...')
       if (value.error) return notice({ kind: 'error', title: 'The apps did not load' }, value.error)
-      const many = value.chosen.length > 1
-      const rows = value.apps.map((entry) => ({ ...entry, id: `${entry.server} ${entry.name}` }))
-      return stack(
-        { gap: 3 },
-        value.failedServers.length
-          ? notice(
-            { kind: 'warning', title: 'Some servers did not answer' },
-            failureText(value.failedServers),
-          )
-          : null,
-        rows.length
-          ? table({
-            label: 'Registered apps',
-            rows,
-            columns: [
-              ...(many ? [{ key: 'server', label: 'Server', sortable: true }] : []),
-              {
-                key: 'name',
-                label: 'App',
-                sortable: true,
-                render: (row) =>
-                  button(
-                    { variant: 'link', events: { click: () => show(row.name) } },
-                    row.name,
-                  ),
-              },
-              {
-                key: 'pages',
-                label: 'Pages',
-                align: 'end',
-                sortable: true,
-                sortValue: (row) => row.pages.length,
-                render: (row) => formatCount(row.pages.length),
-              },
-              {
-                key: 'zones',
-                label: 'Zones',
-                align: 'end',
-                sortable: true,
-                sortValue: (row) => row.zones.length,
-                render: (row) => formatCount(row.zones.length),
-              },
-              {
-                key: 'outcomes',
-                label: 'Outcomes',
-                align: 'end',
-                sortable: true,
-                sortValue: (row) => row.outcomes.length,
-                render: (row) => formatCount(row.outcomes.length),
-              },
-              {
-                key: 'segments',
-                label: 'Segments',
-                render: (row) => row.segments.join(', ') || '-',
-              },
-              {
-                key: 'accepted',
-                label: 'Accepted',
-                align: 'end',
-                sortable: true,
-                render: (row) => formatCount(row.accepted),
-              },
-              {
-                key: 'rejected',
-                label: 'Rejected',
-                align: 'end',
-                sortable: true,
-                render: (row) => formatCount(row.rejected),
-              },
-              {
-                key: 'buildError',
-                label: 'Files',
-                render: (row) =>
-                  row.buildError
-                    ? tag({ color: 'red', dot: true }, 'Cannot read')
-                    : tag({ color: 'green', dot: true }, row.appUrl ? 'From URL' : 'Uploaded'),
-              },
-              {
-                key: 'actions',
-                label: 'Actions',
-                align: 'end',
-                render: (row) =>
-                  menuButton({
-                    label: `Actions for ${row.name}`,
-                    items: [
-                      { id: 'show', label: 'Details', onClick: () => show(row.name) },
-                      {
-                        id: 'refresh',
-                        label: 'Read the files again',
-                        disabled: !row.appUrl,
-                        onClick: () => refresh(row.name),
-                      },
-                      { id: 'remove', label: 'Remove', onClick: () => ask(row.name) },
-                    ],
-                  }),
-              },
-            ],
-          })
-          : emptyState({
-            title: 'No app is registered',
-            description: 'Register an app. Then the app can send records to /collect/<app>.',
-          }),
-      )
+      if (!list.length) {
+        return emptyState({
+          title: 'No app is registered',
+          description: 'Register an app. Then the app can send records to /collect/<app>.',
+        })
+      }
+      return table({
+        label: 'Registered apps',
+        rows: list,
+        columns: [
+          {
+            key: 'name',
+            label: 'App',
+            sortable: true,
+            render: (row) =>
+              button({ variant: 'link', events: { click: () => show(row.name) } }, row.name),
+          },
+          {
+            key: 'servers',
+            label: 'Servers',
+            sortable: true,
+            sortValue: (row) => row.servers.join(', '),
+            render: (row) => row.servers.join(', '),
+          },
+          countColumn('pages', 'Pages'),
+          countColumn('zones', 'Zones'),
+          countColumn('outcomes', 'Outcomes'),
+          {
+            key: 'segments',
+            label: 'Segments',
+            render: (row) => row.segments.join(', ') || '-',
+          },
+          {
+            key: 'accepted',
+            label: 'Accepted',
+            align: 'end',
+            sortable: true,
+            render: (row) => formatCount(row.accepted),
+          },
+          {
+            key: 'rejected',
+            label: 'Rejected',
+            align: 'end',
+            sortable: true,
+            render: (row) => formatCount(row.rejected),
+          },
+          { key: 'buildErrors', label: 'Files', render: filesTag },
+          {
+            key: 'actions',
+            label: 'Actions',
+            align: 'end',
+            render: (row) =>
+              menuButton({
+                label: `Actions for ${row.name}`,
+                items: [
+                  { id: 'show', label: 'Details', onClick: () => show(row.name) },
+                  {
+                    id: 'refresh',
+                    label: 'Read the files again',
+                    disabled: !row.fromUrl.length,
+                    onClick: () => refresh(row),
+                  },
+                  { id: 'remove', label: 'Remove', onClick: () => ask(row) },
+                ],
+              }),
+          },
+        ],
+      })
     }
 
     return page(
@@ -384,20 +401,36 @@ export const registryScreen = component('aly-registry', {
           screenHeader({
             title: 'Registered apps',
             description:
-              'The apps that the servers accept records for. Each app has its build file and segments.',
+              'The apps that the servers accept records for, one row per app. Each app has its build file and segments on each of its servers.',
           }),
-          button(
-            { variant: 'primary', events: { click: () => adding.set(true) } },
-            icon(luPlus),
-            'Register an app',
+          catalog.view((value) =>
+            value?.servers?.servers.length
+              ? button(
+                { variant: 'primary', events: { click: () => adding.set(true) } },
+                icon(luPlus),
+                'Register an app',
+              )
+              : null
           ),
         ),
         scopeBar({ period: false }),
-        reportCard({ title: 'Registered apps' }, catalog.view(appsTable)),
+        catalogNotice(catalog),
+        reportCard(
+          { title: 'Registered apps' },
+          computed([catalog, rows], (value, list) => ({ value, list })).view((
+            { value, list },
+          ) => appsTable(value, list)),
+        ),
         dialog(
           { title: 'Register an app', open: adding },
-          adding.view((open) => (open
+          computed([adding, catalog], (open, value) => ({
+            open,
+            names: (value?.servers?.servers ?? []).map(({ name }) => name),
+            segments: knownSegments(value),
+          })).view(({ open, names, segments }) => (open && names.length
             ? registerForm({
+              serverNames: names,
+              segments,
               onDone: () => {
                 adding.set(false)
                 reload()
@@ -414,14 +447,11 @@ export const registryScreen = component('aly-registry', {
           ).view((entries) => (entries.length ? appDetails(entries) : null)),
         )),
         dialog(
-          {
-            title: computed([removing], (name) => `Remove ${name ?? 'the app'}?`),
-            open: removeOpen,
-          },
+          { title: computed([removing], removeQuestion), open: removeOpen },
           stack(
             { gap: 4 },
             text(
-              'The servers stop accepting the records of the app. The stored data stays until the retention removes it. You can register the app again.',
+              'These servers stop accepting the records of the app. The stored data stays until the retention removes it. You can register the app again.',
             ),
             flex(
               { horizontalAlign: 'end' },

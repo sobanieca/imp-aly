@@ -21,7 +21,10 @@ month.**
   at the last sealed day: the day before the day of `now` minus the seal delay. `3m`, `6m` and `1y`
   start on the day after the same day 3, 6 or 12 months before. `by` is `day`, `week` or `month`,
   and `day` is the default. Another option, such as `app`, `from` or `to`, is an error. The CLI
-  (`--last`, `--by`) and the console form send the same two options, so they make the same file.
+  sends them as `--last` and `--by`.
+- Only the CLI makes and restores backups, on the VPS over SSH or on another machine. The console
+  has no backup screen. On the VPS, `sudo imp-aly backup` finds the local service with no option,
+  see `saved-servers.md`.
 - The archive holds `<app>/<source>/days/<day>/`, `<app>/<source>/weeks/<monday>/` or
   `<app>/<source>/months/<month>/`, with `summary-counts.tsv`, `summary-tuples.tsv` and
   `summary-visits.tsv`. A week or a month folder also has `summary-days.tsv`. That file has one line
@@ -51,10 +54,14 @@ month.**
 - `imp-aly backup` writes the stream to `<file>.tmp`, reads the archive again in parallel to check
   it, and renames the file at the end.
 - The HTTP thread saves the upload of a restore to `restore/` in the data folder, at most 4 GiB, and
-  sends the path to the storage worker. The worker runs the restore between its other steps.
+  sends the path to the storage worker. The worker runs the restore between its other steps. When
+  the upload sends no byte for 30 seconds, the server stops it, removes the file and answers `408`.
+  So a stalled upload does not keep a request and a file for ever.
 - The worker reads the whole file once to check it. Each summary must have the right headers, cells,
-  counts and tuple numbers, and no control character. Each cell of a type, a zone, a name, a country
-  or a segment must pass the record check of its field. When a check fails, it restores nothing.
+  counts and tuple numbers, and no control character. Each cell of a type, a page, a zone, a name, a
+  country or a segment must pass the record check of its field. A page must be a route pattern, as
+  in `app-analytics.json`: it starts with `/`, has at most 512 characters and no control character.
+  When a check fails, it restores nothing.
 - It then skips each day of a source that it stores already, and each day that is not due for
   sealing. It skips a week or a month of a source that it stores already, and a period that is not
   complete. It writes each other period into `apps/<app>/weeks/<monday>/<source>/` or

@@ -60,6 +60,12 @@ export const normalizeCountry = (value) => {
 
 export const isSafeText = (value) => typeof value === 'string' && !hasControlCharacter(value)
 
+const MAX_PATTERN_LENGTH = 512
+
+export const isRoutePattern = (value) =>
+  typeof value === 'string' && value.startsWith('/') && value.length <= MAX_PATTERN_LENGTH &&
+  isSafeText(value)
+
 export const validateRecord = (input, app, country = null, now = Date.now()) => {
   if (!isPlainObject(input)) return { problem: 'record is not an object' }
   const { type } = input

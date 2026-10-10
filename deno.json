@@ -1,6 +1,7 @@
 {
   "version": "0.1.0",
   "license": "MIT",
+  "unstable": ["net"],
   "tasks": {
     "start": "deno task console:build && deno run -A dev/start.js",
     "server": "deno run -A main.js server --foreground",

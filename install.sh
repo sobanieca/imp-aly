@@ -47,17 +47,6 @@ else
 fi
 
 EXPECTED="$(cut -d ' ' -f 1 < "${TMP_DIR}/${ASSET}.sha256")"
-if command -v sha256sum > /dev/null 2>&1; then
-  ACTUAL="$(sha256sum "${TMP_DIR}/${BINARY_NAME}" | cut -d ' ' -f 1)"
-else
-  ACTUAL="$(shasum -a 256 "${TMP_DIR}/${BINARY_NAME}" | cut -d ' ' -f 1)"
-fi
-if [ "${EXPECTED}" != "${ACTUAL}" ]; then
-  echo "Error: the checksum of the download does not match"
-  exit 1
-fi
-
-chmod +x "${TMP_DIR}/${BINARY_NAME}"
 
 if [ -w "${INSTALL_DIR}" ]; then
   SUDO=""
@@ -66,8 +55,26 @@ else
   echo "Note: sudo is needed to install to ${INSTALL_DIR}"
 fi
 
+checksum() {
+  if command -v sha256sum > /dev/null 2>&1; then
+    $SUDO sha256sum "$1" | cut -d ' ' -f 1
+  else
+    $SUDO shasum -a 256 "$1" | cut -d ' ' -f 1
+  fi
+}
+
 $SUDO mkdir -p "${INSTALL_DIR}"
-$SUDO mv "${TMP_DIR}/${BINARY_NAME}" "${INSTALL_DIR}/${BINARY_NAME}"
+STAGED="$($SUDO mktemp "${INSTALL_DIR}/.${BINARY_NAME}.install.XXXXXX")"
+trap 'rm -rf "${TMP_DIR}"; $SUDO rm -f "${STAGED}"' EXIT
+$SUDO cp "${TMP_DIR}/${BINARY_NAME}" "${STAGED}"
+
+if [ "${EXPECTED}" != "$(checksum "${STAGED}")" ]; then
+  echo "Error: the checksum of the download does not match"
+  exit 1
+fi
+
+$SUDO chmod 755 "${STAGED}"
+$SUDO mv -f "${STAGED}" "${INSTALL_DIR}/${BINARY_NAME}"
 
 echo "Installed ${INSTALL_DIR}/${BINARY_NAME} $("${INSTALL_DIR}/${BINARY_NAME}" --version)"
 echo "Run 'imp-aly help' to start."

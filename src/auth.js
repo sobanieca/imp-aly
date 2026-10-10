@@ -38,7 +38,13 @@ export const readKeyFile = (path) => {
 
 export const NEW_KEY_FILE = 'new-key'
 
-const removeFile = (path) => {
+export const KEY_LOADED_FILE = 'key-loaded'
+
+const HANDOVER_DIR_MODE = 0o750
+
+const HANDOVER_FILE_MODE = 0o640
+
+export const removeFile = (path) => {
   try {
     Deno.removeSync(path)
   } catch (error) {
@@ -46,19 +52,46 @@ const removeFile = (path) => {
   }
 }
 
-export const writeKeyFile = (path, key, { beforeRename = () => {} } = {}) => {
+export const writeKeyFile = (path, key, { mode = 0o600, beforeRename = () => {} } = {}) => {
   const temporary = `${path}.tmp`
   removeFile(temporary)
-  Deno.writeTextFileSync(temporary, `${key}\n`, { mode: 0o600, createNew: true })
+  Deno.writeTextFileSync(temporary, `${key}\n`, { mode, createNew: true })
   beforeRename(temporary)
   Deno.renameSync(temporary, path)
 }
 
-export const takeNewKey = (dataDir, apply) => {
-  const path = join(dataDir, NEW_KEY_FILE)
-  const key = readKeyFile(path)
-  if (key) apply(key)
-  removeFile(path)
+const prepareHandoverDir = (dir, { uid, gid }) => {
+  try {
+    Deno.mkdirSync(dir, { mode: HANDOVER_DIR_MODE })
+  } catch (error) {
+    if (!(error instanceof Deno.errors.AlreadyExists)) throw error
+  }
+  const info = Deno.lstatSync(dir)
+  if (!info.isDirectory || info.uid !== uid) {
+    throw new Error(`${dir} must be a folder of the user ${uid} - remove it, then try again`)
+  }
+  Deno.chownSync(dir, uid, gid)
+  Deno.chmodSync(dir, HANDOVER_DIR_MODE)
+}
+
+export const handOverKey = ({ dir, key, uid, gid }) => {
+  prepareHandoverDir(dir, { uid, gid })
+  const path = join(dir, NEW_KEY_FILE)
+  writeKeyFile(path, key, {
+    mode: HANDOVER_FILE_MODE,
+    beforeRename: (temporary) => {
+      Deno.chownSync(temporary, uid, gid)
+      Deno.chmodSync(temporary, HANDOVER_FILE_MODE)
+    },
+  })
+  return path
+}
+
+export const takeNewKey = ({ handoverDir, dataDir }, apply) => {
+  const key = readKeyFile(join(handoverDir, NEW_KEY_FILE))
+  if (!key) return ''
+  apply(key)
+  Deno.writeTextFileSync(join(dataDir, KEY_LOADED_FILE), `${new Date().toISOString()}\n`)
   return key
 }
 
