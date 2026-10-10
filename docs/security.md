@@ -161,8 +161,10 @@ accept connections from that service only. Make backups. See [Backup](backup.md)
 ## What the server stores
 
 The server stores the fields of each record, the UTC day, and the country when you set
-`--country-header`. It does not store the address of a client, a user agent or a cookie. The rate
-limit keeps the recent addresses in memory only.
+`--country-header`. It does not store the address of a client, a user agent or a cookie. It reads
+the user agent only to reject the records of bots. See
+[Bots and prerendered pages](collect.md#bots-and-prerendered-pages). The rate limit keeps the recent
+addresses in memory only.
 
 imp sends no personal data in a record. Keep it that way in your sink, and do not add a user id or
 an organization id as a segment.

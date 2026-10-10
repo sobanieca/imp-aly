@@ -385,6 +385,32 @@ Deno.test('the public port and the admin port serve separate endpoints', async (
   }
 })
 
+Deno.test('rejects the records of a bot and of a prerendered page', async () => {
+  const { call, admin, stop } = await start()
+  try {
+    await admin('PUT', '/apps/myapp', BUILD)
+    const batch = [record({ type: 'page' }), record({ type: 'error' })]
+    const bot = await call('POST', '/collect/myapp', batch, {
+      'user-agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+    })
+    assertEquals(bot.status, 202)
+    assertEquals(bot.body, { accepted: 0, rejected: 2 })
+    const prerender = await call('POST', '/collect/myapp', batch, {
+      'sec-purpose': 'prefetch;prerender',
+    })
+    assertEquals(prerender.body, { accepted: 0, rejected: 2 })
+    const browser = await call('POST', '/collect/myapp', batch)
+    assertEquals(browser.body, { accepted: 2, rejected: 0 })
+    const shown = await admin('GET', '/apps/myapp')
+    assertEquals(shown.body.rejections, {
+      'the user agent is a bot': 2,
+      'the browser prerendered the page': 2,
+    })
+  } finally {
+    await stop()
+  }
+})
+
 Deno.test('accepts records only from the allowed origins', async () => {
   const { base, call, admin, stop } = await start({ allowOrigins: ['https://myapp.example'] })
   try {

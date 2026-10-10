@@ -65,6 +65,26 @@ These rules keep each stored value to plain characters. A value cannot hold HTML
 quote, a space, a control character or other Unicode text. So a value cannot change the look of a
 terminal or a page that shows it, and it cannot change the layout of the data files.
 
+## Bots and prerendered pages
+
+A crawler with a browser runs the JavaScript of your app, so it can send records too. The server
+rejects all records of a request in these two cases:
+
+- The `User-Agent` header names a bot, such as `Googlebot`, `bingbot`, `ClaudeBot`, `HeadlessChrome`
+  or `Chrome-Lighthouse`. The reason is `the user agent is a bot`.
+- The `Sec-Purpose` or the `Purpose` header holds `prefetch` or `prerender`. The browser prepared
+  the page, and no person saw it yet. The reason is `the browser prerendered the page`.
+
+A request without a `User-Agent` header passes. So does `curl`, so you can test the endpoint by
+hand. The server reads the `User-Agent` header for this check only, and does not store it.
+
+`alySink` also sends nothing from a browser that automation software controls, such as Selenium,
+Puppeteer or Playwright. It holds the records of a prerendered page until the page shows. These
+checks stop the bots that say what they are. A bot that copies the headers of a browser still
+passes.
+
+## The rejection counts
+
 The server counts the rejected records of each app by reason. `imp-aly app show myapp` prints the
 counts. A record that your app sends and the server rejects is a bug in the sink, or a sign that the
 server has an old build file. Check the counts after each deploy. See

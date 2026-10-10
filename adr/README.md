@@ -26,6 +26,7 @@ status field. When a decision changes, replace its ADR. When a decision is dropp
 | [per-address-sliding-rate-limit](per-address-sliding-rate-limit.md) | A rate limit per address, in four sliding windows           |
 | [in-flight-request-cap](in-flight-request-cap.md)                   | A cap on the requests in progress per port, then `503`      |
 | [collect-origin-allowlist](collect-origin-allowlist.md)             | The public endpoint can accept only the allowed origins     |
+| [collect-bot-filter](collect-bot-filter.md)                         | The records of bots and prerendered pages are rejected      |
 | [utc-day-from-record-time](utc-day-from-record-time.md)             | The day of a record is the UTC day of its `at`              |
 | [write-ahead-log-group-commit](write-ahead-log-group-commit.md)     | Records go to a synced write-ahead log before the answer    |
 

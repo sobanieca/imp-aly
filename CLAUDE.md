@@ -50,6 +50,7 @@ See `adr/plain-javascript-dependency-free-server.md` and `adr/console-web-app.md
 | `src/rate-limit.js`                   | the sliding windows per client address                                                                                                       |
 | `src/in-flight.js`                    | the requests in progress of a port, and the share of one client address                                                                      |
 | `src/origins.js`                      | the allowed browser origins of the public endpoint                                                                                           |
+| `src/bots.js`                         | the check of the headers of a bot and of a prerendered page                                                                                  |
 | `src/wal.js`                          | the write-ahead log with group commit and parts                                                                                              |
 | `src/storage.js`, `storage-worker.js` | the single writer: log parts to columns, restore, seal, retention                                                                            |
 | `src/column-store.js`, `src/rle.js`   | the column files, the append transaction, sealing, reading                                                                                   |

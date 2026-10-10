@@ -9,6 +9,7 @@ import { HttpError, parseJsonBytes, readBodyBytes, readJsonBody } from './http-b
 import { createInFlight } from './in-flight.js'
 import { logger } from './logger.js'
 import { createOriginCheck } from './origins.js'
+import { botProblem } from './bots.js'
 import { isAppName } from './names.js'
 import { join } from './paths.js'
 import { createSha256, sha256Hex } from './sha256.js'
@@ -457,11 +458,14 @@ export const startServer = async ({
       const over = limiter.take(clients, extra)
       if (over) throw new HttpError(429, `too many records from this address in ${over.name}`)
       const country = countryHeader ? normalizeCountry(request.headers.get(countryHeader)) : null
+      const bot = botProblem(request.headers)
       const now = Date.now()
       const lines = []
       let rejected = 0
       for (const input of inputs) {
-        const { record, problem } = validateRecord(input, app, country, now)
+        const { record, problem } = bot
+          ? { problem: bot }
+          : validateRecord(input, app, country, now)
         if (problem) {
           rejected++
           apps.countRejected(app, problem)
