@@ -1,4 +1,4 @@
-import { importSigningKey } from '../../../src/token.js'
+import { importSigningKey } from '../shared/token.js'
 
 const DB_NAME = 'imp-aly-console'
 

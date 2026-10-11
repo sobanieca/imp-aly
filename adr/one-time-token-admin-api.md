@@ -19,14 +19,16 @@ once, for 60 seconds.**
   server runs, see `key-rotation.md`.
 - The signed text is the time, the nonce, the method in capitals, the path with its query string,
   and the hex SHA-256 of the body, joined with line breaks. The client and the server normalize the
-  path in the same way, with `new URL`. A proxy that removes a path prefix keeps the signature
-  valid, because the client signs the path of the endpoint without the prefix of the server URL.
+  path in the same way, by the rules of the WHATWG URL parser. A proxy that removes a path prefix
+  keeps the signature valid, because the client signs the path of the endpoint without the prefix of
+  the server URL.
 - The server checks the signature from the headers, before it reads the body. So a request without a
   valid token cannot upload anything. After the read, the server compares the hash of the body with
   the signed hash and answers `401` when they differ. An endpoint without a body requires the hash
   of an empty body.
 - A restore upload can be 4 GiB, so both sides hash it as a stream. `crypto.subtle.digest` takes
-  only a whole buffer, so `src/sha256.js` is a small streaming SHA-256.
+  only a whole buffer, so the page has a small streaming SHA-256 in `console/src/shared/sha256.js`.
+  The server and the CLI use the SHA-256 of `ring`.
 - The server compares the signature in constant time, rejects a time more than 60 seconds away from
   its clock, and keeps each used nonce until the token cannot be valid again.
 - The CLI makes a new token for each call. `imp-aly token <method> <path> [<body file>]` prints one

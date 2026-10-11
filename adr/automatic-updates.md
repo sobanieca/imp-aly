@@ -16,10 +16,10 @@ GitHub published more than 7 days ago. It restarts the service, and puts the old
 the service does not stay running.**
 
 - **The version list.** The Pages job of CI writes `versions.json` next to `install.sh`. It holds
-  each tag `v<version>` whose `deno.json` has that version, with the data format of that tag. A
+  each tag `v<version>` whose `Cargo.toml` has that version, with the data format of that tag. A
   release that is not in the list cannot be an update. To withdraw a release, delete its tag and its
   GitHub Release.
-- **The data format.** `DATA_FORMAT` in `src/data-format.js` is a whole number. The server writes it
+- **The data format.** `DATA_FORMAT` in `src/data_format.rs` is a whole number. The server writes it
   to `format.json` in a new data folder, and refuses to start on a data folder with another format.
   Increase it when a change makes the data folder unreadable for the older version, or the reverse.
 - **The rules of the timer.** `update --auto` installs a version only when it is newer than the

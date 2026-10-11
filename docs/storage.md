@@ -256,7 +256,8 @@ The check of the free space runs before the storing and the sealing, and an erro
 stop it. So a full disk always gets space back. A day that the worker cannot seal stays raw, and the
 worker logs the error and seals the other days.
 
-The check uses `df`, which every Linux and macOS system has. `imp-aly status` shows the last result.
+The check asks the system for the free space of the file system of the data folder. `imp-aly status`
+shows the last result.
 
 ## Back up the data
 

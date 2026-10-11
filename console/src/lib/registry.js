@@ -3,7 +3,7 @@ import {
   MAX_SEGMENTS,
   RESERVED_NAMES,
   SEGMENT_NAME_PATTERN,
-} from '../../../src/names.js'
+} from '../shared/names.js'
 import { appOnServers } from './client.js'
 
 const appPath = (name) => `/apps/${encodeURIComponent(name)}`

@@ -61,9 +61,9 @@ period summary when it is current, and reads the days otherwise.**
 ## Consequences
 
 - A query of a year grouped by `month` reads 12 file sets per source, not 365. The answer is the
-  same as from the days, also for `visits`. `test/summary.test.js` checks this by `week`, by `month`
-  and with no time, and checks that a server with the period summaries of two servers answers like
-  the two servers.
+  same as from the days, also for `visits`. `tests/summary.rs` checks this by `week`, by `month` and
+  with no time, and checks that a server with the period summaries of two servers answers like the
+  two servers.
 - The size of a period summary is the size of the union of the combinations of its days. Most
   combinations of a stable app occur each day, so a week or a month summary is about the size of one
   to three daily summaries. Measured at 1,000,000 records a day: with the demo app `shop`, a day is

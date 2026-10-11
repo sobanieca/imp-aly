@@ -1,4 +1,4 @@
-# One storage worker is the only writer of the data
+# One storage thread is the only writer of the data
 
 ## Context
 
@@ -8,7 +8,7 @@ never wait for that work.
 
 ## Decision
 
-**One `Worker` thread does all writes to `apps/`: it stores the log parts, restores backups, seals
+**One storage thread does all writes to `apps/`: it stores the log parts, restores backups, seals
 the days and removes old days. It does them one after the other.**
 
 - The loop: check the free disk space at most once a minute, store every closed log part in id order
@@ -39,7 +39,7 @@ the days and removes old days. It does them one after the other.**
 - When another step fails, such as a full disk, the worker logs the error and tries again in 5
   seconds. When a log part cannot be read 3 times, the worker renames it to `<part>.unreadable` and
   continues. It never deletes such a part.
-- When the worker thread dies, the server starts a new one after 5 seconds.
+- When the storage thread panics, the server logs the error and starts a new one after 5 seconds.
 - A `lock` file in the data folder, locked with `flock`, stops a second server on the same folder.
 
 ## Consequences

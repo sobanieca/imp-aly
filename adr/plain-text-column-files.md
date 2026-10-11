@@ -4,8 +4,8 @@
 
 A query of the imp report touches two or three fields of a record, such as `type`, `page` and
 `visit`. A row format reads every field of every record. Parquet and a database read only the fields
-that a query needs, but they need a dependency or a second service, see
-`plain-javascript-dependency-free-server.md`.
+that a query needs, but they need a large dependency or a second service, see
+`rust-server-with-few-dependencies.md`.
 
 ## Decision
 

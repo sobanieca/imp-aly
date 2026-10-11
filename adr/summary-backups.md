@@ -32,7 +32,7 @@ month.**
   folder name tells the restore the kind, because a day and a week can have the same id. The source
   is the id of the server that received the records, see `source-folders-per-server.md`. A server
   puts every source that it holds into its backups.
-- A small module in `src/tar.js` writes and reads the ustar format. A path longer than 100 bytes is
+- A small module in `src/tar.rs` writes and reads the ustar format. A path longer than 100 bytes is
   split at a `/` into the `prefix` field (155 bytes) and the `name` field, so an app name of 63
   characters fits. The reader joins the two fields of a `ustar` header. `CompressionStream` and
   `DecompressionStream` do the gzip.
@@ -74,7 +74,7 @@ month.**
   and renames it, like a seal.
 - A part of a summary-only day throws "only the daily summary of the day is stored" when a scan
   reads a column. A query skips that source of the day and lists it in `skippedDays`, see
-  `json-query-api-in-a-worker.md`.
+  `json-query-api-in-a-thread.md`.
 - The storage worker drops the records of a log part for a summary-only day, and logs a warning.
 - The retention makes summary-only days with the same layout, from the summary of a sealed day. It
   removes summary-only days only when no other old day with records is left, see
@@ -84,7 +84,7 @@ month.**
 
 - An owner keeps years of history as small files, and restores them into any server. A restore of
   the backups of two servers into a third gives the same answers as the two servers.
-  `test/summary.test.js` checks this for `day`, `week` and `month` backups, and checks that a second
+  `tests/summary.rs` checks this for `day`, `week` and `month` backups, and checks that a second
   restore changes nothing.
 - A `month` backup of a year holds 12 summaries per source, not 365. A restored week or month
   answers only a query by its time or with no time.
@@ -93,7 +93,7 @@ month.**
 - A backup cannot select one app or a day range. The owner restores the whole backup, and a query
   selects the app and the days.
 - A restored day answers each query that a summary can answer, with the same result as the full day.
-  `test/summary.test.js` checks this.
+  `tests/summary.rs` checks this.
 - A query that names `visit`, or that counts `visits` with `zone` or `name`, cannot read a restored
   day. The answer names each skipped day.
 - A backup holds no `visit` id and no `at` time.

@@ -1,4 +1,4 @@
-import { addDays, addMonths, dayCount, dayOf, weekOf } from '../../../src/days.js'
+import { addDays, addMonths, dayCount, dayOf, weekOf } from '../shared/days.js'
 
 const DAY_BARS_UP_TO = 45
 

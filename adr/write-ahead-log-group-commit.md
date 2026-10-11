@@ -9,7 +9,7 @@ and many requests arrive at the same time. An answer before any write loses reco
 ## Decision
 
 **The HTTP handler appends the accepted records to a write-ahead log, syncs it, and then answers. A
-separate worker moves the log into the column files later.**
+separate storage thread moves the log into the column files later.**
 
 - One line of the log is one record: `["<app>", "<day>", {record}]`, in JSON. The handler checks the
   record before it writes it, so the log holds only valid records.

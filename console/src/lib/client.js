@@ -5,9 +5,9 @@ import {
   QUERY_TIMEOUT_MS,
   queryEach,
   requireAnswer,
-} from '../../../src/multi-server.js'
-import { sha256Hex } from '../../../src/sha256.js'
-import { createToken, EMPTY_BODY_HASH } from '../../../src/token.js'
+} from '../shared/multi-server.js'
+import { sha256Hex } from '../shared/sha256.js'
+import { createToken, EMPTY_BODY_HASH } from '../shared/token.js'
 import { markAnswered, noteOutcome } from './health.js'
 import { targetsOf } from './vault.js'
 
