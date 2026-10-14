@@ -39,6 +39,7 @@ sudo imp-aly server --port 2980
 | `--ip-header <name>`       | read the client address from this header                                                     | the address of the connection |
 | `--trusted-proxy <list>`   | read the header only from these addresses                                                    | `127.0.0.0/8,::1`             |
 | `--max-requests <n>`       | requests in progress on each port, then `503`; one address can have 1/32 of them, then `429` | `1024`                        |
+| `--max-connections <n>`    | open connections on each port; one address can hold 1/32 of them                             | `4096`                        |
 | `--country-header <name>`  | store the country from this header                                                           | no country                    |
 | `--allow-origin <list>`    | accept records only from these browser origins                                               | every origin                  |
 | `--min-free <size>`        | the free disk space to keep, as `10%` or `5GB`                                               | `10%`                         |

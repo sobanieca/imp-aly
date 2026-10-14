@@ -109,6 +109,8 @@ wrong by more than the window loses its records, and the rejection counts of the
 | app that is not known  |                                    | `404`  |
 | requests in progress   | 1,024 on the public port           | `503`  |
 | requests in progress   | 32 from one address                | `429`  |
+| time to send the head  | 10 s                               | `408`  |
+| size of the head       | 16 KiB and 64 headers              | `431`  |
 
 The browser limits the body of a `keepalive` request or a `sendBeacon` to about 64 KiB. 20 records
 are about 2 KB. One request holds at most as many records as the smallest window of the rate limit
@@ -158,6 +160,31 @@ One address can have at most 1/32 of these requests in progress, 32 by default. 
 the server answers `429` with `retry-after: 5` at once. An IPv6 `/48` network can have 4 times this
 number. The server reads a body for at most 5 seconds. So a few slow senders cannot take all the
 places of the server.
+
+## Slow clients
+
+A slow client can hold a connection without a request. It sends the request head one byte at a time,
+or it does not read the answer. This attack is "slowloris". The server limits each connection, on
+both ports:
+
+| Limit                               | Value                                     | What the server does    |
+| ----------------------------------- | ----------------------------------------- | ----------------------- |
+| open connections on one port        | 4,096                                     | closes a new connection |
+| open connections of one address     | 128, an IPv6 `/48` 512                    | closes a new connection |
+| TLS handshake                       | 10 s                                      | closes the connection   |
+| request line and headers            | 10 s, 16 KiB, 64 headers                  | `408` or `431`          |
+| idle time between requests          | 5 s, 1 s when half of the places are used | closes the connection   |
+| requests on one connection          | 1,000                                     | closes after the answer |
+| no progress when it sends an answer | 30 s                                      | closes the connection   |
+
+`--max-connections <n>` changes the number of open connections of each port. One address can hold
+1/32 of them. With `--ip-header`, a trusted proxy has no such share, because all its clients use its
+address.
+
+The server refuses a request with both `content-length` and `transfer-encoding`, with two different
+`content-length` headers, or with a folded header. A proxy and the server then always agree where a
+request ends. When the server answers before it reads the body, for example with `429`, it closes
+the connection after the answer.
 
 ## Behind a proxy
 

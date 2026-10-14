@@ -1,0 +1,418 @@
+[
+  {
+    "query": {
+      "app": "myapp",
+      "from": "2026-10-01",
+      "to": "2026-10-02"
+    },
+    "answers": [
+      {
+        "server": "a",
+        "answer": {
+          "days": [
+            "2026-10-01",
+            "2026-10-02"
+          ],
+          "summaryDays": 1,
+          "scanned": 40,
+          "matched": 30,
+          "skippedDays": [],
+          "groups": [
+            {
+              "by": [],
+              "records": 3
+            }
+          ]
+        }
+      },
+      {
+        "server": "b",
+        "answer": {
+          "days": [
+            "2026-10-01",
+            "2026-10-02"
+          ],
+          "summaryDays": 1,
+          "scanned": 40,
+          "matched": 30,
+          "skippedDays": [],
+          "groups": [
+            {
+              "by": [],
+              "records": 4
+            }
+          ]
+        }
+      }
+    ],
+    "result": {
+      "app": "myapp",
+      "from": "2026-10-01",
+      "to": "2026-10-02",
+      "days": 2,
+      "scanned": 80,
+      "matched": 60,
+      "rows": [
+        {
+          "records": 7
+        }
+      ],
+      "truncated": false,
+      "servers": [
+        {
+          "server": "a",
+          "days": 2,
+          "summaryDays": 1,
+          "scanned": 40,
+          "matched": 30
+        },
+        {
+          "server": "b",
+          "days": 2,
+          "summaryDays": 1,
+          "scanned": 40,
+          "matched": 30
+        }
+      ],
+      "skippedDays": []
+    }
+  },
+  {
+    "query": {
+      "app": "myapp",
+      "from": "2026-10-01",
+      "to": "2026-10-02",
+      "groupBy": [
+        "page"
+      ],
+      "measures": [
+        "visits",
+        "records"
+      ],
+      "limit": 2
+    },
+    "answers": [
+      {
+        "server": "eu",
+        "answer": {
+          "days": [
+            "2026-10-01",
+            "2026-10-02"
+          ],
+          "summaryDays": 1,
+          "scanned": 40,
+          "matched": 30,
+          "skippedDays": [],
+          "groups": [
+            {
+              "by": [
+                "/"
+              ],
+              "records": 3,
+              "visits": 2
+            },
+            {
+              "by": [
+                "/x"
+              ],
+              "records": 1,
+              "visits": 1
+            },
+            {
+              "by": [
+                null
+              ],
+              "records": 9,
+              "visits": 0
+            }
+          ]
+        }
+      },
+      {
+        "server": "us",
+        "answer": {
+          "days": [
+            "2026-10-03"
+          ],
+          "summaryDays": 1,
+          "scanned": 40,
+          "matched": 30,
+          "skippedDays": [
+            {
+              "day": "2026-10-02",
+              "source": "0123456789abcdef",
+              "reason": "broken"
+            }
+          ],
+          "groups": [
+            {
+              "by": [
+                "/x"
+              ],
+              "records": 2,
+              "visits": 2
+            },
+            {
+              "by": [
+                "/"
+              ],
+              "records": 1,
+              "visits": 1
+            }
+          ]
+        }
+      }
+    ],
+    "result": {
+      "app": "myapp",
+      "from": "2026-10-01",
+      "to": "2026-10-02",
+      "days": 3,
+      "scanned": 80,
+      "matched": 60,
+      "rows": [
+        {
+          "page": "/",
+          "visits": 3,
+          "records": 4
+        },
+        {
+          "page": "/x",
+          "visits": 3,
+          "records": 3
+        }
+      ],
+      "truncated": true,
+      "servers": [
+        {
+          "server": "eu",
+          "days": 2,
+          "summaryDays": 1,
+          "scanned": 40,
+          "matched": 30
+        },
+        {
+          "server": "us",
+          "days": 1,
+          "summaryDays": 1,
+          "scanned": 40,
+          "matched": 30
+        }
+      ],
+      "skippedDays": [
+        {
+          "server": "us",
+          "day": "2026-10-02",
+          "source": "0123456789abcdef",
+          "reason": "broken"
+        }
+      ]
+    }
+  },
+  {
+    "query": {
+      "app": "myapp",
+      "from": "2026-10-01",
+      "to": "2026-10-07",
+      "groupBy": [
+        "day",
+        "country"
+      ],
+      "measures": [
+        "records",
+        "visits"
+      ]
+    },
+    "answers": [
+      {
+        "server": "one",
+        "answer": {
+          "days": [
+            "2026-10-01",
+            "2026-10-02"
+          ],
+          "summaryDays": 1,
+          "scanned": 40,
+          "matched": 30,
+          "skippedDays": [],
+          "groups": [
+            {
+              "by": [
+                "2026-10-01",
+                "PL"
+              ],
+              "records": 5,
+              "visits": 2
+            },
+            {
+              "by": [
+                "2026-10-01",
+                null
+              ],
+              "records": 5,
+              "visits": 3
+            },
+            {
+              "by": [
+                "2026-10-02",
+                "DE"
+              ],
+              "records": 1,
+              "visits": 1
+            }
+          ]
+        }
+      },
+      {
+        "server": "two",
+        "answer": {
+          "days": [
+            "2026-10-01",
+            "2026-10-02"
+          ],
+          "summaryDays": 1,
+          "scanned": 40,
+          "matched": 30,
+          "skippedDays": [],
+          "groups": [
+            {
+              "by": [
+                "2026-10-01",
+                "PL"
+              ],
+              "records": 1,
+              "visits": 1
+            },
+            {
+              "by": [
+                "2026-10-03",
+                "DE"
+              ],
+              "records": 6,
+              "visits": 6
+            }
+          ]
+        }
+      },
+      {
+        "server": "three",
+        "answer": {
+          "days": [
+            "2026-10-01",
+            "2026-10-02"
+          ],
+          "summaryDays": 1,
+          "scanned": 40,
+          "matched": 30,
+          "skippedDays": [],
+          "groups": []
+        }
+      }
+    ],
+    "result": {
+      "app": "myapp",
+      "from": "2026-10-01",
+      "to": "2026-10-07",
+      "days": 2,
+      "scanned": 120,
+      "matched": 90,
+      "rows": [
+        {
+          "day": "2026-10-01",
+          "country": "PL",
+          "records": 6,
+          "visits": 3
+        },
+        {
+          "day": "2026-10-03",
+          "country": "DE",
+          "records": 6,
+          "visits": 6
+        },
+        {
+          "day": "2026-10-01",
+          "country": null,
+          "records": 5,
+          "visits": 3
+        },
+        {
+          "day": "2026-10-02",
+          "country": "DE",
+          "records": 1,
+          "visits": 1
+        }
+      ],
+      "truncated": false,
+      "servers": [
+        {
+          "server": "one",
+          "days": 2,
+          "summaryDays": 1,
+          "scanned": 40,
+          "matched": 30
+        },
+        {
+          "server": "two",
+          "days": 2,
+          "summaryDays": 1,
+          "scanned": 40,
+          "matched": 30
+        },
+        {
+          "server": "three",
+          "days": 2,
+          "summaryDays": 1,
+          "scanned": 40,
+          "matched": 30
+        }
+      ],
+      "skippedDays": []
+    }
+  },
+  {
+    "query": {
+      "app": "myapp",
+      "from": "2026-10-01",
+      "to": "2026-10-01",
+      "groupBy": [
+        "zone"
+      ]
+    },
+    "answers": [
+      {
+        "server": "only",
+        "answer": {
+          "days": [
+            "2026-10-01",
+            "2026-10-02"
+          ],
+          "summaryDays": 1,
+          "scanned": 40,
+          "matched": 30,
+          "skippedDays": [],
+          "groups": []
+        }
+      }
+    ],
+    "result": {
+      "app": "myapp",
+      "from": "2026-10-01",
+      "to": "2026-10-01",
+      "days": 2,
+      "scanned": 40,
+      "matched": 30,
+      "rows": [],
+      "truncated": false,
+      "servers": [
+        {
+          "server": "only",
+          "days": 2,
+          "summaryDays": 1,
+          "scanned": 40,
+          "matched": 30
+        }
+      ],
+      "skippedDays": []
+    }
+  }
+]

@@ -1,0 +1,36 @@
+[package]
+name = "imp-aly"
+version = "0.2.0"
+edition = "2024"
+description = "A small analytics server for imp apps"
+license = "MIT"
+repository = "https://github.com/sobanieca/imp-aly"
+publish = false
+
+[lib]
+name = "imp_aly"
+path = "src/lib.rs"
+
+[[bin]]
+name = "imp-aly"
+path = "src/main.rs"
+
+[dependencies]
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+libc = "0.2"
+ring = "0.17"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "net", "time", "io-util", "sync", "signal", "macros"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12", "logging"] }
+ureq = { version = "3", default-features = false, features = ["rustls"] }
+
+[workspace]
+members = ["xtask"]
+
+[profile.dev.package.ring]
+opt-level = 3
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

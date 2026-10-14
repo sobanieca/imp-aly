@@ -1,0 +1,10 @@
+[alias]
+xtask = "run --quiet --package xtask --"
+imp-aly = "run --quiet --package imp-aly --"
+server = "run --quiet --package imp-aly -- server --foreground"
+verify = "xtask verify"
+start = "xtask start"
+console = "xtask console"
+console-build = "xtask console-build"
+compile = "xtask compile"
+versions-manifest = "xtask versions-manifest"

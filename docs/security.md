@@ -115,6 +115,10 @@ Anybody can send records to `/collect/<app>`. The server limits what a sender ca
 - **Plain characters only.** A zone, an outcome name and a segment value hold only ASCII letters,
   digits and a few signs. HTML, a script, a shell command or a Unicode trick fails the checks.
 - **The size limits.** A request has at most 64 KiB. The server reads a body for at most 5 seconds.
+- **The connection limits.** Each port takes at most 4,096 open connections, and one address can
+  hold at most 128 of them. A client must send its request head in 10 seconds, and an idle
+  connection closes after 5 seconds. So slow clients (slowloris) cannot hold all the sockets. See
+  [Collecting records](collect.md#slow-clients).
 - **The rate limit.** Each address can send a limited number of records in 5 seconds, 1 minute, 1
   hour and 24 hours. Over a limit, the server answers `429` without reading the body. An IPv6 `/48`
   network has a limit too.
@@ -148,6 +152,8 @@ The limits stop one sender, or a small group of senders. They do not stop a larg
 
 - A sender with more than 400,000 addresses gets past the rate limit, because the server forgets the
   oldest addresses.
+- A flood from more than 32 addresses can take all the connections of a port. The deadlines close
+  each slow connection in 10 seconds, but the flood can open new ones.
 - The server must accept each connection and read each request before it can refuse it. A flood of
   connections or of bytes can use all the network or processor of the VPS.
 - Valid records from many addresses fill the disk. Retention then removes the oldest days to keep

@@ -28,10 +28,10 @@ localhost.**
   `IMP_BASEPATH=/imp-aly/console`, and publishes it with the landing page. GitHub Pages answers a
   missing path with the `404.html` of the site, so CI copies the `index.html` of the console there.
   So a deep link or a reload of a console route opens the console.
-- `deno compile --include console/dist` puts the page into the binary. `imp-aly console` serves only
-  files. It listens on `127.0.0.1` and `::1`, refuses another `Host`, and sends a strict Content
-  Security Policy. Its `connect-src` allows `https:` and `http:`, because the page calls the
-  servers.
+- The build of the binary embeds the files of `console/dist`, so the binary holds the page.
+  `imp-aly console` serves only files. It listens on `127.0.0.1` and `::1`, refuses another `Host`,
+  and sends a strict Content Security Policy. Its `connect-src` allows `https:` and `http:`, because
+  the page calls the servers.
 - The page keeps the servers in IndexedDB. An entry holds the name, the URL of the admin port, and
   the key as a `CryptoKey` for HMAC-SHA-256 with `extractable: false`. The browser signs with the
   key, but no script can read the key back, also not a script of this page. The page asks for
@@ -69,15 +69,17 @@ localhost.**
 - One imp HTTP client, `aly.api`, makes every call. Its `onRequest` interceptor signs the method,
   the path with its query string and the SHA-256 of the body, like the CLI. The page sends no
   `x-request-id`, so a call needs only the headers that the admin port allows.
-- The page imports the modules of `src/` that use no Deno API: `token.js` for the token, `sha256.js`
-  for the hash, `query-core.js` for the parser and the merge, `multi-server.js` for the calls to
-  several servers, and `days.js` for the UTC days, weeks and months. So the page and the CLI give
-  the same numbers and the same days.
+- The page has its own JavaScript copies of the shared rules in `console/src/shared/`: `token.js`
+  for the token, `sha256.js` for the hash, `query-core.js` for the parser and the merge,
+  `multi-server.js` for the calls to several servers, `days.js` for the UTC days, weeks and months,
+  and `names.js` for the names. The Rust server and CLI have the same rules. Shared test cases keep
+  them equal: `console/test/merge-cases.json` holds merge inputs with their answers, and the tests
+  of both sides read it. A Rust test checks a token that the JavaScript code signed.
 - The admin port allows CORS from every origin, see `one-time-token-admin-api.md`. A token, not the
   origin, protects each call.
 - The page does not take a server or a key from its address. A key in a link goes into the history
-  of the browser, into logs and into chats. The person types the values in the form.
-  `deno task start` prints the name, the URL and the key of its demo server for that.
+  of the browser, into logs and into chats. The person types the values in the form. `cargo start`
+  prints the name, the URL and the key of its demo server for that.
 - The page has a dark theme and a light theme. Its fonts are IBM Plex Sans, Space Grotesk and
   JetBrains Mono, under the SIL Open Font License. The page serves the font files itself, with their
   licenses in `fonts/`. So the page loads nothing from another site.
@@ -86,7 +88,7 @@ localhost.**
   hands the key to `vault.js`. A debug log of the states of imp prints every value of a form, so a
   key in the form state would show in that log.
 - The register form lists the segments that the apps on the servers declare, and checks the names
-  with the rules of `src/names.js`, like the server.
+  with the rules of `names.js`, like the server.
 - The register form checks that the build file or its text is a JSON object before it sends it. The
   problem shows on the field, and the form sends nothing. A chosen file also fills the text, so the
   person can change it on the "Text" tab. "Register" sends the build of the chosen tab. A change of
@@ -108,7 +110,8 @@ localhost.**
 - The page treats the same app name on two servers as one app. Two different products on two servers
   must have different names, or their numbers add up.
 - An app that only a failed server holds is not in the menu until that server answers again.
-- A change to a shared module in `src/` changes the page too. Such a module must not use a Deno API.
+- A change to a shared rule must change the Rust code and the JavaScript copy in the same change.
+  The shared test cases fail when they differ.
 - A report of a long range sends several queries. The server runs one query at a time, so a report
   takes as long as its queries together.
 - The build of the binary and of the site needs `imp`. CI installs it, builds the page, and checks

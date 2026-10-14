@@ -7,10 +7,10 @@ and fills a small one.
 
 ## Decision
 
-**Every minute, the storage worker checks the free space of the data disk with `df -Pk`. While the
-free space is below the minimum, it first replaces the oldest days with their daily summaries, then
-removes the oldest days that still hold records, then the oldest summary-only days, then the oldest
-week summaries, and then the oldest month summaries, one app at a time.**
+**Every minute, the storage worker checks the free space of the data disk with the `statvfs` call of
+the system. While the free space is below the minimum, it first replaces the oldest days with their
+daily summaries, then removes the oldest days that still hold records, then the oldest summary-only
+days, then the oldest week summaries, and then the oldest month summaries, one app at a time.**
 
 - The minimum is `--min-free`, a percent of the disk or a size. The default is `10%`.
 - The worker takes a day with all its sources, see `source-folders-per-server.md`. A day counts as
@@ -33,7 +33,7 @@ week summaries, and then the oldest month summaries, one app at a time.**
   to a trash folder and deletes it, as for a day.
 - The worker renames a day folder with all its sources to `<day>.trash` and then deletes it. A query
   never sees half a day, and the next check deletes a trash folder that a crash left.
-- After each day, the worker checks `df` again, so it removes no more than it must.
+- After each day, the worker checks the free space again, so it removes no more than it must.
 - When no old day and no period summary is left, the worker logs a warning. When the disk is full,
   the log write fails and the server answers `503`.
 - The status of the server shows the last result, or the error of `df`.

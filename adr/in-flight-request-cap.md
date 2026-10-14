@@ -35,5 +35,7 @@ server reads a collect body for at most 5 seconds.**
   networks.
 - In a flood from many addresses, normal clients of the public port get `503` too.
 - Many people behind one address, or a proxy without `--ip-header`, share the places of one address.
-- The cap does not stop a flood of connections or of bytes before the server reads a request. A
-  filter in front of the server must do that.
+- The cap counts requests, not connections. The connection gate and the deadlines stop a flood of
+  idle or slow connections before the server reads a request, see
+  `connection-limits-and-deadlines.md`. A flood of bytes from many addresses needs a filter in front
+  of the server.

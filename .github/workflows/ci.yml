@@ -17,25 +17,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@v2
-        with:
-          deno-version: v2.x
-      - run: deno fmt --check
-      - run: deno lint
-      - run: deno task test
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt,clippy
+          rustup default stable
       - name: Install imp
         shell: bash
         run: |
           mkdir -p "$HOME/.local/bin"
           curl -fsSL https://sobanieca.github.io/imp-ui/install.sh | INSTALL_DIR="$HOME/.local/bin" bash
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-      - name: Check the console page
+      - name: Build the console page
         working-directory: console
-        run: |
-          imp fmt --check
-          imp lint
-          imp test --unit
-          imp build --pwa
+        run: imp build --pwa
+      - run: cargo verify
 
   version:
     needs: check
@@ -48,11 +43,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: denoland/setup-deno@v2
-        with:
-          deno-version: v2.x
       - id: read
-        run: echo "version=$(deno eval "console.log(JSON.parse(Deno.readTextFileSync('deno.json')).version)")" >> "$GITHUB_OUTPUT"
+        run: echo "version=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n 1)" >> "$GITHUB_OUTPUT"
       - id: tag
         run: |
           if git rev-parse "v${{ steps.read.outputs.version }}" >/dev/null 2>&1; then
@@ -68,10 +60,10 @@ jobs:
       matrix:
         include:
           - runner: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
+            target: x86_64-unknown-linux-musl
             asset: imp-aly-linux-x64
           - runner: ubuntu-24.04-arm
-            target: aarch64-unknown-linux-gnu
+            target: aarch64-unknown-linux-musl
             asset: imp-aly-linux-arm64
           - runner: macos-15-intel
             target: x86_64-apple-darwin
@@ -82,9 +74,13 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@v2
-        with:
-          deno-version: v2.x
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal --target ${{ matrix.target }}
+          rustup default stable
+      - name: Install musl
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
       - name: Install imp
         shell: bash
         run: |
@@ -95,10 +91,9 @@ jobs:
         working-directory: console
         run: imp build --pwa
       - name: Compile
-        run: >
-          deno compile -A --target ${{ matrix.target }}
-          --include src/storage-worker.js --include src/query-worker.js --include console/dist
-          -o ${{ matrix.asset }} main.js
+        run: |
+          cargo build --release --locked --package imp-aly --target ${{ matrix.target }}
+          cp target/${{ matrix.target }}/release/imp-aly ${{ matrix.asset }}
       - name: Smoke test
         run: |
           test "$(./${{ matrix.asset }} --version)" = "${{ needs.version.outputs.version }}"
@@ -173,9 +168,10 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
-      - uses: denoland/setup-deno@v2
-        with:
-          deno-version: v2.x
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
       - name: Install imp
         shell: bash
         run: |
@@ -187,7 +183,7 @@ jobs:
           mkdir -p _site
           cp -r site/. _site/
           cp install.sh _site/
-          deno run -A dev/versions-manifest.js > _site/versions.json
+          cargo versions-manifest > _site/versions.json
           (cd console && imp build --pwa --env pages --output ../_site/console)
           cp _site/console/index.html _site/404.html
       - uses: actions/configure-pages@v5

@@ -8,11 +8,11 @@ problem: one command installs or updates the service and prints what the owner n
 
 ## Decision
 
-**`deno compile` builds one binary, and `sudo imp-aly server --port <port>` installs, updates or
-shows the systemd service.**
+**`cargo build --release` builds one binary, and `sudo imp-aly server --port <port>` installs,
+updates or shows the systemd service.**
 
-- The binary includes the two worker modules with `--include`, because `deno compile` does not find
-  a module that only a `Worker` URL names.
+- The binary holds the server, the client commands and the built page of the console. A build script
+  puts the files of `console/dist` into the binary.
 - The `server` command is the server, as in tunnelr. Without a command, the binary prints the help.
   As root on Linux with systemd, `server` writes `/etc/systemd/system/imp-aly.service` from its
   options, with an absolute path for the data folder. The unit sets `IMP_ALY_SERVICE=1`, so the
@@ -31,7 +31,9 @@ shows the systemd service.**
   `AF_UNIX`, `AF_INET` and `AF_INET6`. `SystemCallArchitectures=native` and
   `SystemCallFilter=@system-service` limit the system calls, and a blocked call fails with `EPERM`.
   The capability set is empty, or only `CAP_NET_BIND_SERVICE` for a port below 1024. `UMask=0077`
-  keeps new files private. `MemoryDenyWriteExecute` is not set, because the JIT of V8 needs it.
+  keeps new files private. `MemoryDenyWriteExecute=true` refuses memory that is both writable and
+  executable, because the binary has no JIT. `LimitNOFILE=65536` gives room for the connections of
+  both ports, and `TasksMax=4096` caps the threads.
 - `ProtectSystem=strict` makes `/run` read-only for the service. The service only reads the new key
   that root puts in `/run/imp-aly`, see `key-rotation.md`, so the handover still works.
 - The command refuses a data folder in `/root`, a binary in `/root` or `/home`, which the unit
@@ -53,6 +55,8 @@ shows the systemd service.**
 ## Consequences
 
 - One install line and one start line give a server that survives a reboot.
+- The process runs at most 64 threads for blocking file work, next to the threads of the HTTP
+  server, the storage, the queries and the log.
 - A fault in the server cannot change the system, read the files of root, or get more privileges.
 - `LoadCredential=` needs systemd 247 or newer: Debian 11, Ubuntu 22.04 and later.
 - A data folder that the service user cannot reach, such as one below a private home folder, fails
