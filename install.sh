@@ -3,8 +3,58 @@
 set -e
 
 REPO="sobanieca/imp-aly"
-INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
+DEFAULT_INSTALL_DIR="/usr/local/bin"
 BINARY_NAME="imp-aly"
+SCRIPT_URL="sobanieca.github.io/imp-aly/install.sh"
+
+usage() {
+  cat <<USAGE
+Install imp-aly for Linux or macOS (x64, arm64).
+
+Usage:
+  curl -fsSL ${SCRIPT_URL} | bash
+
+By default imp-aly is installed to ${DEFAULT_INSTALL_DIR}, for all users. If you
+can't write to it, run the script with sudo:
+  curl -fsSL ${SCRIPT_URL} | sudo bash
+
+To install to a custom location, set INSTALL_DIR to a directory that is
+on your PATH:
+  curl -fsSL ${SCRIPT_URL} | INSTALL_DIR=~/.local/bin bash
+USAGE
+}
+
+case "${1:-}" in
+  -h|--help) usage; exit 0 ;;
+  "") ;;
+  *)
+    echo "Error: unknown argument: $1"
+    echo ""
+    usage
+    exit 1
+    ;;
+esac
+
+if [ -n "${INSTALL_DIR:-}" ]; then
+  CUSTOM_INSTALL_DIR=1
+else
+  CUSTOM_INSTALL_DIR=""
+  INSTALL_DIR="${DEFAULT_INSTALL_DIR}"
+fi
+
+install_failed() {
+  echo "Error: could not install imp-aly to ${INSTALL_DIR}"
+  if [ -n "${CUSTOM_INSTALL_DIR}" ]; then
+    echo "INSTALL_DIR must be a writable directory that is on your PATH, e.g.:"
+    echo "  curl -fsSL ${SCRIPT_URL} | INSTALL_DIR=~/.local/bin bash"
+  else
+    echo "Most likely you need to run the script with sudo:"
+    echo "  curl -fsSL ${SCRIPT_URL} | sudo bash"
+    echo "or set INSTALL_DIR to a directory that is on your PATH, e.g.:"
+    echo "  curl -fsSL ${SCRIPT_URL} | INSTALL_DIR=~/.local/bin bash"
+  fi
+  exit 1
+}
 
 echo "Installing imp-aly..."
 
@@ -28,6 +78,9 @@ case "$ARCH" in
     ;;
 esac
 
+mkdir -p "${INSTALL_DIR}" 2> /dev/null || install_failed
+[ -w "${INSTALL_DIR}" ] || install_failed
+
 ASSET="${BINARY_NAME}-${OS_TYPE}-${ARCH_TYPE}"
 URL="https://github.com/${REPO}/releases/latest/download/${ASSET}"
 
@@ -48,33 +101,33 @@ fi
 
 EXPECTED="$(cut -d ' ' -f 1 < "${TMP_DIR}/${ASSET}.sha256")"
 
-if [ -w "${INSTALL_DIR}" ]; then
-  SUDO=""
-else
-  SUDO="sudo"
-  echo "Note: sudo is needed to install to ${INSTALL_DIR}"
-fi
-
 checksum() {
   if command -v sha256sum > /dev/null 2>&1; then
-    $SUDO sha256sum "$1" | cut -d ' ' -f 1
+    sha256sum "$1" | cut -d ' ' -f 1
   else
-    $SUDO shasum -a 256 "$1" | cut -d ' ' -f 1
+    shasum -a 256 "$1" | cut -d ' ' -f 1
   fi
 }
 
-$SUDO mkdir -p "${INSTALL_DIR}"
-STAGED="$($SUDO mktemp "${INSTALL_DIR}/.${BINARY_NAME}.install.XXXXXX")"
-trap 'rm -rf "${TMP_DIR}"; $SUDO rm -f "${STAGED}"' EXIT
-$SUDO cp "${TMP_DIR}/${BINARY_NAME}" "${STAGED}"
+STAGED="$(mktemp "${INSTALL_DIR}/.${BINARY_NAME}.install.XXXXXX")" || install_failed
+trap 'rm -rf "${TMP_DIR}"; rm -f "${STAGED}"' EXIT
+cp "${TMP_DIR}/${BINARY_NAME}" "${STAGED}" || install_failed
 
 if [ "${EXPECTED}" != "$(checksum "${STAGED}")" ]; then
   echo "Error: the checksum of the download does not match"
   exit 1
 fi
 
-$SUDO chmod 755 "${STAGED}"
-$SUDO mv -f "${STAGED}" "${INSTALL_DIR}/${BINARY_NAME}"
+chmod 755 "${STAGED}"
+mv -f "${STAGED}" "${INSTALL_DIR}/${BINARY_NAME}" || install_failed
 
 echo "Installed ${INSTALL_DIR}/${BINARY_NAME} $("${INSTALL_DIR}/${BINARY_NAME}" --version)"
 echo "Run 'imp-aly help' to start."
+
+case ":${PATH}:" in
+  *":${INSTALL_DIR}:"*) ;;
+  *)
+    echo "Warning: ${INSTALL_DIR} is not on your PATH"
+    echo "Add it to your PATH, or set INSTALL_DIR to a directory that is on your PATH"
+    ;;
+esac

@@ -813,6 +813,7 @@ onAnalytics(alySink({
           <button type="button" id="copy-btn">Copy</button>
         </div>
         <p>Use the same command on the VPS and on your machine. It supports Linux and macOS on x64 and arm64. As root with systemd, <code>imp-aly server</code> installs a service that runs as its own user. <code>imp-aly help</code> lists every command. Until version 1.0.0, any part of imp-aly can change.</p>
+        <p>It installs to <code>/usr/local/bin</code>, for all users. If you can't write there, run it with <code>sudo bash</code> instead of <code>bash</code>, or install to a custom location: set <code>INSTALL_DIR</code> to a directory on your <code>PATH</code>, as in <code>curl -fsSL sobanieca.github.io/imp-aly/install.sh | INSTALL_DIR=~/.local/bin bash</code>.</p>
       </section>
 
       <footer>
