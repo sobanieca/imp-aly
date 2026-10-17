@@ -1,19 +1,24 @@
 name: CI
 
+# Runs only on demand: start it from the Actions tab (a run on main also releases and
+# deploys the site), or add the `ci` label to a PR to check it and every later push to it.
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
   pull_request:
     branches:
       - main
+    types: [labeled, synchronize, reopened]
 
 concurrency:
-  group: ${{ github.event_name == 'push' && 'release' || format('check-{0}', github.run_id) }}
+  group: ${{ github.event_name != 'pull_request' && 'release' || format('check-{0}', github.run_id) }}
   cancel-in-progress: false
 
 jobs:
   check:
+    if: >-
+      github.event_name != 'pull_request' ||
+      (contains(github.event.pull_request.labels.*.name, 'ci') &&
+       (github.event.action != 'labeled' || github.event.label.name == 'ci'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -34,7 +39,7 @@ jobs:
 
   version:
     needs: check
-    if: github.event_name == 'push'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.read.outputs.version }}
@@ -155,7 +160,7 @@ jobs:
 
   pages:
     needs: [check, release]
-    if: always() && github.event_name == 'push' && needs.check.result == 'success'
+    if: always() && github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.check.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: read
