@@ -337,8 +337,8 @@ mod tests {
         let url = Url::parse("HTTPS://MyApp.Example:443/a/../b?x=1#top").unwrap();
         assert_eq!(url.href(), "https://myapp.example/b?x=1#top");
         assert_eq!(url.origin(), "https://myapp.example");
-        let url = Url::parse("http://[::1]:2981").unwrap();
-        assert_eq!(url.href(), "http://[::1]:2981/");
+        let url = Url::parse("http://[::1]:4410").unwrap();
+        assert_eq!(url.href(), "http://[::1]:4410/");
         assert!(Url::parse("ftp://a.example").is_none());
         assert!(Url::parse("myapp.example").is_none());
         assert!(Url::parse("http://a b.example").is_none());

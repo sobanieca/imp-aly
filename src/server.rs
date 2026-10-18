@@ -40,9 +40,9 @@ use tokio::net::TcpListener;
 use tokio::sync::{oneshot, watch};
 use tokio::task::JoinHandle;
 
-pub const DEFAULT_PORT: u16 = 2980;
+pub const DEFAULT_PORT: u16 = 4411;
 
-pub const DEFAULT_ADMIN_PORT: u16 = 2981;
+pub const DEFAULT_ADMIN_PORT: u16 = 4410;
 
 pub const COLLECT_MAX_BYTES: usize = 65_536;
 

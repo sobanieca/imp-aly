@@ -192,7 +192,7 @@ Behind a proxy, every request comes from the address of the proxy. Tell the serv
 holds the address of the client:
 
 ```sh
-sudo imp-aly server --port 2980 --ip-header x-forwarded-for
+sudo imp-aly server --port 4411 --ip-header x-forwarded-for
 ```
 
 The server takes the last address of the header, which is the address that your proxy added. Use
@@ -205,7 +205,7 @@ only the same machine: `127.0.0.0/8` and `::1`. When your proxy runs on another 
 addresses or networks:
 
 ```sh
-sudo imp-aly server --port 2980 --ip-header x-forwarded-for --trusted-proxy 10.0.0.5,10.1.0.0/16
+sudo imp-aly server --port 4411 --ip-header x-forwarded-for --trusted-proxy 10.0.0.5,10.1.0.0/16
 ```
 
 A request from any other address counts for the address of its connection. So a client that connects
@@ -219,7 +219,7 @@ in the header, and so it escapes the rate limit.
 The server can store the country of each record from a header of your CDN or proxy:
 
 ```sh
-sudo imp-aly server --port 2980 --country-header cf-ipcountry
+sudo imp-aly server --port 4411 --country-header cf-ipcountry
 ```
 
 The server stores a two-character code, such as `PL`, in the field `country`. It stores null when
@@ -235,7 +235,7 @@ sends no preflight.
 To accept records only from the pages of your apps, give their origins:
 
 ```sh
-sudo imp-aly server --port 2980 --allow-origin https://myapp.example,https://www.myapp.example
+sudo imp-aly server --port 4411 --allow-origin https://myapp.example,https://www.myapp.example
 ```
 
 An origin is a scheme, a host and an optional port, like `https://myapp.example` or

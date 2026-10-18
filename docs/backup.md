@@ -285,9 +285,9 @@ A backup that you never restored is not tested. Start a second server on a tempo
 restore a backup into it, and run a query:
 
 ```sh
-imp-aly server --foreground -p 2981 -d /tmp/imp-aly-test &
-imp-aly restore imp-aly-2026-09.tar.gz --url http://127.0.0.1:2981
-imp-aly query '{"app": "myapp", "from": "2026-09-01", "to": "2026-09-30"}' --url http://127.0.0.1:2981
+imp-aly server --foreground -p 4410 -d /tmp/imp-aly-test &
+imp-aly restore imp-aly-2026-09.tar.gz --url http://127.0.0.1:4410
+imp-aly query '{"app": "myapp", "from": "2026-09-01", "to": "2026-09-30"}' --url http://127.0.0.1:4410
 ```
 
 Stop the test server, and delete the folder.

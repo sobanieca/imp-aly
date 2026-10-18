@@ -16,7 +16,7 @@ journalctl -u imp-aly-update -n 30
 To turn off the updates, run the server command again with `--no-auto-update`:
 
 ```sh
-sudo imp-aly server --port 2980 --no-auto-update
+sudo imp-aly server --port 4411 --no-auto-update
 ```
 
 Run it again without `--no-auto-update` to turn the updates on again. `--uninstall` removes the
@@ -55,7 +55,7 @@ https://github.com/sobanieca/imp-aly/releases, then install it yourself:
 
 ```sh
 sudo imp-aly update
-sudo imp-aly server --port 2980
+sudo imp-aly server --port 4411
 ```
 
 `sudo imp-aly update` without `--auto` does not use the major version rule and the 7 days. It
@@ -101,7 +101,7 @@ delete such a release before the timer installs it.
 The update keeps the previous binary. To use it again, stop the updates, then put it back:
 
 ```sh
-sudo imp-aly server --port 2980 --no-auto-update
+sudo imp-aly server --port 4411 --no-auto-update
 sudo mv /usr/local/bin/.imp-aly.previous /usr/local/bin/imp-aly
 sudo systemctl restart imp-aly
 ```

@@ -102,13 +102,13 @@ jobs:
       - name: Smoke test
         run: |
           test "$(./${{ matrix.asset }} --version)" = "${{ needs.version.outputs.version }}"
-          ./${{ matrix.asset }} server --foreground -p 2980 -d "$RUNNER_TEMP/data" -a "$RUNNER_TEMP/key" &
+          ./${{ matrix.asset }} server --foreground -p 4411 -d "$RUNNER_TEMP/data" -a "$RUNNER_TEMP/key" &
           sleep 3
           mkdir "$RUNNER_TEMP/build"
           printf '{"pages":["/","/invoices"],"zones":["smoke.list"],"outcomes":["smoke.sent"]}' > "$RUNNER_TEMP/build/app-analytics.json"
           ./${{ matrix.asset }} app add smoke "$RUNNER_TEMP/build" -a "$RUNNER_TEMP/key"
           at="$(date +%s)000"
-          curl -fsS -X POST http://127.0.0.1:2980/collect/smoke -d "[
+          curl -fsS -X POST http://127.0.0.1:4411/collect/smoke -d "[
             {\"type\":\"error\",\"visit\":\"v1\",\"at\":$at,\"page\":\"/invoices\"},
             {\"type\":\"seen\",\"visit\":\"v1\",\"at\":$at,\"page\":\"/invoices\",\"zone\":\"smoke.list\"},
             {\"type\":\"outcome\",\"visit\":\"v1\",\"at\":$at,\"page\":\"/invoices\",\"name\":\"smoke.sent\"},
@@ -116,13 +116,13 @@ jobs:
           ]" | grep '"rejected":1'
           sleep 4
           ./${{ matrix.asset }} query '{"app":"smoke"}' --json -a "$RUNNER_TEMP/key" | grep '"matched": 3'
-          curl -fsS -i -X OPTIONS http://127.0.0.1:2981/query \
+          curl -fsS -i -X OPTIONS http://127.0.0.1:4410/query \
             -H 'origin: https://sobanieca.github.io' \
             -H 'access-control-request-method: POST' | grep -i 'access-control-allow-origin: \*'
-          ./${{ matrix.asset }} console --port 8010 &
+          ./${{ matrix.asset }} console --port 4400 &
           sleep 2
-          curl -fsS http://127.0.0.1:8010/ | grep 'id="app"'
-          curl -fsS http://127.0.0.1:8010/manifest.webmanifest | grep '"name": "imp-aly console"'
+          curl -fsS http://127.0.0.1:4400/ | grep 'id="app"'
+          curl -fsS http://127.0.0.1:4400/manifest.webmanifest | grep '"name": "imp-aly console"'
           kill %2
           kill %1
       - name: Checksum

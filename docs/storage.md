@@ -236,8 +236,8 @@ below the minimum, it frees space in five steps, and stops as soon as the free s
 It removes a day, a week or a month with all its sources. It never removes the current day.
 
 ```sh
-sudo imp-aly server --port 2980 --min-free 10%
-sudo imp-aly server --port 2980 --min-free 5GB
+sudo imp-aly server --port 4411 --min-free 10%
+sudo imp-aly server --port 4411 --min-free 5GB
 ```
 
 A summary-only day is about 2 MB for 1,000,000 records, and the records of such a day are much
@@ -295,7 +295,7 @@ These steps move the data of the service to a new disk that is mounted at `/mnt/
 3. Start the service again with the new folder, and with every option of step 1:
 
    ```sh
-   sudo imp-aly server --data /mnt/data/imp-aly --port 2980 --allow-origin https://myapp.example
+   sudo imp-aly server --data /mnt/data/imp-aly --port 4411 --allow-origin https://myapp.example
    ```
 
    The command writes the new unit file, makes the user `imp-aly` the owner of the new folder, and

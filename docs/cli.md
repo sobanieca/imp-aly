@@ -25,13 +25,13 @@ imp-aly help | version
 ## Start the server
 
 ```sh
-sudo imp-aly server --port 2980
+sudo imp-aly server --port 4411
 ```
 
 | Option                     | Value                                                                                        | Default                       |
 | -------------------------- | -------------------------------------------------------------------------------------------- | ----------------------------- |
-| `-p`, `--port <port>`      | the public port, for `/collect/<app>`                                                        | `2980`                        |
-| `--admin-port <port>`      | the port of the private API                                                                  | `2981`                        |
+| `-p`, `--port <port>`      | the public port, for `/collect/<app>`                                                        | `4411`                        |
+| `--admin-port <port>`      | the port of the private API                                                                  | `4410`                        |
 | `-d`, `--data <folder>`    | the data folder                                                                              | see below                     |
 | `-a`, `--auth <key\|file>` | the key, or a file with the key                                                              | `~/.secret/imp-aly-key`       |
 | `--bind <address>`         | listen on this address only                                                                  | all addresses                 |
@@ -132,7 +132,7 @@ The command finds the server in this order:
 3. The default saved server or group, with the saved keys.
 4. The local service, when this machine runs the systemd service of imp-aly. The command reads the
    admin port, the bind address, TLS and the key file from `/etc/systemd/system/imp-aly.service`.
-5. The admin port of a local server in the foreground, `http://127.0.0.1:2981`.
+5. The admin port of a local server in the foreground, `http://127.0.0.1:4410`.
 
 `-a` replaces the saved key. Without `-a` and without a saved key, the command reads the key file of
 the local service, or `~/.secret/imp-aly-key`.
@@ -178,7 +178,7 @@ Save the servers that you use, and give each one a name. Then a client command n
 
 ```sh
 imp-aly add eu https://eu.analytics.example -a ~/.secret/imp-aly-eu
-imp-aly add us http://203.0.113.10:2981 -a ~/.secret/imp-aly-us
+imp-aly add us http://203.0.113.10:4410 -a ~/.secret/imp-aly-us
 imp-aly query '{"app": "myapp"}'
 imp-aly query '{"app": "myapp"}' -s eu
 ```
@@ -227,7 +227,7 @@ imp-aly query report.json
 
 ## Console
 
-`imp-aly console` serves the console web app on your machine, at `http://localhost:8010`. It shows
+`imp-aly console` serves the console web app on your machine, at `http://localhost:4400`. It shows
 the reports of your apps in charts, and it registers and removes apps. Add the servers and their
 keys in the page. The page does not use the saved servers of the CLI. `--port <port>` changes the
 port. The same app is at `https://sobanieca.github.io/imp-aly/console/`, ready to install on a

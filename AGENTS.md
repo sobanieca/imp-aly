@@ -129,9 +129,9 @@ The tasks are cargo aliases in `.cargo/config.toml`. They run `xtask`.
 
 | Command               | What it does                                                                                                                                                    |
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `cargo start`         | starts a demo: a server on ports 44890 and 44889 (admin) in `.dev-data/` with 45 days of sample data, a new visit every 3 seconds, and the console on port 8010 |
-| `cargo server`        | runs the server from source in the foreground on ports 2980 and 2981                                                                                            |
-| `cargo console`       | builds the page, then runs the console from source on port 8010                                                                                                 |
+| `cargo start`         | starts a demo: a server on ports 4411 and 4410 (admin) in `.dev-data/` with 45 days of sample data, a new visit every 3 seconds, and the console on port 4400   |
+| `cargo server`        | runs the server from source in the foreground on ports 4411 and 4410                                                                                            |
+| `cargo console`       | builds the page, then runs the console from source on port 4400                                                                                                 |
 | `cargo console-build` | runs `imp build --pwa` in `console/`, which writes `console/dist`                                                                                               |
 | `cargo test`          | runs the unit tests and `tests/`                                                                                                                                |
 | `cargo verify`        | runs `cargo fmt --check`, `cargo clippy -D warnings`, the tests, then `imp fmt --check`, `imp lint` and `imp test --unit` in `console/`                         |

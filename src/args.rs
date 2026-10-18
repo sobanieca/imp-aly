@@ -244,7 +244,7 @@ mod tests {
                 .message
                 .contains("--max-connections")
         );
-        assert_eq!(parse_port("2980").unwrap(), 2980);
+        assert_eq!(parse_port("4411").unwrap(), 4411);
         assert!(parse_port("0").is_err());
         assert!(parse_port("70000").is_err());
         assert!(parse_port("+1").is_err());

@@ -21,7 +21,7 @@ imp-aly is not released yet. Until version `1.0.0`, any part of it can change.
 
 ```sh
 curl -fsSL https://sobanieca.github.io/imp-aly/install.sh | bash
-sudo imp-aly server --port 2980
+sudo imp-aly server --port 4411
 imp-aly app add myapp https://myapp.example/
 ```
 
@@ -68,9 +68,9 @@ build and check the page of the console. The server is Rust. The console is an i
 
 | Task                  | What it does                                                                                                                                      |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `cargo start`         | starts a demo: a server on ports 44890 and 44889 (admin) with 45 days of sample data in `.dev-data/` and new visits, and the console on port 8010 |
-| `cargo server`        | runs the server from source in the foreground on ports 2980 and 2981                                                                              |
-| `cargo console`       | builds the page of the console, and runs the console from source on port 8010                                                                     |
+| `cargo start`         | starts a demo: a server on ports 4411 and 4410 (admin) with 45 days of sample data in `.dev-data/` and new visits, and the console on port 4400   |
+| `cargo server`        | runs the server from source in the foreground on ports 4411 and 4410                                                                              |
+| `cargo console`       | builds the page of the console, and runs the console from source on port 4400                                                                     |
 | `cargo console-build` | builds the page of the console into `console/dist`                                                                                                |
 | `cargo test`          | runs the tests of the server                                                                                                                      |
 | `cargo verify`        | runs `cargo fmt`, `cargo clippy` and the tests, then `imp fmt`, `imp lint` and `imp test --unit` in `console/`                                    |

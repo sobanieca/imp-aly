@@ -18,7 +18,7 @@ server is given.**
 - `add` replaces an entry with the same name and makes the entry the default. `use` changes the
   default. `rm` makes the last remaining entry the default.
 - A client command finds the server in this order: `--server`, `--url`, the default saved server,
-  the local service, the admin port of a local server on `http://127.0.0.1:2981`. `--server` and
+  the local service, the admin port of a local server on `http://127.0.0.1:4410`. `--server` and
   `--url` together are an error. `-a` replaces the saved key.
 - The local service is the systemd service on this machine. The command reads its admin port, its
   bind address, its TLS option and its key file from the unit file

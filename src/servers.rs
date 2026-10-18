@@ -505,14 +505,14 @@ mod tests {
         let path = dir.join("servers.json");
         let saved = add_server(
             "eu",
-            "https://eu.example:2981/",
+            "https://eu.example:4410/",
             Some("plain-key-0123456789"),
             &path,
         )
         .unwrap();
-        assert_eq!(saved.url, "https://eu.example:2981");
+        assert_eq!(saved.url, "https://eu.example:4410");
         assert_eq!(saved.auth.as_deref(), Some("plain-key-0123456789"));
-        add_server("us", "http://203.0.113.10:2981", Some("/keys/us"), &path).unwrap();
+        add_server("us", "http://203.0.113.10:4410", Some("/keys/us"), &path).unwrap();
         let store = read_store(&path).unwrap();
         assert_eq!(store.default, "us");
         assert_eq!(store.servers.len(), 2);
@@ -563,9 +563,9 @@ mod tests {
             (Some("https://eu.example"), Some("/keys/eu"))
         );
         let target =
-            resolve_target_with(&select(Some("http://127.0.0.1:2981/"), None), &path, &none)
+            resolve_target_with(&select(Some("http://127.0.0.1:4410/"), None), &path, &none)
                 .unwrap();
-        assert_eq!(target.url.as_deref(), Some("http://127.0.0.1:2981"));
+        assert_eq!(target.url.as_deref(), Some("http://127.0.0.1:4410"));
         assert!(resolve_target_with(&select(Some("http://a"), Some("eu")), &path, &none).is_err());
         let default = resolve_target_with(&select(None, None), &path, &none).unwrap();
         assert_eq!(default.server.as_deref(), Some("us"));
@@ -623,7 +623,7 @@ mod tests {
         let path = dir.join("servers.json");
         let local = || {
             Some(ServiceTarget {
-                url: "http://127.0.0.1:2981".to_string(),
+                url: "http://127.0.0.1:4410".to_string(),
                 key_path: "/root/.secret/imp-aly-key".to_string(),
             })
         };

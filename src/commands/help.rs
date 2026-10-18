@@ -193,7 +193,7 @@ Apps:
 Saved servers (on your machine):
 
   imp-aly add eu https://eu.analytics.example -a ~/.secret/imp-aly-eu
-  imp-aly add us http://203.0.113.10:2981 -a ~/.secret/imp-aly-us
+  imp-aly add us http://203.0.113.10:4410 -a ~/.secret/imp-aly-us
   imp-aly query '{{"app": "myapp"}}'          ask the default server (now "us")
   imp-aly query '{{"app": "myapp"}}' -s eu    ask "eu"
   imp-aly use eu                            make "eu" the default

@@ -5,7 +5,7 @@ use imp_aly::api_client::{ApiTarget, call_server};
 use imp_aly::auth::{generate_key, read_key_file, write_key_file};
 use imp_aly::console::start_console;
 use imp_aly::json::{self, Object, Value};
-use imp_aly::server::{ServerOptions, start_server};
+use imp_aly::server::{DEFAULT_ADMIN_PORT, DEFAULT_PORT, ServerOptions, start_server};
 use imp_aly::source::open_source;
 use imp_aly::static_files::Files;
 use imp_aly::storage::apply_segment_text;
@@ -19,10 +19,6 @@ const DAYS: i64 = 45;
 const VISIT_EVERY: Duration = Duration::from_secs(3);
 
 const COUNTRY_HEADER: &str = "x-demo-country";
-
-const DEMO_ADMIN_PORT: u16 = 44889;
-
-const DEMO_PORT: u16 = 44890;
 
 fn root() -> PathBuf {
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
@@ -206,8 +202,8 @@ fn start(args: &[String]) -> Result<(), String> {
     let runtime = tokio::runtime::Runtime::new().map_err(|error| error.to_string())?;
     runtime.block_on(async move {
         let mut options = ServerOptions::new(&dev.data_dir, &dev.key);
-        options.port = DEMO_PORT;
-        options.admin_port = DEMO_ADMIN_PORT;
+        options.port = DEFAULT_PORT;
+        options.admin_port = DEFAULT_ADMIN_PORT;
         options.hostname = Some("127.0.0.1".to_string());
         options.min_free = None;
         options.country_header = Some(COUNTRY_HEADER.to_string());

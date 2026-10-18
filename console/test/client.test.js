@@ -13,15 +13,15 @@ test('the body hash covers no body and a text', () => {
 })
 
 test('the signed path leaves out the path of the server URL and keeps the query', () => {
-  expect(signedPath('https://a.example:2981/query', 'https://a.example:2981')).toEqual('/query')
+  expect(signedPath('https://a.example:4410/query', 'https://a.example:4410')).toEqual('/query')
   expect(signedPath('https://a.example/aly/apps?x=1', 'https://a.example/aly')).toEqual('/apps?x=1')
 })
 
 test('a server URL is http or https, and an https page calls only https', () => {
-  expect(parseServerUrl('https://a.example:2981/', 'https:')).toEqual('https://a.example:2981')
-  expect(parseServerUrl('http://127.0.0.1:2981', 'https:')).toEqual('http://127.0.0.1:2981')
-  expect(parseServerUrl('http://a.example:2981', 'http:')).toEqual('http://a.example:2981')
-  expect(() => parseServerUrl('http://a.example:2981', 'https:')).toThrow(/https/)
+  expect(parseServerUrl('https://a.example:4410/', 'https:')).toEqual('https://a.example:4410')
+  expect(parseServerUrl('http://127.0.0.1:4410', 'https:')).toEqual('http://127.0.0.1:4410')
+  expect(parseServerUrl('http://a.example:4410', 'http:')).toEqual('http://a.example:4410')
+  expect(() => parseServerUrl('http://a.example:4410', 'https:')).toThrow(/https/)
   expect(() => parseServerUrl('ftp://a.example', 'http:')).toThrow(/not a server URL/)
   expect(() => parseServerUrl('https://a.example/?x=1', 'http:')).toThrow(/query/)
 })

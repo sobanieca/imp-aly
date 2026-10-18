@@ -26,7 +26,7 @@ Run the same command again to update.
 ## Start the server
 
 ```sh
-sudo imp-aly server --port 2980
+sudo imp-aly server --port 4411
 ```
 
 As root on Linux with systemd, this command installs the systemd service `imp-aly`, starts it,
@@ -42,9 +42,9 @@ service cannot run a binary in `/root` or `/home`.
 ```
 imp-aly 0.1.0 - systemd service "imp-aly" installed and started
 
-  Address:   http://203.0.113.10:2980
-  Collect:   http://203.0.113.10:2980/collect/<app>
-  Admin:     http://203.0.113.10:2981  (the app, query, backup and status commands)
+  Address:   http://203.0.113.10:4411
+  Collect:   http://203.0.113.10:4411/collect/<app>
+  Admin:     http://203.0.113.10:4410  (the app, query, backup and status commands)
   Key:       kD3xW9q1mZ8pR4tY7uH2cV6bN0aS5fGj
   Key file:  /root/.secret/imp-aly-key
   Data:      /var/lib/imp-aly
@@ -66,19 +66,19 @@ The server listens on two ports:
 
 | Port   | Option         | Endpoints                                           | Who calls it                 |
 | ------ | -------------- | --------------------------------------------------- | ---------------------------- |
-| `2980` | `--port`       | `/collect/<app>`                                    | the browsers of your users   |
-| `2981` | `--admin-port` | `/apps`, `/query`, `/status`, `/backup`, `/restore` | the client commands, and you |
+| `4411` | `--port`       | `/collect/<app>`                                    | the browsers of your users   |
+| `4410` | `--admin-port` | `/apps`, `/query`, `/status`, `/backup`, `/restore` | the client commands, and you |
 
 Each port answers only its own endpoints. Open the public port to the internet. Open the admin port
 only to the machines that run the client commands, for example with the firewall of the VPS:
 
 ```sh
-sudo ufw allow 2980/tcp
-sudo ufw allow from 198.51.100.7 to any port 2981 proto tcp
+sudo ufw allow 4411/tcp
+sudo ufw allow from 198.51.100.7 to any port 4410 proto tcp
 ```
 
 When you call the commands only on the VPS, give `--admin-bind 127.0.0.1`. Then the admin port is
-not on the network. From another machine, use an SSH tunnel: `ssh -L 2981:127.0.0.1:2981 <vps>`.
+not on the network. From another machine, use an SSH tunnel: `ssh -L 4410:127.0.0.1:4410 <vps>`.
 
 ## Serve HTTPS
 
@@ -172,7 +172,7 @@ option. On another machine, save the server once with the URL of its admin port 
 Then the commands call it:
 
 ```sh
-imp-aly add myvps http://203.0.113.10:2981 -a ~/.secret/imp-aly-key
+imp-aly add myvps http://203.0.113.10:4410 -a ~/.secret/imp-aly-key
 imp-aly query '{"app": "myapp"}'
 ```
 
@@ -184,7 +184,7 @@ accepts each token once. See [Security](security.md).
 ## See the numbers in the console
 
 Open `https://sobanieca.github.io/imp-aly/console/` on your phone or your computer, and install it
-from the menu of the browser. Or run `imp-aly console` and open `http://localhost:8010`. In
+from the menu of the browser. Or run `imp-aly console` and open `http://localhost:4400`. In
 **Servers**, add the URL of the admin port and the key. The installed console needs HTTPS on the
 admin port, see [Serve HTTPS](#serve-https).
 

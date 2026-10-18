@@ -536,9 +536,9 @@ mod tests {
             [
                 "server",
                 "--port",
-                "2980",
+                "4411",
                 "--admin-port",
-                "2981",
+                "4410",
                 "--data",
                 "/var/lib/imp-aly"
             ]
@@ -570,7 +570,7 @@ mod tests {
                 "--port",
                 "443",
                 "--admin-port",
-                "2981",
+                "4410",
                 "--data",
                 "/data",
                 "--ip-header",
@@ -590,7 +590,7 @@ mod tests {
             ]
         );
         for bad in [
-            vec!["server", "--port", "2981"],
+            vec!["server", "--port", "4410"],
             vec!["server", "--tls-cert", "a"],
             vec!["server", "--trusted-proxy", "10.0.0.0/8"],
             vec!["server", "--ip-header", "x", "--trusted-proxy", "nope"],

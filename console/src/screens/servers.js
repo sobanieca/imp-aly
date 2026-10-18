@@ -161,7 +161,7 @@ const serverForm = component('aly-server-form', {
         label: 'URL of the admin port',
         type: 'url',
         required: true,
-        placeholder: 'https://analytics.myapp.example:2981',
+        placeholder: 'https://analytics.myapp.example:4410',
         validate: urlProblem,
       }),
       keyField({ editing }),

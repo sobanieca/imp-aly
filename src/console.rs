@@ -8,7 +8,7 @@ use tokio::net::TcpListener;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
 
-pub const DEFAULT_CONSOLE_PORT: u16 = 8010;
+pub const DEFAULT_CONSOLE_PORT: u16 = 4400;
 
 const SECURITY_HEADERS: [(&str, &str); 6] = [
     (

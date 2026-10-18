@@ -10,7 +10,7 @@ Open it in one of two ways:
   the bottom of the menu. On a phone, the button is in the navigation drawer. The installed console
   opens like an app, and it starts also without a network.
 - **On your machine**, with `imp-aly console`. The binary serves the same page on
-  `http://localhost:8010`.
+  `http://localhost:4400`.
 
 ```sh
 imp-aly console
@@ -19,14 +19,14 @@ imp-aly console
 ```
 imp-aly 0.1.0 - console
 
-To open the console, go to http://localhost:8010
+To open the console, go to http://localhost:4400
 
 Add your servers and their keys in the page. Press Ctrl+C to stop the console.
 ```
 
 | Option          | Value                       | Default |
 | --------------- | --------------------------- | ------- |
-| `--port <port>` | the port of the console     | `8010`  |
+| `--port <port>` | the port of the console     | `4400`  |
 | `--debug`       | log more, in the foreground |         |
 
 The browser shows **Install the app** only when it can install the page. Chrome and Edge show their
@@ -46,7 +46,7 @@ The console starts with no server. Open **Servers** and click **Add a server**:
 | Field                 | Value                                                                       |
 | --------------------- | --------------------------------------------------------------------------- |
 | Name                  | a name for the server, such as `eu-1`                                       |
-| URL of the admin port | the address of the admin port, such as `https://analytics.example.com:2981` |
+| URL of the admin port | the address of the admin port, such as `https://analytics.example.com:4410` |
 | Key                   | the key of the server, from `~/.secret/imp-aly-key` on the server           |
 
 The console asks the server for its state at once, and tells you when the server does not answer. To

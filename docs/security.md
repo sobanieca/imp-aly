@@ -4,8 +4,8 @@ The server has a public part and a private part. Each part has its own port.
 
 | Part    | Port   | Endpoints                                           | Protection                             |
 | ------- | ------ | --------------------------------------------------- | -------------------------------------- |
-| public  | `2980` | `POST /collect/<app>`, `GET /`                      | build files, record checks, rate limit |
-| private | `2981` | `/apps`, `/query`, `/status`, `/backup`, `/restore` | a one-time token signed with a key     |
+| public  | `4411` | `POST /collect/<app>`, `GET /`                      | build files, record checks, rate limit |
+| private | `4410` | `/apps`, `/query`, `/status`, `/backup`, `/restore` | a one-time token signed with a key     |
 
 `--port` and `--admin-port` change the ports. A port answers `404` to the endpoints of the other
 part.
@@ -53,9 +53,9 @@ To call the API with another tool, get a token for the method and the path. For 
 body, give the file of the body too, and send the file exactly as it is:
 
 ```sh
-curl -H "Authorization: Bearer $(imp-aly token GET /status)" http://127.0.0.1:2981/status
+curl -H "Authorization: Bearer $(imp-aly token GET /status)" http://127.0.0.1:4410/status
 curl -H "Authorization: Bearer $(imp-aly token POST /query query.json)" \
-  --data-binary @query.json http://127.0.0.1:2981/query
+  --data-binary @query.json http://127.0.0.1:4410/query
 ```
 
 Use `--data-binary`. `curl -d` removes the line breaks, so the body no longer has the signed hash.
