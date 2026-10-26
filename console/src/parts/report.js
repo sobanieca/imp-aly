@@ -227,7 +227,7 @@ const noApp = (catalog) =>
             'Add the URL of the admin port of your imp-aly server, and its key. This browser keeps both.',
         },
         button(
-          { variant: 'primary', events: { click: () => navigate(app.console.servers.href()) } },
+          { variant: 'primary', events: { click: () => navigate(app.manage.servers.href()) } },
           'Add a server',
         ),
       )
@@ -239,7 +239,7 @@ const noApp = (catalog) =>
         description: 'Register an app, then send records to the server.',
       },
       button(
-        { variant: 'primary', events: { click: () => navigate(app.console.registry.href()) } },
+        { variant: 'primary', events: { click: () => navigate(app.manage.registry.href()) } },
         'Register an app',
       ),
     )

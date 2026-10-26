@@ -129,7 +129,7 @@ const appOverview = component('aly-app-overview', {
           {
             title: 'Top pages',
             description: `Without the home page ${HOME_PAGE}, which most visits open.`,
-            actions: moreLink(app.console.pages.href(), 'All pages'),
+            actions: moreLink(app.reports.pages.href(), 'All pages'),
           },
           topTable(
             'Top pages',
@@ -140,7 +140,7 @@ const appOverview = component('aly-app-overview', {
         reportCard(
           {
             title: 'Top outcomes',
-            actions: moreLink(app.console.outcomes.href(), 'All outcomes'),
+            actions: moreLink(app.reports.outcomes.href(), 'All outcomes'),
           },
           topTable('Top outcomes', ['Outcome', 'Count'], topRows(outcomes.rows, 'name')),
         ),

@@ -56,9 +56,15 @@ export const root = component('aly-root', {
     const health = initState(self, 'aly.health', failuresOf())
     onHealthChange(() => health.set(failuresOf()), self.abortSignal)
     const orgs = computed([catalog], appOrgs)
-    const serversNavTag = computed(
-      [catalog, chosenApp, health],
-      (value, name, failures) => serversTag({ catalog: value, app: name, failures }),
+    const serversTagOf = (value, name, failures) =>
+      serversTag({ catalog: value, app: name, failures })
+    const serversNavTag = initState(
+      self,
+      'aly.serversTag',
+      serversTagOf(catalog.get(), chosenApp.get(), health.get()),
+    )
+    computed([catalog, chosenApp, health], serversTagOf).watch(self, (tag) =>
+      serversNavTag.set(tag)
     )
     let latest = 0
     const reload = async () => {
@@ -96,18 +102,18 @@ export const root = component('aly-root', {
               : null
           ),
         ),
-        navbar: {
-          map: app,
-          icons: {
-            [app.console.overview]: luGauge,
-            [app.console.pages]: luFiles,
-            [app.console.zones]: luMousePointerClick,
-            [app.console.outcomes]: luTarget,
-            [app.console.errors]: luTriangleAlert,
-            [app.console.registry]: luPackage,
-            [app.console.servers]: luServer,
-          },
-          tags: { [app.console.servers]: serversNavTag },
+        map: app,
+        navbar: false,
+        nav: {
+          [app.reports]: { group: true },
+          [app.reports.overview]: { icon: luGauge },
+          [app.reports.pages]: { icon: luFiles },
+          [app.reports.zones]: { icon: luMousePointerClick },
+          [app.reports.outcomes]: { icon: luTarget },
+          [app.reports.errors]: { icon: luTriangleAlert },
+          [app.manage]: { group: true },
+          [app.manage.registry]: { icon: luPackage },
+          [app.manage.servers]: { icon: luServer, tag: 'aly.serversTag' },
         },
         extras: [
           installButton(),
@@ -123,13 +129,13 @@ export const root = component('aly-root', {
       router({
         map: app,
         screens: {
-          [app.console.overview]: () => overviewScreen(),
-          [app.console.pages]: () => pagesScreen(),
-          [app.console.zones]: () => zonesScreen(),
-          [app.console.outcomes]: () => outcomesScreen(),
-          [app.console.errors]: () => errorsScreen(),
-          [app.console.registry]: () => registryScreen(),
-          [app.console.servers]: () => serversScreen(),
+          [app.reports.overview]: () => overviewScreen(),
+          [app.reports.pages]: () => pagesScreen(),
+          [app.reports.zones]: () => zonesScreen(),
+          [app.reports.outcomes]: () => outcomesScreen(),
+          [app.reports.errors]: () => errorsScreen(),
+          [app.manage.registry]: () => registryScreen(),
+          [app.manage.servers]: () => serversScreen(),
         },
         title: ({ crumbs }) => `${crumbs.at(-1)} - imp-aly console`,
       }),
