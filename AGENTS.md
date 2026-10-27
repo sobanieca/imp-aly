@@ -193,8 +193,9 @@ and user-facing strings. Keep code names, options and quoted output as they are.
 
 ## Git
 
-Commit on the branch that is checked out. When it is `main`, commit to `main`. Commit only when
-asked. `cargo verify` must pass before a commit.
+Commit on the branch that is checked out. When it is `main`, commit to `main`. Commit the changes
+when they are complete. Do not wait for the person to ask. Do not push. Push only when the person
+asks. `cargo verify` must pass before a commit.
 
 ## Versioning and release
 
