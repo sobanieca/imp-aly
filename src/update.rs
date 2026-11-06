@@ -30,6 +30,8 @@ const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(600);
 
 const VERSION_TIMEOUT: Duration = Duration::from_secs(10);
 
+const BUSY_TIMEOUT: Duration = Duration::from_secs(2);
+
 const MAX_MANIFEST_BYTES: u64 = 16 << 20;
 
 const MAX_BINARY_BYTES: u64 = 512 << 20;
@@ -352,14 +354,25 @@ pub fn lock_updates(dir: &str) -> Result<File> {
 }
 
 pub fn reported_version(binary: &str) -> Option<String> {
-    let mut child = Command::new(binary)
-        .arg("--version")
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .ok()?;
     let start = Instant::now();
+    let mut child = loop {
+        match Command::new(binary)
+            .arg("--version")
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+        {
+            Ok(child) => break child,
+            Err(error)
+                if error.kind() == std::io::ErrorKind::ExecutableFileBusy
+                    && start.elapsed() < BUSY_TIMEOUT =>
+            {
+                std::thread::sleep(Duration::from_millis(20))
+            }
+            Err(_) => return None,
+        }
+    };
     loop {
         match child.try_wait() {
             Ok(Some(status)) => {

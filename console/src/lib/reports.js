@@ -41,8 +41,8 @@ export const pageFlag = ({ views, used }) =>
   views ? usageFlag(views, used, RARELY_VIEWED) : NEVER_REACHED
 
 export const leastUsed = (rows, count = 10) => {
-  const sorted = [...rows].sort((a, b) =>
-    a.used - b.used || b.views - a.views || (a.page < b.page ? -1 : 1)
+  const sorted = [...rows].sort(
+    (a, b) => a.used - b.used || b.views - a.views || (a.page < b.page ? -1 : 1),
   )
   return sorted.slice(0, Math.max(count, rows.filter((row) => !row.used).length))
 }
@@ -131,9 +131,9 @@ export const errorTableNote = ({ chosen, withErrors, shown }) => {
   if (!chosen) return shownNote(shown, withErrors, 'pages with errors')
   const clean = chosen - withErrors
   return clean > 0
-    ? `Showing ${formatCount(shown)} of ${formatCount(chosen)} chosen pages. The table leaves out ${
-      formatCount(clean)
-    } chosen ${clean === 1 ? 'page' : 'pages'} with no errors.`
+    ? `Showing ${formatCount(shown)} of ${formatCount(chosen)} chosen pages. The table leaves out ${formatCount(
+        clean,
+      )} chosen ${clean === 1 ? 'page' : 'pages'} with no errors.`
     : null
 }
 

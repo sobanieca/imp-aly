@@ -22,8 +22,8 @@ folder is record N.**
 - No value can hold a line break, a tab or another control character. The record checks enforce this
   before a record reaches the log: zones, names, segment values and countries take only ASCII
   letters, digits and a few signs, see `build-file-record-validation.md`.
-- A query reads only the files of the fields that it names. It marks the matching lines of each
-  filter in a selection vector, combines the vectors, and counts.
+- A query reads only the files of the fields that it names, in blocks of 65,536 rows, see
+  `streaming-scan-on-ids.md`.
 
 ## Consequences
 

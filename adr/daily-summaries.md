@@ -29,10 +29,17 @@ over the sources and the days.**
 - A day has one folder per source, see `source-folders-per-server.md`. Each source of a day has its
   own summary. A query uses the summary of each source on its own, and scans the other sources.
 - A source of a day uses its summary only when it has no raw records above the sealed generation. A
-  source with late records is scanned until the next seal.
+  day with raw records of the source of the server uses its running summary, see
+  `running-summary-of-open-days.md`. Another source with late records is scanned until it is
+  sealed.
 - The scan path counts `visits` per source and per day too, so both paths give the same result. A
   test checks this for many queries. A visit with records in two sources counts twice, as with two
   servers.
+- A query checks a summary when it reads it from the disk. The headers must have the fields of the
+  file in their order, and each line must have one cell per field and a positive count. The counts
+  must add up to `rows` in `meta.json`, and each visit line must point to lines of the tuples. A
+  summary that fails the check gives an error, never a count of zero. The check is cheaper than the
+  check of a restore, which also checks each cell.
 - `meta.json` has `summary: true`. The summary files are part of the sealed folder, so the rename of
   the folder makes them visible together with the columns.
 - When a UTC week or month is complete, the worker adds the daily summaries of its source into a
@@ -48,6 +55,7 @@ over the sources and the days.**
 - A visit that lasts past midnight UTC counts once on each of its days. This is the rule of many
   analytics tools, and the docs state it.
 - A seal takes longer, about 15 seconds for 1,000,000 records. A summary takes about 2 MB a day.
-- The current day is not sealed, so every query scans it.
+- The current day is not sealed. A query reads its running summary, see
+  `running-summary-of-open-days.md`.
 - A period summary keeps `visits` per source and per day, so it adds a visit list per day. See
   `week-and-month-summaries.md`.

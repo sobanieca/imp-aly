@@ -6,6 +6,7 @@ use crate::fsutil::{
     create_dir_all, list_directory, read_string, remove_if_exists, write_file_atomic,
 };
 use crate::json::{self, Object, Value};
+use crate::live::{LiveDays, build_from_disk, disk_state};
 use crate::logger;
 use crate::names::{is_app_name, is_column_name, is_source};
 use crate::paths::join;
@@ -125,9 +126,15 @@ fn apply_group(
     segment: u64,
     group: &Group,
     counts: &mut Counts,
+    live: Option<&LiveDays>,
 ) -> Result<u64> {
     let key = group.key();
-    let Some(target) = append_target(&source_dir(data_dir, &group.app, &group.day, source))? else {
+    let path = source_dir(data_dir, &group.app, &group.day, source);
+    let before = match live {
+        Some(_) => Some(disk_state(&path)?),
+        None => None,
+    };
+    let Some(target) = append_target(&path)? else {
         counts.dropped += group.records.len() as u64;
         logger::error(format!(
             "Dropped {} records of {key}: only the daily summary of the day is stored",
@@ -136,6 +143,12 @@ fn apply_group(
         return Ok(0);
     };
     if append_records(&target.dir, segment, &group.records, target.applied_wal)? {
+        if let (Some(live), Some(before)) = (live, before) {
+            match disk_state(&path) {
+                Ok(after) => live.add(&path, &before, after, &group.records),
+                Err(_) => live.remove(&path),
+            }
+        }
         counts.stored.insert(key);
         return Ok(group.records.len() as u64);
     }
@@ -175,13 +188,14 @@ pub fn apply_segment(
     text: &str,
     held: &mut BTreeMap<String, Option<String>>,
     counts: &mut Counts,
+    live: Option<&LiveDays>,
 ) -> Result<u64> {
     check_source(source)?;
     let mut rows = 0;
     for group in parse_segment(text, counts) {
         let key = group.key();
         if let std::collections::btree_map::Entry::Vacant(entry) = held.entry(key.clone()) {
-            match apply_group(data_dir, source, segment, &group, counts) {
+            match apply_group(data_dir, source, segment, &group, counts, live) {
                 Ok(count) => {
                     rows += count;
                     continue;
@@ -207,6 +221,7 @@ pub fn apply_segment_text(data_dir: &str, source: &str, segment: u64, text: &str
         text,
         &mut BTreeMap::new(),
         &mut Counts::default(),
+        None,
     )
 }
 
@@ -226,7 +241,13 @@ pub fn list_held_days(data_dir: &str) -> Result<Vec<String>> {
     Ok(held)
 }
 
-pub fn retry_held_day(data_dir: &str, source: &str, key: &str, counts: &mut Counts) -> Result<u64> {
+pub fn retry_held_day(
+    data_dir: &str,
+    source: &str,
+    key: &str,
+    counts: &mut Counts,
+    live: Option<&LiveDays>,
+) -> Result<u64> {
     let (app, day) = key.split_once('/').unwrap_or((key, ""));
     let dir = held_dir(data_dir, app, day);
     let mut rows = 0;
@@ -249,7 +270,7 @@ pub fn retry_held_day(data_dir: &str, source: &str, key: &str, counts: &mut Coun
             day: day.to_string(),
             records,
         };
-        rows += apply_group(data_dir, source, segment.id, &group, counts)?;
+        rows += apply_group(data_dir, source, segment.id, &group, counts, live)?;
         remove_if_exists(&segment.path)?;
     }
     remove_if_exists(&dir)?;
@@ -369,6 +390,7 @@ pub struct StorageOptions {
     pub maintenance_ms: i64,
     pub retry_ms: u64,
     pub usage: Arc<UsageFn>,
+    pub live: Arc<LiveDays>,
 }
 
 impl StorageOptions {
@@ -381,6 +403,7 @@ impl StorageOptions {
             maintenance_ms: DEFAULT_MAINTENANCE_MS,
             retry_ms: RETRY_MS,
             usage: Arc::new(disk_usage),
+            live: Arc::new(LiveDays::default()),
         }
     }
 }
@@ -544,6 +567,7 @@ impl Storage {
                         text,
                         &mut self.held,
                         &mut self.counts,
+                        Some(&self.options.live),
                     )?;
                 }
                 write_applied_segment(&self.wal_dir, segment.id)?;
@@ -584,7 +608,13 @@ impl Storage {
             }
             let data_dir = self.options.data_dir.clone();
             let source = self.options.source.clone();
-            match retry_held_day(&data_dir, &source, &key, &mut self.counts) {
+            match retry_held_day(
+                &data_dir,
+                &source,
+                &key,
+                &mut self.counts,
+                Some(&self.options.live),
+            ) {
                 Ok(rows) => {
                     self.status.processed_rows += rows;
                     self.held.remove(&key);
@@ -631,11 +661,59 @@ impl Storage {
         }
     }
 
+    fn refresh_live(&mut self) {
+        let Some(unsealed) = &self.unsealed else {
+            return;
+        };
+        let data_dir = &self.options.data_dir;
+        let source = &self.options.source;
+        let paths: Vec<String> = unsealed
+            .iter()
+            .chain(self.counts.stored.iter())
+            .map(|key| {
+                let (app, day) = key.split_once('/').unwrap_or((key, ""));
+                source_dir(data_dir, app, day, source)
+            })
+            .collect();
+        let live = self.options.live.clone();
+        live.keep_only(&paths);
+        for path in &paths {
+            if self.stopping {
+                return;
+            }
+            let state = match disk_state(path) {
+                Ok(state) => state,
+                Err(error) => {
+                    live.remove(path);
+                    logger::warn(format!("Cannot read the state of {path}: {error}"));
+                    continue;
+                }
+            };
+            if !state.is_open() {
+                live.remove(path);
+                continue;
+            }
+            if live.holds(path, &state) {
+                continue;
+            }
+            match build_from_disk(path) {
+                Ok((summary, built)) => live.put(path, summary, built),
+                Err(error) => {
+                    live.remove(path);
+                    logger::warn(format!(
+                        "Cannot make the running summary of {path}: {error}"
+                    ));
+                }
+            }
+        }
+    }
+
     fn due(last: Option<i64>, every: i64) -> bool {
         last.is_none_or(|last| now_ms() - last >= every)
     }
 
     pub fn run(&mut self) {
+        self.options.live.clear();
         while !self.stopping {
             let mut stored = true;
             if Self::due(self.last_maintenance, self.options.maintenance_ms) {
@@ -699,6 +777,9 @@ impl Storage {
                     self.options.seal_delay_ms,
                     &mut self.checked_periods,
                 );
+            }
+            if stored && !self.stopping {
+                self.refresh_live();
             }
             *self
                 .published

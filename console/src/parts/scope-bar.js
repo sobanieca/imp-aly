@@ -34,13 +34,13 @@ export const scopeBar = component('aly-scope-bar', {
       { class: 'bar' },
       period
         ? today.view((day) =>
-          dateRangePicker({
-            label: 'Period (UTC)',
-            value: chosen,
-            presets: presetChoices(day),
-            max: day,
-          })
-        )
+            dateRangePicker({
+              label: 'Period (UTC)',
+              value: chosen,
+              presets: presetChoices(day),
+              max: day,
+            }),
+          )
         : null,
       button(
         {

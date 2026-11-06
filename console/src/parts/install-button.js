@@ -18,11 +18,13 @@ export const installButton = component('aly-install-button', {
       })
     }
     return mode.view((value) =>
-      value === 'none' ? null : button(
-        { variant: 'ghost', size: 'sm', events: { click: install } },
-        icon(luMonitorDown),
-        'Install the app',
-      )
+      value === 'none'
+        ? null
+        : button(
+            { variant: 'ghost', size: 'sm', events: { click: install } },
+            icon(luMonitorDown),
+            'Install the app',
+          ),
     )
   },
 })

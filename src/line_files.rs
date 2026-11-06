@@ -73,6 +73,114 @@ impl LineReader {
     }
 }
 
+const ONES: u64 = 0x0101_0101_0101_0101;
+
+const HIGHS: u64 = 0x8080_8080_8080_8080;
+
+const BREAKS: u64 = ONES * b'\n' as u64;
+
+pub fn find_line_break(bytes: &[u8]) -> Option<usize> {
+    let (words, rest) = bytes.as_chunks::<8>();
+    for (index, word) in words.iter().enumerate() {
+        let value = u64::from_le_bytes(*word) ^ BREAKS;
+        let found = value.wrapping_sub(ONES) & !value & HIGHS;
+        if found != 0 {
+            return Some(index * 8 + (found.trailing_zeros() / 8) as usize);
+        }
+    }
+    let start = words.len() * 8;
+    rest.iter()
+        .position(|byte| *byte == b'\n')
+        .map(|at| start + at)
+}
+
+pub struct LineBlocks {
+    path: String,
+    file: Option<File>,
+    remaining: Option<u64>,
+    buffer: Vec<u8>,
+    start: usize,
+    end: usize,
+}
+
+impl LineBlocks {
+    pub fn open(path: &str, max_bytes: Option<u64>) -> Result<LineBlocks> {
+        let file = File::open(path).map_err(|error| Error::io(&error, path))?;
+        Ok(LineBlocks {
+            path: path.to_string(),
+            file: Some(file),
+            remaining: max_bytes,
+            buffer: vec![0; READ_BLOCK_BYTES],
+            start: 0,
+            end: 0,
+        })
+    }
+
+    pub fn path(&self) -> &str {
+        &self.path
+    }
+
+    fn fill(&mut self) -> Result<bool> {
+        let Some(file) = self.file.as_mut() else {
+            return Ok(false);
+        };
+        if self.start > 0 {
+            self.buffer.copy_within(self.start..self.end, 0);
+            self.end -= self.start;
+            self.start = 0;
+        }
+        if self.end == self.buffer.len() {
+            let grown = self.buffer.len() * 2;
+            self.buffer.resize(grown, 0);
+        }
+        let room = self.buffer.len() - self.end;
+        let limit = match self.remaining {
+            Some(left) => (left.min(room as u64)) as usize,
+            None => room,
+        };
+        let size = if limit == 0 {
+            0
+        } else {
+            file.read(&mut self.buffer[self.end..self.end + limit])
+                .map_err(|error| Error::io(&error, &self.path))?
+        };
+        if size == 0 {
+            self.file = None;
+            if self.remaining.is_some_and(|left| left > 0) {
+                return Err(Error::new(format!(
+                    "{} is shorter than its commit",
+                    self.path
+                )));
+            }
+            return Ok(false);
+        }
+        if let Some(left) = self.remaining.as_mut() {
+            *left -= size as u64;
+        }
+        self.end += size;
+        Ok(true)
+    }
+
+    pub fn next_line(&mut self) -> Result<Option<&[u8]>> {
+        loop {
+            if let Some(at) = find_line_break(&self.buffer[self.start..self.end]) {
+                let start = self.start;
+                self.start += at + 1;
+                return Ok(Some(&self.buffer[start..start + at]));
+            }
+            if !self.fill()? {
+                if self.start < self.end {
+                    return Err(Error::new(format!(
+                        "{} does not end with a line break",
+                        self.path
+                    )));
+                }
+                return Ok(None);
+            }
+        }
+    }
+}
+
 pub struct LineWriter {
     path: String,
     writer: Option<BufWriter<File>>,
@@ -257,5 +365,25 @@ impl ValueSource for RunReader {
             return Err(more_rows(&self.path));
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_line_break_search_finds_the_first_break_in_any_place() {
+        for length in 0..20 {
+            for at in 0..length {
+                let mut bytes = vec![b'a'; length];
+                bytes[at] = b'\n';
+                if at + 1 < length {
+                    bytes[length - 1] = b'\n';
+                }
+                assert_eq!(find_line_break(&bytes), Some(at), "{length} {at}");
+            }
+            assert_eq!(find_line_break(&vec![0x8a; length]), None);
+        }
     }
 }

@@ -442,7 +442,9 @@ pub fn all(_: u64) -> bool {
 }
 
 pub fn ask(data_dir: &str, query: &imp_aly::query_core::Query) -> Value {
-    let answer = imp_aly::query::run_query(data_dir, query, &|| false).unwrap();
+    let answer = imp_aly::query::QueryEngine::default()
+        .run(data_dir, query, &|| false)
+        .unwrap();
     let answer = json::parse(&json::stringify(&answer)).unwrap();
     Value::Object(imp_aly::query_core::finalize_query(
         query,
@@ -454,6 +456,8 @@ pub fn ask(data_dir: &str, query: &imp_aly::query_core::Query) -> Value {
 }
 
 pub fn answer_of(data_dir: &str, query: &imp_aly::query_core::Query) -> Value {
-    let answer = imp_aly::query::run_query(data_dir, query, &|| false).unwrap();
+    let answer = imp_aly::query::QueryEngine::default()
+        .run(data_dir, query, &|| false)
+        .unwrap();
     json::parse(&json::stringify(&answer)).unwrap()
 }

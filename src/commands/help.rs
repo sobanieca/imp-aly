@@ -213,6 +213,17 @@ Saved servers (on your machine):
   a group, backup, restore, status and token need -s <server>.
   The list is in ~/.config/imp-aly/servers.json ($XDG_CONFIG_HOME when set).
 
+Queries (how the server reads the data):
+
+  A query reads a sealed day, week or month from its summary when it can,
+  and scans the records of the day otherwise. The server keeps the summaries
+  that it read in memory (up to 256 MB) and checks the folders on the disk
+  before each use, so the same report again reads almost nothing. A scan
+  reads the files in blocks, so its memory does not grow with the day. A
+  query reads its days on all the cores, one query at a time. The
+  current day has a running summary in memory, which the server makes again
+  from the records of the day after a start.
+
 Console (a web app for your phone or your machine):
 
   https://sobanieca.github.io/imp-aly/console/   open it, and install it from the browser

@@ -38,7 +38,10 @@ const loadCatalog = async (api) => {
   const saved = await loadServers()
   if (!saved.servers.length) return { servers: saved, apps: [], failedServers: [], error: null }
   try {
-    const { apps, failedServers } = await appsOf(api, saved.servers.map(({ name }) => name))
+    const { apps, failedServers } = await appsOf(
+      api,
+      saved.servers.map(({ name }) => name),
+    )
     return { servers: saved, apps, failedServers, error: null }
   } catch (error) {
     return { servers: saved, apps: [], failedServers: [], error: messageOf(error) }
@@ -64,7 +67,7 @@ export const root = component('aly-root', {
       serversTagOf(catalog.get(), chosenApp.get(), health.get()),
     )
     computed([catalog, chosenApp, health], serversTagOf).watch(self, (tag) =>
-      serversNavTag.set(tag)
+      serversNavTag.set(tag),
     )
     let latest = 0
     const reload = async () => {
@@ -94,12 +97,12 @@ export const root = component('aly-root', {
           orgs.view((list) =>
             list.length
               ? orgSelect({
-                orgs: list,
-                selected: chosenApp,
-                label: computed([chosenApp], (name) => `App: ${name ?? '-'}`),
-                size: 'sm',
-              })
-              : null
+                  orgs: list,
+                  selected: chosenApp,
+                  label: computed([chosenApp], (name) => `App: ${name ?? '-'}`),
+                  size: 'sm',
+                })
+              : null,
           ),
         ),
         map: app,

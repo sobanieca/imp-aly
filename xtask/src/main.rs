@@ -1,3 +1,4 @@
+mod bench;
 mod demo_data;
 
 use demo_data::{DEMO_APPS, Random, build_of, seed_lines, visit_records};
@@ -342,6 +343,8 @@ fn main() -> ExitCode {
             console_build() && cargo(&["build", "--release", "--locked", "--package", "imp-aly"])
         }
         "versions-manifest" => versions_manifest(),
+        "bench" => bench::bench(&root(), &args[1..]),
+        "bench-scan" => bench::scan_child(&args[1..]),
         "start" => match start(&args[1..]) {
             Ok(()) => true,
             Err(error) => {
@@ -351,7 +354,7 @@ fn main() -> ExitCode {
         },
         _ => {
             eprintln!(
-                "Usage: cargo xtask <verify|start|console|console-build|compile|versions-manifest>"
+                "Usage: cargo xtask <verify|start|console|console-build|compile|versions-manifest|bench>"
             );
             false
         }

@@ -36,6 +36,7 @@ fn apply(data_dir: &str, source: &str, segment: u64, text: &str) -> u64 {
         text,
         &mut BTreeMap::new(),
         &mut Counts::default(),
+        None,
     )
     .unwrap()
 }
@@ -369,6 +370,7 @@ fn records_that_cannot_be_stored_are_counted_in_the_status() {
         &line("a", day, &record),
         &mut BTreeMap::new(),
         &mut counts,
+        None,
     )
     .unwrap();
     assert_eq!((rows, counts.dropped), (0, 1));
@@ -384,5 +386,46 @@ fn records_that_cannot_be_stored_are_counted_in_the_status() {
     .unwrap();
     let runner = StorageRunner::start(options(&dir.path)).unwrap();
     wait_for(|| status_number(&runner, "droppedRecords") == 3.0);
+    runner.stop();
+}
+
+#[test]
+fn the_worker_builds_the_running_summary_of_an_open_day_at_start_and_adds_each_part() {
+    let dir = TempDir::new();
+    let today = imp_aly::days::day_of(imp_aly::days::now_ms());
+    apply(
+        &dir.path,
+        SOURCE,
+        1,
+        &line("a", &today, &error_record("v", 1)),
+    );
+    let options = options(&dir.path);
+    let live = options.live.clone();
+    let path = day_path(&dir.path, &today, SOURCE, "a");
+    let runner = StorageRunner::start(options).unwrap();
+    wait_for(|| live.has(&path));
+    let wal = open_wal(&dir.path, &runner);
+    wal.append_blocking(line("a", &today, &error_record("w", 2)))
+        .unwrap();
+    wait_for(|| status_number(&runner, "processedRows") == 1.0);
+    let query = imp_aly::query_core::parse_query(
+        &imp_aly::json::parse(r#"{"app":"a","groupBy":["visit"]}"#).unwrap(),
+        imp_aly::days::now_ms(),
+    )
+    .unwrap();
+    let summary = imp_aly::query_core::parse_query(
+        &imp_aly::json::parse(r#"{"app":"a","measures":["records","visits"]}"#).unwrap(),
+        imp_aly::days::now_ms(),
+    )
+    .unwrap();
+    let engine = imp_aly::query::QueryEngine::default().with_live(live.clone());
+    let answer = engine.run(&dir.path, &summary, &|| false).unwrap();
+    assert_eq!(answer.get("summaryDays").unwrap().as_f64(), Some(1.0));
+    let groups = answer.get("groups").unwrap().as_array().unwrap();
+    assert_eq!(groups[0].get("records").unwrap().as_f64(), Some(2.0));
+    assert_eq!(groups[0].get("visits").unwrap().as_f64(), Some(2.0));
+    let scanned = engine.run(&dir.path, &query, &|| false).unwrap();
+    assert_eq!(scanned.get("summaryDays").unwrap().as_f64(), Some(0.0));
+    wal.close();
     runner.stop();
 }

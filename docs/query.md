@@ -176,7 +176,9 @@ A query reads a day in one of two ways:
 - **By a scan of the columns.** The server stores each field of a record in its own file, one line
   per record. A scan opens only the files of the fields that the query names. The query above that
   counts the visits per week and plan reads the `type`, `plan` and `visit` files. It does not open
-  the `page`, `zone` or `at` files. A scan reads about 1,000,000 records in 2 seconds.
+  the `page`, `zone` or `at` files. The server reads each file in blocks, and keeps each value once
+  per day. A scan reads about 1,000,000 records in 0.2 seconds, and its memory does not grow with
+  the number of records.
 
 A day from a restore, or an old day after the retention removed its records, has only its summary. A
 query that cannot use a summary skips such a day, see [Backup](backup.md#a-summary-only-day).
@@ -187,14 +189,30 @@ visits of each source and each day, and then adds them up, as for several server
 
 The server uses the summary of a day when the day is sealed and the query can use it. A query cannot
 use a summary when it names `visit` in `where` or `groupBy`, or when it counts `visits` and names
-`zone` or `name`. The result is the same both ways. The current day is not sealed yet, so a query
-always scans it. The previous day is sealed at 01:10 UTC. See [Storage](storage.md).
+`zone` or `name`. The result is the same both ways. The previous day is sealed at 01:10 UTC. See
+[Storage](storage.md).
 
-An example: an app stores about 1,000,000 records a day. A query of 180 days reads 179 summaries and
-scans 1 day, and takes about 6 seconds. The same query as a scan takes about 8 minutes.
+A day that is not sealed yet, for example the current day, has a running summary in memory. The
+server adds each part of the log that it stores to this summary. A query that can use a summary
+reads the running summary, and does not scan the day. The server uses the running summary only when
+it holds all the records that are on the disk. Otherwise the query scans the day. After a start, the
+server makes the running summary again from the records of the day, which takes about 2 seconds for
+1,000,000 records. Only the days of the source of the server have a running summary.
+
+An example: an app stores about 1,000,000 records a day. A query of 180 days reads the week and
+month summaries, the summaries of the other sealed days and the running summary of the current day.
+The same query as a scan takes about 8 minutes.
+
+The server keeps the summaries that it read in memory, up to 256 MB, and drops the summary that it
+used last the longest time ago. It also keeps the folder lists and the counts of each summary for
+each query. A sealed day, week or month does not change, so the next query of the same range reads
+almost nothing from the disk. Before the server uses a kept summary, it checks that the folder did
+not change. A new generation of a day or a removed folder makes the server read the disk again. The
+server keeps a folder only when it did not change in the last 2 seconds.
 
 The server runs one query at a time, in its own thread, so a long query does not slow down the
-collection of records. Up to 16 queries wait. A query stops after 120 seconds with `504`. Use a
+collection of records. A query reads its days, weeks and months on up to one thread per core, and
+adds up their counts in their order. So the answer is the same on any number of cores. Up to 16 queries wait. A query stops after 120 seconds with `504`. Use a
 shorter range when a scan takes too long.
 
 ### Week and month summaries
@@ -213,6 +231,11 @@ The query reads the month summaries first, then the week summaries, then the day
 a query of a year grouped by `month` reads 12 summaries per source, not 365. The result is the same
 as from the days. `visits` of a period is the sum of the visits of its days. The query reads the
 periods of each source on its own, and adds up the counts, as for the days.
+
+Before the server uses a summary, it checks its headers and lines. The counts of the summary must
+add up to the number of records in its `meta.json`. When a week or a month summary fails this
+check, the query reads its weeks and days in its place. When a daily summary fails it, the query
+skips that source of the day and lists the reason in `skippedDays`.
 
 A restore or the retention can leave a week or a month summary with no days. A query grouped by
 `day` cannot read such a period. It skips the days of the period, and lists each day with its source

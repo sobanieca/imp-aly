@@ -23,9 +23,9 @@ const MEASURES = ['records', 'visits']
 const QUERY_KEYS = ['app', 'from', 'to', 'where', 'groupBy', 'measures', 'limit']
 
 const isDimension = (field) =>
-  typeof field === 'string' &&
-  (DIMENSIONS.includes(field) ||
-    (SEGMENT_NAME_PATTERN.test(field) && !RESERVED_NAMES.has(field)))
+  typeof field === 'string'
+  && (DIMENSIONS.includes(field)
+    || (SEGMENT_NAME_PATTERN.test(field) && !RESERVED_NAMES.has(field)))
 
 const dimensionHint = () => `${DIMENSIONS.join(', ')} or a segment name`
 
@@ -87,8 +87,9 @@ export const parseQuery = (input, now = Date.now()) => {
 
   const measures = input.measures ?? ['records']
   if (
-    !Array.isArray(measures) || !measures.length ||
-    measures.some((measure) => !MEASURES.includes(measure))
+    !Array.isArray(measures)
+    || !measures.length
+    || measures.some((measure) => !MEASURES.includes(measure))
   ) {
     throw new QueryError('measures is a list of records and visits, like ["records", "visits"]')
   }

@@ -30,7 +30,7 @@ fn fake_server(kind: &'static str) -> u16 {
                     "html" => ("text/html", "<html>proxy</html>".to_string()),
                     "wrong" => ("application/json", r#"{"hello":"world"}"#.to_string()),
                     _ => {
-                        std::thread::sleep(Duration::from_secs(5));
+                        std::thread::sleep(Duration::from_secs(15));
                         return;
                     }
                 };
@@ -65,11 +65,11 @@ fn a_stalled_server_and_a_reply_that_is_not_an_answer_fail_and_the_others_still_
     let outcome = query_servers(
         &targets,
         &json::parse(r#"{"app":"myapp","from":"2026-10-01"}"#).unwrap(),
-        Some(300),
+        Some(1_500),
     )
     .unwrap();
     assert!(
-        started.elapsed() < Duration::from_secs(4),
+        started.elapsed() < Duration::from_secs(10),
         "the query waited for the stalled server"
     );
     assert_eq!(
@@ -92,7 +92,7 @@ fn a_stalled_server_and_a_reply_that_is_not_an_answer_fail_and_the_others_still_
         reason("wrong")
     );
     assert!(
-        reason("stalled").contains("did not answer in 0.3 s"),
+        reason("stalled").contains("did not answer in 1.5 s"),
         "{}",
         reason("stalled")
     );

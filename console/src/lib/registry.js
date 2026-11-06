@@ -48,17 +48,17 @@ const COUNTRY_NOTE = 'The server can add the country to each record, so "country
 
 export const segmentsNote = (known) =>
   known.length
-    ? `Segments of the apps on the servers: ${
-      known.map(({ segment, apps }) => `${segment} (${apps.join(', ')})`).join(', ')
-    }. ${COUNTRY_NOTE}`
+    ? `Segments of the apps on the servers: ${known
+        .map(({ segment, apps }) => `${segment} (${apps.join(', ')})`)
+        .join(', ')}. ${COUNTRY_NOTE}`
     : `No app on the servers has a segment yet. ${COUNTRY_NOTE}`
 
 const SOURCE_FIELDS = { url: 'appUrl', file: 'files', text: 'build' }
 
 export const withoutOtherSources = (errors, source) =>
   Object.fromEntries(
-    Object.entries(errors ?? {}).filter(([path]) =>
-      path === SOURCE_FIELDS[source] || !Object.values(SOURCE_FIELDS).includes(path)
+    Object.entries(errors ?? {}).filter(
+      ([path]) => path === SOURCE_FIELDS[source] || !Object.values(SOURCE_FIELDS).includes(path),
     ),
   )
 

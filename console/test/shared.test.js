@@ -51,18 +51,16 @@ test('a token signs the time, the nonce, the method, the path and the body hash'
 test('queries are validated like on the server', () => {
   expect(parseQuery({ app: 'myapp' }, NOW).from).toEqual('2026-10-10')
   expect(parseQuery({ app: 'myapp', from: '2026-09-01' }, NOW).to).toEqual('2026-09-01')
-  for (
-    const input of [
-      [],
-      { app: 'Bad' },
-      { app: 'myapp', extra: 1 },
-      { app: 'myapp', from: '2026-10-02', to: '2026-10-01' },
-      { app: 'myapp', where: { at: '1' } },
-      { app: 'myapp', groupBy: ['day', 'week'] },
-      { app: 'myapp', measures: ['nope'] },
-      { app: 'myapp', limit: 0 },
-    ]
-  ) {
+  for (const input of [
+    [],
+    { app: 'Bad' },
+    { app: 'myapp', extra: 1 },
+    { app: 'myapp', from: '2026-10-02', to: '2026-10-01' },
+    { app: 'myapp', where: { at: '1' } },
+    { app: 'myapp', groupBy: ['day', 'week'] },
+    { app: 'myapp', measures: ['nope'] },
+    { app: 'myapp', limit: 0 },
+  ]) {
     expect(() => parseQuery(input, NOW)).toThrow()
   }
 })

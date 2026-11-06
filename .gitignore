@@ -11,6 +11,9 @@ console/dist
 # The demo of cargo start
 .dev-data/
 
+# The data of cargo xtask bench
+.bench-data/
+
 # Tools and editors
 node_modules/
 .cache/

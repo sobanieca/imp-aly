@@ -1,7 +1,8 @@
 const HOME_PAGE = '/'
 
 const parentOf = (page, pages) =>
-  pages.filter((other) => other !== HOME_PAGE && other !== page && page.startsWith(`${other}/`))
+  pages
+    .filter((other) => other !== HOME_PAGE && other !== page && page.startsWith(`${other}/`))
     .sort((a, b) => b.length - a.length)[0]
 
 export const pageTree = (list) => {

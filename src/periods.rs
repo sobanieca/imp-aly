@@ -1,6 +1,7 @@
 use crate::column_store::{
-    DaySummary, SealedMeta, SummaryFiles, accept_all, app_dir, list_sources_in, read_day_summary,
-    read_generations, read_sealed_meta, source_dir, write_summary_period,
+    DaySummary, Disk, Folders, SealedMeta, SummaryFiles, accept_all, app_dir, list_sources_in,
+    read_day_summary, read_generations, read_sealed_meta, sealed_dir, source_dir,
+    write_summary_period,
 };
 use crate::days::{PERIOD_KINDS, PeriodKind, day_end_ms, is_period_id, period_days, period_of};
 use crate::error::{Error, Result};
@@ -9,6 +10,7 @@ use crate::json::{Object, Value};
 use crate::paths::join;
 use crate::summary::{SummaryMerger, SummaryText};
 use std::collections::{BTreeMap, HashSet};
+use std::sync::Arc;
 
 pub fn periods_dir(data_dir: &str, app: &str, kind: PeriodKind) -> String {
     join(&[&app_dir(data_dir, app), kind.dir()])
@@ -89,6 +91,7 @@ pub fn check_period_days(kind: PeriodKind, id: &str, days: Option<&Value>) -> Re
 }
 
 pub fn read_day_states(
+    folders: &dyn Folders,
     data_dir: &str,
     app: &str,
     kind: PeriodKind,
@@ -97,16 +100,11 @@ pub fn read_day_states(
 ) -> Result<Option<DayStates>> {
     let mut days = DayStates::new();
     for day in period_days(kind, id) {
-        let path = source_dir(data_dir, app, &day, source);
-        let generations = read_generations(&path)?;
-        if generations.sealed == 0 && generations.raws.is_empty() {
+        let state = folders.sealed_state(&source_dir(data_dir, app, &day, source))?;
+        if state.generations.sealed == 0 && state.generations.raws.is_empty() {
             continue;
         }
-        if !generations.raws.is_empty() {
-            return Ok(None);
-        }
-        let Ok(meta) = read_sealed_meta(&join(&[&path, &format!("sealed-{}", generations.sealed)]))
-        else {
+        let Some(Ok(meta)) = state.meta else {
             return Ok(None);
         };
         if !meta.summary() {
@@ -132,6 +130,21 @@ pub fn matches_days(recorded: &DayStates, states: Option<&DayStates>) -> bool {
         .all(|(day, state)| recorded.get(day) == Some(state))
 }
 
+pub fn accepts_period<'a>(
+    folders: &'a dyn Folders,
+    data_dir: &'a str,
+    app: &'a str,
+    kind: PeriodKind,
+    id: &'a str,
+    source: &'a str,
+) -> impl Fn(&SealedMeta) -> Result<bool> + 'a {
+    move |meta: &SealedMeta| -> Result<bool> {
+        let recorded = check_period_days(kind, id, meta.days())?;
+        let states = read_day_states(folders, data_dir, app, kind, id, source)?;
+        Ok(matches_days(&recorded, states.as_ref()))
+    }
+}
+
 pub fn read_period_summary(
     data_dir: &str,
     app: &str,
@@ -140,19 +153,15 @@ pub fn read_period_summary(
     source: &str,
     with_visits: bool,
 ) -> Result<Option<DaySummary>> {
-    let accept = |meta: &SealedMeta| -> Result<bool> {
-        let recorded = check_period_days(kind, id, meta.days())?;
-        let states = read_day_states(data_dir, app, kind, id, source)?;
-        Ok(matches_days(&recorded, states.as_ref()))
-    };
     read_day_summary(
         &period_source_dir(data_dir, app, kind, id, source),
         with_visits,
-        &accept,
+        &accepts_period(&Disk, data_dir, app, kind, id, source),
     )
 }
 
 pub fn read_period_days(
+    folders: &dyn Folders,
     data_dir: &str,
     app: &str,
     kind: PeriodKind,
@@ -160,11 +169,15 @@ pub fn read_period_days(
     source: &str,
 ) -> Result<DayStates> {
     let path = period_source_dir(data_dir, app, kind, id, source);
-    let generations = read_generations(&path)?;
-    if generations.sealed == 0 {
-        return Ok(DayStates::new());
-    }
-    let meta = read_sealed_meta(&join(&[&path, &format!("sealed-{}", generations.sealed)]))?;
+    let state = folders.sealed_state(&path)?;
+    let meta = match state.meta {
+        Some(meta) => meta?,
+        None if state.generations.sealed == 0 => return Ok(DayStates::new()),
+        None => Arc::new(read_sealed_meta(&sealed_dir(
+            &path,
+            state.generations.sealed,
+        ))?),
+    };
     check_period_days(kind, id, meta.days())
 }
 
@@ -188,7 +201,7 @@ pub fn update_period_summary(
     id: &str,
     source: &str,
 ) -> Result<bool> {
-    let Some(states) = read_day_states(data_dir, app, kind, id, source)? else {
+    let Some(states) = read_day_states(&Disk, data_dir, app, kind, id, source)? else {
         return Ok(false);
     };
     if states.is_empty() {
@@ -196,7 +209,7 @@ pub fn update_period_summary(
     }
     let path = period_source_dir(data_dir, app, kind, id, source);
     if read_generations(&path)?.sealed > 0
-        && let Ok(recorded) = read_period_days(data_dir, app, kind, id, source)
+        && let Ok(recorded) = read_period_days(&Disk, data_dir, app, kind, id, source)
         && matches_days(&recorded, Some(&states))
     {
         return Ok(false);

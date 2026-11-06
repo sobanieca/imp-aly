@@ -45,6 +45,9 @@ the service does not stay running.**
   downloads the asset to `.imp-aly.new` in the folder of the binary, checks the SHA-256 and the
   asset name from the `.sha256` file, and runs `--version` on it. The version must be the version
   that it selected. A failed step removes the file and changes nothing.
+- Linux refuses to run a file while a process has it open for writing ("Text file busy"). A
+  thread that starts a process at the same time can keep the new file open for a short time. So the
+  command tries `--version` again for up to 2 seconds while Linux gives this error.
 - **The swap.** The command makes the hard link `.imp-aly.previous` to the old binary, then renames
   `.imp-aly.new` to the binary. A rename in one folder is atomic. The running server keeps its open
   copy of the old binary, so it runs on without a change until the restart.

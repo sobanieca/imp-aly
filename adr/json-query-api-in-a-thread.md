@@ -20,8 +20,10 @@ group, and the client adds them up.**
   server and many servers. See `several-servers-merged-by-the-client.md`.
 - A server sends at most 100,000 groups, because the client applies `limit` after the merge.
 - The server checks the query before it queues it, so a bad query fails at once with `400`.
-- The query thread reads only the columns that the query names, builds a selection vector per day,
-  and groups with a map.
+- The query thread reads only the columns that the query names, in blocks, and matches and groups on
+  ids of the values, see `streaming-scan-on-ids.md`.
+- The query thread reads the days, weeks and months of one query on up to one thread per core, see
+  `days-on-several-cores.md`. Queries still run one at a time.
 - Up to 16 queries wait. When a query runs for more than 120 seconds, the server answers `504` and
   sets a stop flag. The query thread checks the flag every 65,536 rows and between days, and stops.
 - When the request ends before the answer, for example at a shutdown, the server sets the same flag.
@@ -29,6 +31,7 @@ group, and the client adds them up.**
 - A panic in a query fails only that query. The query thread continues with the next one.
 - A query reads a sealed day from its summary when the query allows it, and scans its columns
   otherwise, see `daily-summaries.md`.
+- The query thread keeps the summaries that it read in memory, see `query-cache-in-memory.md`.
 - `visits` is the number of distinct visit ids of each day, added up over the days of the range, and
   over the days of a week or a month. So every count adds up, and a week costs the same as its days.
 - A reader lists the generations of a day before and after it reads the day. When they differ, it

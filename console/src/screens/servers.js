@@ -25,23 +25,23 @@ const storageNotices = (storage) =>
       : null,
     storage.heldDays?.length
       ? notice(
-        { kind: 'warning', title: `${storage.heldDays.length} days wait aside` },
-        storage.heldDays.map(({ day, error }) => `${day}: ${error}`).join(' '),
-      )
+          { kind: 'warning', title: `${storage.heldDays.length} days wait aside` },
+          storage.heldDays.map(({ day, error }) => `${day}: ${error}`).join(' '),
+        )
       : null,
     storage.unreadableSegments
       ? notice(
-        { kind: 'warning', title: 'Some log parts cannot be read' },
-        `${storage.unreadableSegments} log parts cannot be read.`,
-      )
+          { kind: 'warning', title: 'Some log parts cannot be read' },
+          `${storage.unreadableSegments} log parts cannot be read.`,
+        )
       : null,
     storage.droppedRecords
       ? notice(
-        { kind: 'warning', title: 'Some records could not be stored' },
-        `${
-          formatCount(storage.droppedRecords)
-        } records were dropped since the start. The log of the server names their days.`,
-      )
+          { kind: 'warning', title: 'Some records could not be stored' },
+          `${formatCount(
+            storage.droppedRecords,
+          )} records were dropped since the start. The log of the server names their days.`,
+        )
       : null,
   ].filter(Boolean)
 
@@ -277,23 +277,22 @@ export const serversScreen = component('aly-servers', {
         ),
         dialog(
           {
-            title: computed(
-              [editing],
-              (value) => (value?.edit ? `Change ${value.initial.name}` : 'Add a server'),
+            title: computed([editing], (value) =>
+              value?.edit ? `Change ${value.initial.name}` : 'Add a server',
             ),
             open: formOpen,
           },
           editing.view((value) =>
             value
               ? serverForm({
-                initial: value.initial,
-                editing: value.edit === true,
-                onDone: () => {
-                  formOpen.set(false)
-                  reload()
-                },
-              })
-              : null
+                  initial: value.initial,
+                  editing: value.edit === true,
+                  onDone: () => {
+                    formOpen.set(false)
+                    reload()
+                  },
+                })
+              : null,
           ),
         ),
         dialog(

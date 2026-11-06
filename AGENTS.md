@@ -61,12 +61,16 @@ See `adr/rust-server-with-few-dependencies.md` and `adr/console-web-app.md`.
 | `src/storage.rs`                              | the single writer thread: log parts to columns, restore, seal, retention                                                                     |
 | `src/column_store.rs`, `src/rle.rs`           | the column files, the append transaction, sealing, reading                                                                                   |
 | `src/seal_sort.rs`                            | the sort of a day in chunks, and the merge of the chunks into the run files                                                                  |
-| `src/line_files.rs`                           | the reading and writing of line files in blocks                                                                                              |
+| `src/line_files.rs`                           | the reading and writing of line files in blocks, and the line reader that passes each line as bytes                                         |
 | `src/summary.rs`                              | the daily summary of a sealed day: build, parse, check, and the merge of days into a week or a month                                         |
+| `src/live.rs`                                 | the running summary of each open day of the own source, its state on the disk, and its rebuild from the columns                              |
 | `src/periods.rs`                              | the week and month summaries of a source: paths, the check that one is current, the build at seal                                            |
 | `src/backup.rs`, `src/tar.rs`                 | the backup stream of the summaries, and the restore                                                                                          |
 | `src/query_core.rs`                           | the query parser, the groups and the merge of the answers of servers                                                                         |
+| `src/parallel.rs`                             | the run of the parts of a query on several threads, with the results in the order of the parts                                               |
+| `src/scan.rs`                                 | the scan of a day: the column readers in blocks of runs of `u32` ids, the dictionaries, the filters and groups on ids                        |
 | `src/query.rs`                                | the query engine over the day folders and the daily, week and month summaries, with a stop flag                                              |
+| `src/query_cache.rs`, `src/fast_hash.rs`      | the folders, sealed metas, parsed summaries and counts that the query engine keeps in memory, and the fast map of `u32` ids                   |
 | `src/retention.rs`                            | the free space with `statvfs`, the free space rule, old days to summaries, then removal of days, weeks and months                            |
 | `src/auth.rs`                                 | the key, the key file, and the new key that root hands over in `/run/imp-aly` and the service takes on SIGHUP                                |
 | `src/token.rs`                                | the one-time tokens signed per request, and the SHA-256                                                                                      |
@@ -82,6 +86,7 @@ See `adr/rust-server-with-few-dependencies.md` and `adr/console-web-app.md`.
 | `src/file_watch.rs`                           | the hourly check of the TLS files                                                                                                            |
 | `src/testing.rs`, `tests/support/`            | the temporary folders and the test server with a raw HTTP client                                                                             |
 | `xtask/src/main.rs`, `xtask/src/demo_data.rs` | the dev tasks, the demo in `.dev-data/`, the sample records of the apps `shop`, `crm` and `docs`, and `versions.json`                        |
+| `xtask/src/bench.rs`                          | the query benchmark and its data in `.bench-data/`                                                                                           |
 | `console/`                                    | the imp project of the PWA: `src/app.js`, `src/screens/`, `src/parts/`, `src/lib/` (`vault.js`, `client.js`), `src/shared/`, `test/`         |
 | `site/index.html`                             | the landing page, one static file that GitHub Pages serves with `install.sh`                                                                 |
 
@@ -91,7 +96,7 @@ Rules that keep the server safe:
   body and each write. Never read a body without `read_all` or a reader with an idle deadline. See
   `adr/connection-limits-and-deadlines.md`.
 - **A blocking step never runs on a `tokio` worker.** File work, queries and the WAL run on their
-  own threads or in `spawn_blocking`.
+  own threads or in `spawn_blocking`. A query reads its parts with `std::thread::scope` threads.
 - **A panic in a thread must not stop the server.** The storage thread restarts after 5 seconds, and
   the query thread fails only the one query.
 
@@ -136,6 +141,7 @@ The tasks are cargo aliases in `.cargo/config.toml`. They run `xtask`.
 | `cargo test`          | runs the unit tests and `tests/`                                                                                                                                |
 | `cargo verify`        | runs `cargo fmt --check`, `cargo clippy -D warnings`, the tests, then `imp fmt --check`, `imp lint` and `imp test --unit` in `console/`                         |
 | `cargo compile`       | builds the page and the release binary `target/release/imp-aly` with the page inside                                                                            |
+| `cargo query-bench`   | writes 180 sealed days, 1M records of today and a day of 10M records in `.bench-data/` once, then prints the query times; `--reset` writes the data again |
 
 After a batch of changes, run `cargo fmt --all`, then `cargo verify`, and fix every issue. When you
 change the HTTP layer, a thread, the server start or the CLI, also run `cargo compile` and try the

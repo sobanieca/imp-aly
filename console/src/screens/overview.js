@@ -35,7 +35,8 @@ const per100 = (part, whole) => (whole ? ((part / whole) * 100).toFixed(2) : '-'
 const recordsOf = (types, type) => types?.get(type)?.records ?? 0
 
 const topRows = (rows, field) =>
-  rows.map((row) => ({ id: labelOf(row[field]), label: labelOf(row[field]), count: row.records }))
+  rows
+    .map((row) => ({ id: labelOf(row[field]), label: labelOf(row[field]), count: row.records }))
     .sort((a, b) => b.count - a.count || (a.label < b.label ? -1 : 1))
     .slice(0, TOP_ROWS)
 
@@ -134,7 +135,10 @@ const appOverview = component('aly-app-overview', {
           topTable(
             'Top pages',
             ['Page', 'Views'],
-            topRows(pages.rows.filter((row) => row.page !== HOME_PAGE), 'page'),
+            topRows(
+              pages.rows.filter((row) => row.page !== HOME_PAGE),
+              'page',
+            ),
           ),
         ),
         reportCard(

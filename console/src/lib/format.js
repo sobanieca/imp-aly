@@ -1,8 +1,7 @@
 const counts = new Intl.NumberFormat('en')
 
-export const formatCount = (
-  value,
-) => (value === null || value === undefined ? '-' : counts.format(value))
+export const formatCount = (value) =>
+  value === null || value === undefined ? '-' : counts.format(value)
 
 export const formatPercent = (value) =>
   value === null || value === undefined ? '-' : `${Number(value).toFixed(1)}%`

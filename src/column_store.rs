@@ -1,7 +1,7 @@
 use crate::days::is_day;
 use crate::error::{Error, Result};
 use crate::fsutil::{
-    create_dir_all, list_directory, read_json, read_string, remove_if_exists, rename,
+    Entry, create_dir_all, list_directory, read_json, read_string, remove_if_exists, rename,
     sync_directory, write_file_atomic, write_json_atomic,
 };
 use crate::json::{Object, Value, pretty};
@@ -14,6 +14,7 @@ use crate::summary::{SUMMARY_KINDS, SummaryBuilder, summary_file};
 use std::collections::BTreeSet;
 use std::fs::{self, OpenOptions};
 use std::io::{Seek, SeekFrom, Write};
+use std::sync::Arc;
 
 pub const COMMIT_FILE: &str = "commit.json";
 
@@ -23,7 +24,7 @@ pub const SORT_COLUMNS: [&str; 5] = ["page", "type", "zone", "name", "visit"];
 
 pub const SUMMARY_ONLY_PROBLEM: &str = "only the daily summary of the day is stored";
 
-const READ_ATTEMPTS: u32 = 5;
+pub const READ_ATTEMPTS: u32 = 5;
 
 pub fn apps_dir(data_dir: &str) -> String {
     join(&[data_dir, "apps"])
@@ -56,14 +57,18 @@ pub fn order_columns<'a>(columns: impl IntoIterator<Item = &'a str>) -> Vec<Stri
     ordered
 }
 
-fn sorted_dirs(path: &str, keep: impl Fn(&str) -> bool) -> Result<Vec<String>> {
-    let mut names: Vec<String> = list_directory(path)?
-        .into_iter()
+pub fn dirs_of(entries: &[Entry], keep: impl Fn(&str) -> bool) -> Vec<String> {
+    let mut names: Vec<String> = entries
+        .iter()
         .filter(|entry| entry.is_dir && keep(&entry.name))
-        .map(|entry| entry.name)
+        .map(|entry| entry.name.clone())
         .collect();
     names.sort();
-    Ok(names)
+    names
+}
+
+fn sorted_dirs(path: &str, keep: impl Fn(&str) -> bool) -> Result<Vec<String>> {
+    Ok(dirs_of(&list_directory(path)?, keep))
 }
 
 pub fn list_apps(data_dir: &str) -> Result<Vec<String>> {
@@ -104,16 +109,16 @@ fn generation_of(name: &str) -> Option<(bool, u64)> {
     }
 }
 
-pub fn read_generations(path: &str) -> Result<Generations> {
+pub fn generations_of(entries: &[Entry]) -> Generations {
     let mut sealed_all = Vec::new();
     let mut raw_all = Vec::new();
     let mut temporary = Vec::new();
-    for entry in list_directory(path)? {
+    for entry in entries {
         if !entry.is_dir {
             continue;
         }
         if entry.name.ends_with(".tmp") {
-            temporary.push(entry.name);
+            temporary.push(entry.name.clone());
             continue;
         }
         match generation_of(&entry.name) {
@@ -125,13 +130,52 @@ pub fn read_generations(path: &str) -> Result<Generations> {
     let sealed = sealed_all.iter().copied().max().unwrap_or(0);
     let mut raws: Vec<u64> = raw_all.iter().copied().filter(|g| *g > sealed).collect();
     raws.sort_unstable();
-    Ok(Generations {
+    Generations {
         sealed,
         raws,
         stale_sealed: sealed_all.into_iter().filter(|g| *g < sealed).collect(),
         stale_raws: raw_all.into_iter().filter(|g| *g <= sealed).collect(),
         temporary,
-    })
+    }
+}
+
+pub fn read_generations(path: &str) -> Result<Generations> {
+    Ok(generations_of(&list_directory(path)?))
+}
+
+pub fn sealed_dir(path: &str, generation: u64) -> String {
+    join(&[path, &format!("sealed-{generation}")])
+}
+
+pub struct SealedState {
+    pub generations: Generations,
+    pub meta: Option<Result<Arc<SealedMeta>>>,
+}
+
+impl SealedState {
+    pub fn complete(&self) -> bool {
+        self.generations.sealed > 0 && self.generations.raws.is_empty()
+    }
+}
+
+pub trait Folders {
+    fn entries(&self, path: &str) -> Result<Arc<Vec<Entry>>>;
+    fn sealed_state(&self, path: &str) -> Result<SealedState>;
+}
+
+pub struct Disk;
+
+impl Folders for Disk {
+    fn entries(&self, path: &str) -> Result<Arc<Vec<Entry>>> {
+        Ok(Arc::new(list_directory(path)?))
+    }
+
+    fn sealed_state(&self, path: &str) -> Result<SealedState> {
+        let generations = read_generations(path)?;
+        let meta = (generations.sealed > 0 && generations.raws.is_empty())
+            .then(|| read_sealed_meta(&sealed_dir(path, generations.sealed)).map(Arc::new));
+        Ok(SealedState { generations, meta })
+    }
 }
 
 pub struct AppendTarget {
@@ -351,6 +395,17 @@ pub fn read_sealed_meta(dir: &str) -> Result<SealedMeta> {
     })
 }
 
+pub enum ColumnFile {
+    Missing,
+    Plain {
+        path: String,
+        max_bytes: Option<u64>,
+    },
+    Runs {
+        path: String,
+    },
+}
+
 pub enum PartKind {
     Raw { dir: String, commit: Commit },
     Sealed { dir: String, meta: SealedMeta },
@@ -407,6 +462,35 @@ impl Part {
                     )));
                 }
                 Ok(values)
+            }
+        }
+    }
+
+    pub fn column_file(&self, column: &str) -> Result<ColumnFile> {
+        match &self.kind {
+            PartKind::Raw { dir, commit } => Ok(match commit.size_of(column) {
+                None => ColumnFile::Missing,
+                Some(bytes) => ColumnFile::Plain {
+                    path: column_path(dir, column),
+                    max_bytes: Some(bytes),
+                },
+            }),
+            PartKind::Sealed { dir, meta } => {
+                if meta.summary_only() {
+                    return Err(Error::new(SUMMARY_ONLY_PROBLEM));
+                }
+                if !meta.columns.iter().any(|name| name == column) {
+                    return Ok(ColumnFile::Missing);
+                }
+                if meta.plain.iter().any(|name| name == column) {
+                    return Ok(ColumnFile::Plain {
+                        path: column_path(dir, column),
+                        max_bytes: None,
+                    });
+                }
+                Ok(ColumnFile::Runs {
+                    path: join(&[dir, &format!("{column}.rle")]),
+                })
             }
         }
     }
@@ -502,7 +586,7 @@ fn changed_during_read(error: &Error, path: &str, before: &Generations) -> Resul
     Ok(error.not_found && !same_generations(before, &read_generations(path)?))
 }
 
-fn pause(attempt: u32) {
+pub fn pause(attempt: u32) {
     std::thread::sleep(std::time::Duration::from_millis(50 * u64::from(attempt)));
 }
 
@@ -566,6 +650,26 @@ pub struct DaySummary {
     pub visits: Option<String>,
 }
 
+pub fn read_summary_text(dir: &str, meta: &SealedMeta, with_visits: bool) -> Result<DaySummary> {
+    let file = |kind: &str| read_string(&join(&[dir, summary_file(kind)]));
+    Ok(DaySummary {
+        rows: meta.rows,
+        wal: meta.wal,
+        days: meta.days().cloned(),
+        counts: file("counts")?,
+        tuples: if with_visits {
+            Some(file("tuples")?)
+        } else {
+            None
+        },
+        visits: if with_visits {
+            Some(file("visits")?)
+        } else {
+            None
+        },
+    })
+}
+
 pub fn read_day_summary(
     path: &str,
     with_visits: bool,
@@ -578,28 +682,12 @@ pub fn read_day_summary(
             return Ok(None);
         }
         let read = (|| -> Result<Option<DaySummary>> {
-            let dir = join(&[path, &format!("sealed-{}", before.sealed)]);
+            let dir = sealed_dir(path, before.sealed);
             let meta = read_sealed_meta(&dir)?;
             if !meta.summary() || !accept(&meta)? {
                 return Ok(None);
             }
-            let file = |kind: &str| read_string(&join(&[&dir, summary_file(kind)]));
-            Ok(Some(DaySummary {
-                rows: meta.rows,
-                wal: meta.wal,
-                days: meta.days().cloned(),
-                counts: file("counts")?,
-                tuples: if with_visits {
-                    Some(file("tuples")?)
-                } else {
-                    None
-                },
-                visits: if with_visits {
-                    Some(file("visits")?)
-                } else {
-                    None
-                },
-            }))
+            read_summary_text(&dir, &meta, with_visits).map(Some)
         })();
         match read {
             Ok(None) => return Ok(None),

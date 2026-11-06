@@ -140,9 +140,9 @@ export const screenHeader = component('aly-screen-header', {
         text(description),
         terms.length
           ? descriptionList({
-            layout: 'vertical',
-            items: terms.map(([term, details]) => ({ term, details })),
-          })
+              layout: 'vertical',
+              items: terms.map(([term, details]) => ({ term, details })),
+            })
           : null,
       ),
     )
@@ -179,17 +179,18 @@ export const problemNotices = ({ failed, skipped, warnings }) =>
   [
     failed.length
       ? notice(
-        { kind: 'warning', title: 'The numbers are not complete' },
-        `${plural(failed.length, 'server')} did not answer. ${failureText(failed)}`,
-      )
+          { kind: 'warning', title: 'The numbers are not complete' },
+          `${plural(failed.length, 'server')} did not answer. ${failureText(failed)}`,
+        )
       : null,
     skipped.length
       ? notice(
-        { kind: 'info', title: `${plural(skipped.length, 'day')} are not in the numbers` },
-        skipped.slice(0, 5).map(({ server, day, reason }) =>
-          `${day}${server ? ` (${server})` : ''}: ${reason}`
-        ).join(' '),
-      )
+          { kind: 'info', title: `${plural(skipped.length, 'day')} are not in the numbers` },
+          skipped
+            .slice(0, 5)
+            .map(({ server, day, reason }) => `${day}${server ? ` (${server})` : ''}: ${reason}`)
+            .join(' '),
+        )
       : null,
     ...warnings.map((warning) => notice({ kind: 'warning', title: 'Check the app' }, warning)),
   ].filter(Boolean)
@@ -197,9 +198,10 @@ export const problemNotices = ({ failed, skipped, warnings }) =>
 export const dataNote = (answer) =>
   text(
     { tone: 'secondary', size: 'sm' },
-    `${plural(answer.days, 'day')} with data, ${plural(answer.scanned, 'record')} read, ${
-      plural(answer.matched, 'record')
-    } matched.`,
+    `${plural(answer.days, 'day')} with data, ${plural(answer.scanned, 'record')} read, ${plural(
+      answer.matched,
+      'record',
+    )} matched.`,
   )
 
 export const tableNote = (note) => (note ? text({ tone: 'secondary', size: 'sm' }, note) : null)
@@ -208,8 +210,7 @@ export const noRecords = (answer) =>
   emptyState({
     icon: luCalendarX,
     title: 'No records in these days',
-    description:
-      `The servers hold no record of ${answer.app} from ${answer.from} to ${answer.to}. Choose other days.`,
+    description: `The servers hold no record of ${answer.app} from ${answer.from} to ${answer.to}. Choose other days.`,
   })
 
 const noApp = (catalog) =>
@@ -249,12 +250,12 @@ export const catalogNotice = (catalog) =>
   catalog.view((value) =>
     value?.failedServers?.length
       ? notice(
-        { kind: 'warning', title: 'Some servers did not answer' },
-        `The list of apps and the numbers leave out these servers. ${
-          failureText(value.failedServers)
-        }`,
-      )
-      : null
+          { kind: 'warning', title: 'Some servers did not answer' },
+          `The list of apps and the numbers leave out these servers. ${failureText(
+            value.failedServers,
+          )}`,
+        )
+      : null,
   )
 
 const changeTag = (change, { upIsBad = false } = {}) => {
@@ -264,52 +265,51 @@ const changeTag = (change, { upIsBad = false } = {}) => {
 }
 
 export const changeHint = (current, previous, scope, options) =>
-  previous === null || previous === undefined ? null : span(
-    changeTag(changeOf(current, previous), options),
-    ` from ${formatCount(previous)}`,
-    span({ style: 'display: block' }, `in the ${previousLabel(scope.preset).toLowerCase()}`),
-  )
+  previous === null || previous === undefined
+    ? null
+    : span(
+        changeTag(changeOf(current, previous), options),
+        ` from ${formatCount(previous)}`,
+        span({ style: 'display: block' }, `in the ${previousLabel(scope.preset).toLowerCase()}`),
+      )
 
 export const compareColumns = (scope, { upIsBad = false } = {}) =>
   scope.preset
     ? [
-      {
-        key: 'previous',
-        label: previousLabel(scope.preset),
-        align: 'end',
-        sortable: true,
-        render: (row) => formatCount(row.previous),
-      },
-      {
-        key: 'percent',
-        label: 'Change',
-        align: 'end',
-        sortable: true,
-        sortValue: (row) => row.change?.percent ?? Infinity,
-        render: (row) => (row.change ? changeTag(row.change, { upIsBad }) : ''),
-      },
-    ]
+        {
+          key: 'previous',
+          label: previousLabel(scope.preset),
+          align: 'end',
+          sortable: true,
+          render: (row) => formatCount(row.previous),
+        },
+        {
+          key: 'percent',
+          label: 'Change',
+          align: 'end',
+          sortable: true,
+          sortValue: (row) => row.change?.percent ?? Infinity,
+          render: (row) => (row.change ? changeTag(row.change, { upIsBad }) : ''),
+        },
+      ]
     : []
 
 export const trendChart = ({ label, bar, buckets, series }) =>
   series.length
     ? chart({
-      type: 'column',
-      stacked: true,
-      label,
-      labels: buckets.map((bucket) => bucketLabel(bucket, bar)),
-      series,
-      format: formatCount,
-    })
+        type: 'column',
+        stacked: true,
+        label,
+        labels: buckets.map((bucket) => bucketLabel(bucket, bar)),
+        series,
+        format: formatCount,
+      })
     : emptyState({ title: 'Nothing to draw', description: 'No record matches in these days.' })
 
 const termsFor = (terms, scope) =>
   scope.preset ? terms : terms.filter(([term]) => term !== 'Change')
 
-export const reportScreen = (
-  self,
-  { title, description, terms, filters: fields = [], render },
-) => {
+export const reportScreen = (self, { title, description, terms, filters: fields = [], render }) => {
   const scope = useScope(self)
   const catalog = useState(self, 'aly.catalog')
   const filters = initState(self, 'aly.report.filters', null)
@@ -317,25 +317,25 @@ export const reportScreen = (
     segments: segmentsOf(value, current.app),
     mapPages: mapPagesOf(value, current.app),
   }))
-  const active = computed(
-    [filters, scope],
-    (saved, current) => (saved && saved.app === current.app ? activeFilters(saved.values) : {}),
+  const active = computed([filters, scope], (saved, current) =>
+    saved && saved.app === current.app ? activeFilters(saved.values) : {},
   )
   const ready = (current) => current.app && current.from && current.servers.length
   return page(
     stack(
       { gap: 5 },
       computed([scope], (current) => Boolean(current.preset)).view((compared) =>
-        screenHeader({ title, description, terms: termsFor(terms, { preset: compared }) })
+        screenHeader({ title, description, terms: termsFor(terms, { preset: compared }) }),
       ),
       scopeBar(),
       catalogNotice(catalog),
       fields.length
         ? div(
-          computed([scope, meta], (current, info) => ({ current, info })).view((
-            { current, info },
-          ) => (ready(current) ? filterBar({ scope: current, fields, ...info }) : null)),
-        )
+            computed([scope, meta], (current, info) => ({ current, info })).view(
+              ({ current, info }) =>
+                ready(current) ? filterBar({ scope: current, fields, ...info }) : null,
+            ),
+          )
         : null,
       div(
         computed([scope, active, meta], (current, where, info) => ({

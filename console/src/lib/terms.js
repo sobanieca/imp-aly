@@ -10,8 +10,7 @@ const CHANGE = [
   'The difference from the previous period of the same length, just before this one. For "Last 30 days", that is "Previous 30 days": the 30 days before them. For "Last 3 months", that is "Previous 3 months". A custom period shows no change.',
 ]
 
-const RARELY =
-  `viewed ${RARELY_USED.minShown} times or more, and used in less than ${RARELY_USED.maxShare}% of them`
+const RARELY = `viewed ${RARELY_USED.minShown} times or more, and used in less than ${RARELY_USED.maxShare}% of them`
 
 export const OVERVIEW_TERMS = [
   VISIT,

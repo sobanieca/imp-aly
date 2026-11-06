@@ -97,10 +97,8 @@ const callServer = async (api, target, { method, path, body, timeout = CALL_TIME
 
 export const queryServers = async (api, names, body) => {
   const targets = await targetsOf(names)
-  const { result, warnings } = await queryEach(
-    targets,
-    body,
-    (target, request) => callServer(api, target, { ...request, timeout: QUERY_TIMEOUT_MS }),
+  const { result, warnings } = await queryEach(targets, body, (target, request) =>
+    callServer(api, target, { ...request, timeout: QUERY_TIMEOUT_MS }),
   )
   return { ...result, warnings }
 }
@@ -119,22 +117,16 @@ const appListOf = async (api, target) => {
 }
 
 export const appsOf = async (api, names) => {
-  const { results, failedServers } = await onServers(
-    api,
-    names,
-    (target) => appListOf(api, target),
-  )
+  const { results, failedServers } = await onServers(api, names, (target) => appListOf(api, target))
   const apps = results.flatMap(({ server, result }) =>
-    result.apps.map((entry) => ({ server, ...entry }))
+    result.apps.map((entry) => ({ server, ...entry })),
   )
   return { apps, failedServers }
 }
 
 export const appOnServers = async (api, names, method, path, body) => {
-  const { results, failedServers } = await onServers(
-    api,
-    names,
-    (target) => callServer(api, target, { method, path, body }),
+  const { results, failedServers } = await onServers(api, names, (target) =>
+    callServer(api, target, { method, path, body }),
   )
   return { apps: results.map(({ server, result }) => ({ server, ...result })), failedServers }
 }

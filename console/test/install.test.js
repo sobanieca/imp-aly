@@ -29,9 +29,11 @@ test('an iPhone and an iPad with a desktop user agent count as iOS', () => {
   expect(isIos({ userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)' })).toEqual(
     true,
   )
-  expect(isIos({ userAgent: 'Mozilla/5.0 (Macintosh)', platform: 'MacIntel', maxTouchPoints: 5 }))
-    .toEqual(true)
-  expect(isIos({ userAgent: 'Mozilla/5.0 (Macintosh)', platform: 'MacIntel', maxTouchPoints: 0 }))
-    .toEqual(false)
+  expect(
+    isIos({ userAgent: 'Mozilla/5.0 (Macintosh)', platform: 'MacIntel', maxTouchPoints: 5 }),
+  ).toEqual(true)
+  expect(
+    isIos({ userAgent: 'Mozilla/5.0 (Macintosh)', platform: 'MacIntel', maxTouchPoints: 0 }),
+  ).toEqual(false)
   expect(isIos(undefined)).toEqual(false)
 })

@@ -12,11 +12,12 @@ use crate::http::{
 };
 use crate::in_flight::InFlight;
 use crate::json::{self, Object, Value, format_number};
+use crate::live::LiveDays;
 use crate::logger;
 use crate::names::is_app_name;
 use crate::origins::OriginCheck;
 use crate::paths::join;
-use crate::query::run_query;
+use crate::query::QueryEngine;
 use crate::query_core::{Query, parse_query};
 use crate::rate_limit::{
     ClientKey, DEFAULT_MAX_CLIENTS, DEFAULT_TRUSTED_PROXIES, RateLimiter, Window, client_address,
@@ -191,13 +192,14 @@ struct QueryRunner {
 }
 
 impl QueryRunner {
-    fn start(data_dir: String, timeout_ms: u64) -> Result<QueryRunner> {
+    fn start(data_dir: String, timeout_ms: u64, live: Arc<LiveDays>) -> Result<QueryRunner> {
         let (sender, receiver) = mpsc::channel::<QueryJob>();
         let current: Arc<Mutex<Option<Arc<AtomicBool>>>> = Arc::new(Mutex::new(None));
         let running = current.clone();
         std::thread::Builder::new()
             .name("imp-aly-query".to_string())
             .spawn(move || {
+                let engine = QueryEngine::default().with_live(live);
                 while let Ok(job) = receiver.recv() {
                     if job.started.send(()).is_err() || job.cancelled.load(Ordering::Relaxed) {
                         continue;
@@ -206,7 +208,7 @@ impl QueryRunner {
                         Some(job.cancelled.clone());
                     let cancelled = job.cancelled.clone();
                     let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        run_query(&data_dir, &job.query, &|| cancelled.load(Ordering::Relaxed))
+                        engine.run(&data_dir, &job.query, &|| cancelled.load(Ordering::Relaxed))
                     }));
                     *running.lock().unwrap_or_else(|poison| poison.into_inner()) = None;
                     let result = outcome.unwrap_or_else(|_| {
@@ -1078,9 +1080,10 @@ pub async fn start_server(options: ServerOptions) -> Result<RunningServer> {
     storage_options.min_free = min_free;
     storage_options.seal_delay_ms = options.seal_delay_ms;
     storage_options.maintenance_ms = options.maintenance_ms;
+    let live = storage_options.live.clone();
     let storage = Arc::new(StorageRunner::start(storage_options)?);
     *waker.lock().unwrap_or_else(|poison| poison.into_inner()) = Some(Box::new(storage.waker()));
-    let queries = QueryRunner::start(data_dir.clone(), options.query_timeout_ms)?;
+    let queries = QueryRunner::start(data_dir.clone(), options.query_timeout_ms, live)?;
     let state = Arc::new(State {
         data_dir: data_dir.clone(),
         source,

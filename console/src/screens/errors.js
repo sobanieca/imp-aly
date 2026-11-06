@@ -70,7 +70,7 @@ const errorsReport = component('aly-errors-report', {
       : null
     const withErrors = pages.filter((row) => row.errors > 0).sort((a, b) => b.errors - a.errors)
     const rows = (chosen.length ? withErrors : withErrors.slice(0, TOP)).map((row) => {
-      const last = previous ? previous.get(row.page) ?? 0 : null
+      const last = previous ? (previous.get(row.page) ?? 0) : null
       return { ...row, previous: last, change: previous ? changeOf(row.errors, last) : null }
     })
     const note = errorTableNote({
@@ -113,8 +113,8 @@ const errorsReport = component('aly-errors-report', {
           title: one
             ? `Errors of ${labelOf(chosen[0])}`
             : chosen.length
-            ? 'Errors of the chosen pages'
-            : 'Errors of the top pages',
+              ? 'Errors of the chosen pages'
+              : 'Errors of the top pages',
           description: `${
             chosen.length
               ? 'The errors of each chosen page.'
@@ -131,41 +131,41 @@ const errorsReport = component('aly-errors-report', {
         rows.length ? tableNote(note) : null,
         rows.length
           ? table({
-            label: 'Pages with the most errors',
-            rows,
-            columns: [
-              { key: 'page', label: 'Page', sortable: true },
-              {
-                key: 'errors',
-                label: 'Errors',
-                align: 'end',
-                sortable: true,
-                render: (row) => formatCount(row.errors),
-              },
-              {
-                key: 'views',
-                label: 'Page views',
-                align: 'end',
-                sortable: true,
-                render: (row) => formatCount(row.views),
-              },
-              {
-                key: 'per100',
-                label: 'Per 100 views',
-                align: 'end',
-                sortable: true,
-                sortValue: (row) => row.per100 ?? Infinity,
-                render: (row) => per100(row.per100),
-              },
-              ...compareColumns(scope, { upIsBad: true }),
-            ],
-          })
+              label: 'Pages with the most errors',
+              rows,
+              columns: [
+                { key: 'page', label: 'Page', sortable: true },
+                {
+                  key: 'errors',
+                  label: 'Errors',
+                  align: 'end',
+                  sortable: true,
+                  render: (row) => formatCount(row.errors),
+                },
+                {
+                  key: 'views',
+                  label: 'Page views',
+                  align: 'end',
+                  sortable: true,
+                  render: (row) => formatCount(row.views),
+                },
+                {
+                  key: 'per100',
+                  label: 'Per 100 views',
+                  align: 'end',
+                  sortable: true,
+                  sortValue: (row) => row.per100 ?? Infinity,
+                  render: (row) => per100(row.per100),
+                },
+                ...compareColumns(scope, { upIsBad: true }),
+              ],
+            })
           : emptyState({
-            icon: luCircleCheck,
-            kind: 'success',
-            title: 'No errors',
-            description: 'No page sent an error record in these days.',
-          }),
+              icon: luCircleCheck,
+              kind: 'success',
+              title: 'No errors',
+              description: 'No page sent an error record in these days.',
+            }),
       ),
       dataNote(current),
     )

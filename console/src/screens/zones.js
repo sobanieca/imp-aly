@@ -53,10 +53,9 @@ const ZONE_COLUMNS = [
 ]
 
 const usedOf = (rows) =>
-  rows.filter((row) => row.zone !== null && row.zone !== undefined).reduce(
-    (total, row) => total + row.records,
-    0,
-  )
+  rows
+    .filter((row) => row.zone !== null && row.zone !== undefined)
+    .reduce((total, row) => total + row.records, 0)
 
 const zonesReport = component('aly-zones-report', {
   loading: () => reportLoading(),
@@ -89,7 +88,9 @@ const zonesReport = component('aly-zones-report', {
     const rows = zoneRows(current.rows)
     const uses = rows.reduce((total, row) => total + row.used, 0)
     const earlier = before ? usedOf(before.rows) : null
-    const mostUsed = rows.filter((row) => row.used > 0).sort((a, b) => b.used - a.used)
+    const mostUsed = rows
+      .filter((row) => row.used > 0)
+      .sort((a, b) => b.used - a.used)
       .slice(0, TOP)
     const leastUsed = [...rows].sort((a, b) => a.used - b.used || b.seen - a.seen).slice(0, TOP)
     const usedPerZone = totalsBy(
@@ -126,8 +127,7 @@ const zonesReport = component('aly-zones-report', {
         statTile({
           label: RARELY,
           value: formatCount(rarely),
-          hint:
-            `Seen ${RARELY_USED.minShown} times or more, used in less than ${RARELY_USED.maxShare}%`,
+          hint: `Seen ${RARELY_USED.minShown} times or more, used in less than ${RARELY_USED.maxShare}%`,
         }),
       ),
       reportCard(
@@ -152,8 +152,7 @@ const zonesReport = component('aly-zones-report', {
         reportCard(
           {
             title: 'Least used zones',
-            description:
-              `"${RARELY}" marks a zone seen ${RARELY_USED.minShown} times or more and used in less than ${RARELY_USED.maxShare}% of them.`,
+            description: `"${RARELY}" marks a zone seen ${RARELY_USED.minShown} times or more and used in less than ${RARELY_USED.maxShare}% of them.`,
           },
           table({ label: 'Least used zones', rows: leastUsed, columns: ZONE_COLUMNS }),
         ),

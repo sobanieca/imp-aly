@@ -18,8 +18,10 @@ export const runsAsApp = (scope = globalThis) =>
 
 export const isIos = (nav = globalThis.navigator) => {
   if (!nav) return false
-  return /iPad|iPhone|iPod/.test(nav.userAgent ?? '') ||
-    (nav.platform === 'MacIntel' && nav.maxTouchPoints > 1)
+  return (
+    /iPad|iPhone|iPod/.test(nav.userAgent ?? '')
+    || (nav.platform === 'MacIntel' && nav.maxTouchPoints > 1)
+  )
 }
 
 export const installModeOf = ({ installed, prompt, app, secure, ios }) => {

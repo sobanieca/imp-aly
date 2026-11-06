@@ -67,7 +67,7 @@ const outcomesReport = component('aly-outcomes-report', {
     const previous = before ? indexBy(before.rows, 'name') : null
     const outcomeTable = outcomeTableRows(current.rows, chosen, TOP)
     const rows = outcomeTable.rows.map(({ name, records }) => {
-      const last = previous ? previous.get(name)?.records ?? 0 : null
+      const last = previous ? (previous.get(name)?.records ?? 0) : null
       return {
         id: name,
         name,

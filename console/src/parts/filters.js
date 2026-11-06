@@ -81,10 +81,7 @@ export const filterBar = component('aly-filter-bar', {
       })),
     )
     const found = Object.fromEntries(
-      lookups.map((field, index) => [
-        field,
-        answers[index].rows.map((row) => labelOf(row[field])),
-      ]),
+      lookups.map((field, index) => [field, answers[index].rows.map((row) => labelOf(row[field]))]),
     )
     const cut = Object.fromEntries(
       lookups.map((field, index) => [field, Boolean(answers[index].truncated)]),
@@ -96,53 +93,63 @@ export const filterBar = component('aly-filter-bar', {
     const values = initialValues(filters.get(), scope.app, segments)
     const controls = []
     if (fields.includes('page')) {
-      controls.push(treeSelect({
-        field: 'page',
-        label: 'Pages',
-        items: pageTree([...mapPages, ...values.page]),
-        placeholder: 'All pages',
-        searchPlaceholder: 'Find a page',
-      }))
+      controls.push(
+        treeSelect({
+          field: 'page',
+          label: 'Pages',
+          items: pageTree([...mapPages, ...values.page]),
+          placeholder: 'All pages',
+          searchPlaceholder: 'Find a page',
+        }),
+      )
     }
     if (fields.includes('zone')) {
-      controls.push(select({
-        field: 'zone',
-        label: 'Zone',
-        options: choices('All zones', found.zone, values.zone),
-        help: cutListHelp(cut.zone),
-      }))
+      controls.push(
+        select({
+          field: 'zone',
+          label: 'Zone',
+          options: choices('All zones', found.zone, values.zone),
+          help: cutListHelp(cut.zone),
+        }),
+      )
     }
     if (fields.includes('name')) {
-      controls.push(comboBox({
-        field: 'name',
-        label: 'Outcomes',
-        multiple: true,
-        options: multiChoices(found.name, values.name),
-        placeholder: 'All outcomes',
-        ...typed('name'),
-      }))
+      controls.push(
+        comboBox({
+          field: 'name',
+          label: 'Outcomes',
+          multiple: true,
+          options: multiChoices(found.name, values.name),
+          placeholder: 'All outcomes',
+          ...typed('name'),
+        }),
+      )
     }
     if (fields.includes('segments')) {
       for (const segment of segments) {
-        controls.push(comboBox({
-          field: `segment.${segment}`,
-          label: segment,
-          multiple: true,
-          options: multiChoices(found[segment], values.segment[segment]),
-          placeholder: 'All',
-          ...typed(segment),
-        }))
+        controls.push(
+          comboBox({
+            field: `segment.${segment}`,
+            label: segment,
+            multiple: true,
+            options: multiChoices(found[segment], values.segment[segment]),
+            placeholder: 'All',
+            ...typed(segment),
+          }),
+        )
       }
     }
     if (fields.includes('country')) {
-      controls.push(comboBox({
-        field: 'country',
-        label: 'Countries',
-        multiple: true,
-        options: multiChoices(found.country, values.country),
-        placeholder: 'All countries',
-        ...typed('country'),
-      }))
+      controls.push(
+        comboBox({
+          field: 'country',
+          label: 'Countries',
+          multiple: true,
+          options: multiChoices(found.country, values.country),
+          placeholder: 'All countries',
+          ...typed('country'),
+        }),
+      )
     }
     return form(
       { initialValues: values },

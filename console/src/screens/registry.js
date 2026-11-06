@@ -64,8 +64,7 @@ const sourceFields = (source, readFiles) => {
       type: 'url',
       required: true,
       placeholder: 'https://myapp.example/',
-      help:
-        `The folder of the build. The server reads ${BUILD_FILE} there, and again every 10 minutes.`,
+      help: `The folder of the build. The server reads ${BUILD_FILE} there, and again every 10 minutes.`,
     })
   }
   if (source === 'file') {
@@ -86,8 +85,7 @@ const sourceFields = (source, readFiles) => {
     placeholder:
       '{\n  "pages": ["/", "/invoices/:id"],\n  "zones": ["myapp.send"],\n  "outcomes": []\n}',
     validate: buildProblem,
-    help:
-      'The route patterns in "pages", and the zone and outcome names in "zones" and "outcomes". A chosen file shows here, and you can change it.',
+    help: 'The route patterns in "pages", and the zone and outcome names in "zones" and "outcomes". A chosen file shows here, and you can change it.',
   })
 }
 
@@ -113,14 +111,14 @@ const buildSource = component('aly-build-source', {
 const serverChoice = (names) =>
   names.length > 1
     ? comboBox({
-      field: 'servers',
-      label: 'Servers',
-      multiple: true,
-      required: true,
-      options: names,
-      help: 'The servers that accept the records of the app.',
-      validate: (value) => (value?.length ? null : 'Choose one server or more.'),
-    })
+        field: 'servers',
+        label: 'Servers',
+        multiple: true,
+        required: true,
+        options: names,
+        help: 'The servers that accept the records of the app.',
+        validate: (value) => (value?.length ? null : 'Choose one server or more.'),
+      })
     : text({ size: 'sm', tone: 'secondary' }, `The console registers the app on ${names[0]}.`)
 
 const registerForm = component('aly-register-form', {
@@ -152,8 +150,7 @@ const registerForm = component('aly-register-form', {
           notify({
             kind: 'success',
             title: `Registered ${values.name}`,
-            description:
-              `${first.pages.length} pages, ${first.zones.length} zones, ${first.outcomes.length} outcomes. Send records to /collect/${values.name}.`,
+            description: `${first.pages.length} pages, ${first.zones.length} zones, ${first.outcomes.length} outcomes. Send records to /collect/${values.name}.`,
           })
           reportFailures(`${values.name} is not registered on every server`, answer.failedServers)
           onDone()
@@ -175,8 +172,7 @@ const registerForm = component('aly-register-form', {
         custom: true,
         options: known.map(({ segment }) => segment),
         placeholder: 'plan, role ...',
-        help:
-          'The extra fields that the records can carry. Choose a segment from the list, or type a name and press Enter.',
+        help: 'The extra fields that the records can carry. Choose a segment from the list, or type a name and press Enter.',
         validate: segmentProblem,
       }),
       text({ size: 'sm', tone: 'secondary' }, segmentsNote(known)),
@@ -194,10 +190,7 @@ const appDetails = (entries) =>
         { gap: 3 },
         text({ weight: 'bold' }, entry.server),
         entry.buildError
-          ? notice(
-            { kind: 'error', title: 'The server cannot read the build' },
-            entry.buildError,
-          )
+          ? notice({ kind: 'error', title: 'The server cannot read the build' }, entry.buildError)
           : null,
         descriptionList({
           items: [
@@ -214,22 +207,23 @@ const appDetails = (entries) =>
         }),
         Object.keys(entry.rejections ?? {}).length
           ? table({
-            label: `Why ${entry.server} rejected records`,
-            rowKey: 'problem',
-            rows: Object.entries(entry.rejections).map(([problem, count]) => ({ problem, count }))
-              .sort((a, b) => b.count - a.count),
-            columns: [
-              { key: 'problem', label: 'Problem' },
-              {
-                key: 'count',
-                label: 'Records',
-                align: 'end',
-                render: (row) => formatCount(row.count),
-              },
-            ],
-          })
+              label: `Why ${entry.server} rejected records`,
+              rowKey: 'problem',
+              rows: Object.entries(entry.rejections)
+                .map(([problem, count]) => ({ problem, count }))
+                .sort((a, b) => b.count - a.count),
+              columns: [
+                { key: 'problem', label: 'Problem' },
+                {
+                  key: 'count',
+                  label: 'Records',
+                  align: 'end',
+                  render: (row) => formatCount(row.count),
+                },
+              ],
+            })
           : text({ size: 'sm', tone: 'secondary' }, 'No record was rejected since the start.'),
-      )
+      ),
     ),
   )
 
@@ -406,20 +400,20 @@ export const registryScreen = component('aly-registry', {
           catalog.view((value) =>
             value?.servers?.servers.length
               ? button(
-                { variant: 'primary', events: { click: () => adding.set(true) } },
-                icon(luPlus),
-                'Register an app',
-              )
-              : null
+                  { variant: 'primary', events: { click: () => adding.set(true) } },
+                  icon(luPlus),
+                  'Register an app',
+                )
+              : null,
           ),
         ),
         scopeBar({ period: false }),
         catalogNotice(catalog),
         reportCard(
           { title: 'Registered apps' },
-          computed([catalog, rows], (value, list) => ({ value, list })).view((
-            { value, list },
-          ) => appsTable(value, list)),
+          computed([catalog, rows], (value, list) => ({ value, list })).view(({ value, list }) =>
+            appsTable(value, list),
+          ),
         ),
         dialog(
           { title: 'Register an app', open: adding },
@@ -427,25 +421,27 @@ export const registryScreen = component('aly-registry', {
             open,
             names: (value?.servers?.servers ?? []).map(({ name }) => name),
             segments: knownSegments(value),
-          })).view(({ open, names, segments }) => (open && names.length
-            ? registerForm({
-              serverNames: names,
-              segments,
-              onDone: () => {
-                adding.set(false)
-                reload()
-              },
-            })
-            : null)
+          })).view(({ open, names, segments }) =>
+            open && names.length
+              ? registerForm({
+                  serverNames: names,
+                  segments,
+                  onDone: () => {
+                    adding.set(false)
+                    reload()
+                  },
+                })
+              : null,
           ),
         ),
-        wide(drawer(
-          { title: computed([shown], (name) => name ?? 'App'), open: showOpen },
-          computed(
-            [catalog, shown],
-            (value, name) => (value?.apps ?? []).filter((entry) => entry.name === name),
-          ).view((entries) => (entries.length ? appDetails(entries) : null)),
-        )),
+        wide(
+          drawer(
+            { title: computed([shown], (name) => name ?? 'App'), open: showOpen },
+            computed([catalog, shown], (value, name) =>
+              (value?.apps ?? []).filter((entry) => entry.name === name),
+            ).view((entries) => (entries.length ? appDetails(entries) : null)),
+          ),
+        ),
         dialog(
           { title: computed([removing], removeQuestion), open: removeOpen },
           stack(

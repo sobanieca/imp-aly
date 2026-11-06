@@ -25,22 +25,28 @@ pub fn split_lines(text: &str) -> Result<Vec<Cell>> {
     Ok(body.split('\n').map(decode_value).collect())
 }
 
-pub fn parse_run(line: &str) -> Result<(u64, &str)> {
-    let Some((count, value)) = line.split_once('\t') else {
+pub fn parse_run_bytes(line: &[u8]) -> Result<(u64, &[u8])> {
+    let Some(tab) = line.iter().position(|byte| *byte == b'\t') else {
         return Err(Error::new("a run line has no tab"));
     };
-    let count = if !count.is_empty()
-        && count.len() <= 16
-        && count.bytes().all(|byte| byte.is_ascii_digit())
+    let digits = &line[..tab];
+    let count = if !digits.is_empty() && digits.len() <= 16 && digits.iter().all(u8::is_ascii_digit)
     {
-        count.parse::<u64>().unwrap_or(0)
+        digits
+            .iter()
+            .fold(0u64, |count, digit| count * 10 + u64::from(digit - b'0'))
     } else {
         0
     };
     if count < 1 {
         return Err(Error::new("a run line has a wrong count"));
     }
-    Ok((count, value))
+    Ok((count, &line[tab + 1..]))
+}
+
+pub fn parse_run(line: &str) -> Result<(u64, &str)> {
+    let (count, value) = parse_run_bytes(line.as_bytes())?;
+    Ok((count, &line[line.len() - value.len()..]))
 }
 
 pub fn decode_runs(text: &str, rows: u64) -> Result<Vec<Cell>> {

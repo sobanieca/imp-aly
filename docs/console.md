@@ -200,8 +200,9 @@ records of the range have. A list shows at most the 300 values with the most rec
 cut list says so. In a cut list of the outcomes, a segment or the country, type another value and
 press Enter. "Clear the filters" removes all the filters.
 
-The current day is not sealed. So a report always reads its records, and a long day can make the
-report slower. See [Storage](storage.md).
+The current day is not sealed. A report reads the running summary of the day that the server keeps
+in memory. A report that the summary cannot answer, for example the visits per zone, reads the
+records of the day, and a long day can make it slower. See [Query](query.md).
 
 ### Overview
 

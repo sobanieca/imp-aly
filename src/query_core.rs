@@ -48,12 +48,16 @@ pub fn is_time_field(field: &str) -> bool {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Filter {
     pub field: String,
-    pub values: HashSet<Option<String>>,
+    pub values: HashSet<String>,
+    pub null: bool,
 }
 
 impl Filter {
     pub fn matches(&self, value: Option<&str>) -> bool {
-        self.values.contains(&value.map(str::to_string))
+        match value {
+            None => self.null,
+            Some(value) => self.values.contains(value),
+        }
     }
 }
 
@@ -142,16 +146,13 @@ pub fn parse_query(input: &Value, now: i64) -> Result<Query, Error> {
                 )));
             }
             let mut values = HashSet::new();
+            let mut null = false;
             for item in items {
                 match item {
-                    Value::Null => {
-                        values.insert(None);
-                    }
-                    Value::String(text) if text.is_empty() => {
-                        values.insert(None);
-                    }
+                    Value::Null => null = true,
+                    Value::String(text) if text.is_empty() => null = true,
                     Value::String(text) => {
-                        values.insert(Some(text.clone()));
+                        values.insert(text.clone());
                     }
                     _ => {
                         return Err(query_error(format!(
@@ -163,6 +164,7 @@ pub fn parse_query(input: &Value, now: i64) -> Result<Query, Error> {
             filters.push(Filter {
                 field: field.clone(),
                 values,
+                null,
             });
         }
     }

@@ -52,6 +52,8 @@ period summary when it is current, and reads the days otherwise.**
   tries the months first, then the weeks, then the days. It does this for each source on its own,
   and adds the counts of the sources. The time value of the groups is the time of the first day of
   the period.
+- When a query cannot read a period summary, because a file is missing or fails the check of
+  `daily-summaries.md`, it reads the weeks and the days of the period in its place.
 - A query that needs the days of a period where only the period summary holds them skips those days.
   It lists each day with its source in `skippedDays`, with the reason "only the summary of the week
   is stored" or "only the summary of the month is stored". `days` in the answer has the days that a

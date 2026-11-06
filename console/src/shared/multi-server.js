@@ -12,10 +12,7 @@ class ApiError extends Error {
 }
 
 const noServerAnswered = (failed) =>
-  new ApiError(
-    `no server answered:\n${failed.map((entry) => `  ${entry.reason}`).join('\n')}`,
-    502,
-  )
+  new ApiError(`no server answered:\n${failed.map((entry) => `  ${entry.reason}`).join('\n')}`, 502)
 
 const reasonOf = (error) => error?.message ?? String(error)
 
@@ -43,9 +40,15 @@ const isGroup = (group) =>
   group !== null && typeof group === 'object' && Array.isArray(group.by) && isCount(group.records)
 
 const isQueryAnswer = (answer) =>
-  answer !== null && typeof answer === 'object' && !Array.isArray(answer) &&
-  Array.isArray(answer.days) && Array.isArray(answer.groups) && answer.groups.every(isGroup) &&
-  Array.isArray(answer.skippedDays) && isCount(answer.scanned) && isCount(answer.matched)
+  answer !== null
+  && typeof answer === 'object'
+  && !Array.isArray(answer)
+  && Array.isArray(answer.days)
+  && Array.isArray(answer.groups)
+  && answer.groups.every(isGroup)
+  && Array.isArray(answer.skippedDays)
+  && isCount(answer.scanned)
+  && isCount(answer.matched)
 
 const notAnAnswer = (server) =>
   new ApiError(`${server} sent a reply that is not a query answer`, 502)
@@ -61,9 +64,7 @@ const configWarnings = (app, answers) => {
     warnings.push(`the app ${app} is not registered on: ${names}`)
   }
   if (configs.size > 1) {
-    warnings.push(
-      `the app ${app} has different builds or different segments on the servers`,
-    )
+    warnings.push(`the app ${app} has different builds or different segments on the servers`)
   }
   return warnings
 }

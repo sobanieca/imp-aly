@@ -50,11 +50,13 @@ test('the register form checks the segment names like the server', () => {
 
 test('the register form lists the segments that the servers know', () => {
   expect(
-    segmentsNote([{ segment: 'plan', apps: ['shop'] }, { segment: 'role', apps: ['crm', 'shop'] }]),
+    segmentsNote([
+      { segment: 'plan', apps: ['shop'] },
+      { segment: 'role', apps: ['crm', 'shop'] },
+    ]),
+  ).toEqual(
+    'Segments of the apps on the servers: plan (shop), role (crm, shop). The server can add the country to each record, so "country" is not a segment.',
   )
-    .toEqual(
-      'Segments of the apps on the servers: plan (shop), role (crm, shop). The server can add the country to each record, so "country" is not a segment.',
-    )
   expect(segmentsNote([])).toMatch(/^No app on the servers has a segment yet\./)
 })
 

@@ -70,7 +70,7 @@ test('the key goes to onSubmit, never to the debug log, and the field clears aft
 
 test('a key in a plain form field shows in the debug log of the state', async () => {
   const values = await traced(() =>
-    submitted(textField({ field: 'key', label: 'Key', type: 'password' }))
+    submitted(textField({ field: 'key', label: 'Key', type: 'password' })),
   )
   expect(values.key).toEqual(KEY)
   expect(logged.some((line) => line.includes(KEY))).toEqual(true)

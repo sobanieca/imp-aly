@@ -58,7 +58,7 @@ const PAGE_COLUMNS = [
   {
     key: 'flag',
     label: 'Flag',
-    render: (row) => row.flag ? tag({ color: flagColor(row.flag) }, row.flag) : '',
+    render: (row) => (row.flag ? tag({ color: flagColor(row.flag) }, row.flag) : ''),
   },
 ]
 
@@ -106,12 +106,12 @@ const pagesReport = component('aly-pages-report', {
     const series = one
       ? usedSeries(trend.rows, { bar, buckets, shownType: 'page', shownLabel: 'Viewed, not used' })
       : stackedSeries(trend.rows, {
-        bar,
-        field: 'page',
-        buckets,
-        keys: chosen.length ? chosen : topKeys(trend.rows, 'page'),
-        other: !chosen.length,
-      })
+          bar,
+          field: 'page',
+          buckets,
+          keys: chosen.length ? chosen : topKeys(trend.rows, 'page'),
+          other: !chosen.length,
+        })
     const tiles = tileGrid(
       statTile({
         label: 'Page views',
@@ -128,13 +128,15 @@ const pagesReport = component('aly-pages-report', {
         value: formatPercent(shareOf(uses, views)),
         hint: 'The share of the page views with a click, a tap or a key',
       }),
-      chosen.length ? null : statTile({
-        label: 'Never reached or used',
-        value: formatCount(neverReached + neverUsed),
-        hint: `${formatCount(neverReached)} never reached, ${
-          formatCount(neverUsed)
-        } viewed but never used`,
-      }),
+      chosen.length
+        ? null
+        : statTile({
+            label: 'Never reached or used',
+            value: formatCount(neverReached + neverUsed),
+            hint: `${formatCount(neverReached)} never reached, ${formatCount(
+              neverUsed,
+            )} viewed but never used`,
+          }),
     )
     const chartCard = (title, description) =>
       reportCard({ title, description }, trendChart({ label: 'Page uses', bar, buckets, series }))
@@ -174,7 +176,10 @@ const pagesReport = component('aly-pages-report', {
         dataNote(current),
       )
     }
-    const mostUsed = rows.filter((row) => row.used > 0).sort(byUse).slice(0, TOP)
+    const mostUsed = rows
+      .filter((row) => row.used > 0)
+      .sort(byUse)
+      .slice(0, TOP)
     return stack(
       { gap: 5 },
       ...problemNotices(problemsOf([current, before, trend])),
@@ -194,8 +199,7 @@ const pagesReport = component('aly-pages-report', {
       reportCard(
         {
           title: 'Least used pages',
-          description:
-            `The pages with the fewest uses, and every page of the app map with no view or no use. "${RARELY_VIEWED}" marks a page viewed ${RARELY_USED.minShown} times or more and used in less than ${RARELY_USED.maxShare}% of them.`,
+          description: `The pages with the fewest uses, and every page of the app map with no view or no use. "${RARELY_VIEWED}" marks a page viewed ${RARELY_USED.minShown} times or more and used in less than ${RARELY_USED.maxShare}% of them.`,
         },
         table({ label: 'Least used pages', rows: leastUsed(rows, TOP), columns: PAGE_COLUMNS }),
       ),

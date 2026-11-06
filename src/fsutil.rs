@@ -4,6 +4,7 @@ use crate::paths::dirname;
 use std::fs::{self, File, OpenOptions};
 use std::io::{ErrorKind, Write};
 
+#[derive(Clone, Debug)]
 pub struct Entry {
     pub name: String,
     pub is_dir: bool,
@@ -98,6 +99,43 @@ pub fn list_directory(path: &str) -> Result<Vec<Entry>> {
         });
     }
     Ok(entries)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Stamp {
+    device: u64,
+    inode: u64,
+    modified_s: i64,
+    modified_ns: i64,
+    changed_s: i64,
+    changed_ns: i64,
+    size: u64,
+}
+
+impl Stamp {
+    pub fn settled(&self, now_ms: i64, settle_ms: i64) -> bool {
+        let ms = |s: i64, ns: i64| s.saturating_mul(1000).saturating_add(ns / 1_000_000);
+        let latest = ms(self.modified_s, self.modified_ns).max(ms(self.changed_s, self.changed_ns));
+        latest.saturating_add(settle_ms) <= now_ms
+    }
+}
+
+pub fn stamp_of(path: &str) -> Result<Option<Stamp>> {
+    use std::os::unix::fs::MetadataExt;
+    let meta = match fs::metadata(path) {
+        Ok(meta) => meta,
+        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(Error::io(&error, path)),
+    };
+    Ok(Some(Stamp {
+        device: meta.dev(),
+        inode: meta.ino(),
+        modified_s: meta.mtime(),
+        modified_ns: meta.mtime_nsec(),
+        changed_s: meta.ctime(),
+        changed_ns: meta.ctime_nsec(),
+        size: meta.size(),
+    }))
 }
 
 pub fn create_dir_all(path: &str) -> Result<()> {

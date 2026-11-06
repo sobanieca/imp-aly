@@ -408,3 +408,256 @@ fn week_and_month_summaries_are_made_once_and_answer_like_the_days() {
             .is_empty()
     );
 }
+
+#[test]
+fn the_summary_cache_never_gives_the_answer_of_an_old_generation_or_a_removed_folder() {
+    let engine = imp_aly::query::QueryEngine::new(usize::MAX, 100);
+    let settle = || std::thread::sleep(std::time::Duration::from_millis(150));
+    let cached = |dir: &str, query: &Query| {
+        let answer = engine.run(dir, query, &|| false).unwrap();
+        json::parse(&json::stringify(&answer)).unwrap()
+    };
+    let dir = fill(&days(&DAYS), SOURCE, &all);
+    seal_all(&dir.path, SOURCE, &days(&DAYS));
+    settle();
+    let queries = day_queries();
+    for query in &queries {
+        assert_eq!(cached(&dir.path, query), answer_of(&dir.path, query));
+    }
+    assert!(engine.cached_bytes() > 0);
+    for query in &queries {
+        assert_eq!(cached(&dir.path, query), answer_of(&dir.path, query));
+    }
+    let late = format!(
+        r#"["myapp","{}",{{"type":"error","visit":"late","at":{},"page":"/"}}]"#,
+        DAYS[0],
+        day_ms(DAYS[0]).unwrap()
+    );
+    apply_segment_text(&dir.path, SOURCE, 2, &format!("{late}\n")).unwrap();
+    seal_day(&day_path(&dir.path, DAYS[0], SOURCE)).unwrap();
+    settle();
+    for (index, query) in queries.iter().enumerate() {
+        assert_eq!(
+            cached(&dir.path, query),
+            answer_of(&dir.path, query),
+            "new generation {index}"
+        );
+    }
+    std::fs::remove_dir_all(day_path(&dir.path, DAYS[1], SOURCE)).unwrap();
+    settle();
+    for (index, query) in queries.iter().enumerate() {
+        assert_eq!(
+            cached(&dir.path, query),
+            answer_of(&dir.path, query),
+            "removed folder {index}"
+        );
+    }
+    let path = day_path(&dir.path, DAYS[0], SOURCE);
+    std::fs::remove_dir_all(&path).unwrap();
+    let other = fill(&days(&DAYS[..1]), SOURCE, &|visit| visit % 3 == 0);
+    std::fs::rename(day_path(&other.path, DAYS[0], SOURCE), &path).unwrap();
+    seal_day(&path).unwrap();
+    settle();
+    for (index, query) in queries.iter().enumerate() {
+        assert_eq!(
+            cached(&dir.path, query),
+            answer_of(&dir.path, query),
+            "new folder with the same generation {index}"
+        );
+    }
+}
+
+fn ask_with(engine: &imp_aly::query::QueryEngine, data_dir: &str, query: &Query) -> Value {
+    let answer = engine.run(data_dir, query, &|| false).unwrap();
+    let answer = json::parse(&json::stringify(&answer)).unwrap();
+    Value::Object(finalize_query(
+        query,
+        &[ServerAnswer {
+            server: "local".to_string(),
+            answer,
+        }],
+    ))
+}
+
+fn summary_days_of(value: &Value) -> Option<f64> {
+    value.get("servers").unwrap().as_array().unwrap()[0]
+        .get("summaryDays")
+        .unwrap()
+        .as_f64()
+}
+
+fn fill_live(data_dir: &str, live: &imp_aly::live::LiveDays) {
+    let text = fill_text(&days(&DAYS), &all);
+    let lines: Vec<&str> = text.lines().collect();
+    for (index, part) in lines.chunks(lines.len() / 3 + 1).enumerate() {
+        imp_aly::storage::apply_segment(
+            data_dir,
+            SOURCE,
+            index as u64 + 1,
+            &format!("{}\n", part.join("\n")),
+            &mut std::collections::BTreeMap::new(),
+            &mut imp_aly::storage::Counts::default(),
+            Some(live),
+        )
+        .unwrap();
+    }
+}
+
+fn assert_like_a_scan(engine: &imp_aly::query::QueryEngine, data_dir: &str, label: &str) {
+    for (index, query) in day_queries().iter().enumerate() {
+        let result = ask_with(engine, data_dir, query);
+        assert_eq!(
+            summary_days_of(&result),
+            Some(if can_use_summary(query) { 2.0 } else { 0.0 }),
+            "{label} {index}"
+        );
+        assert_eq!(
+            without_servers(&result),
+            without_servers(&ask(data_dir, query)),
+            "{label} {index}"
+        );
+    }
+}
+
+#[test]
+fn the_running_summary_of_a_raw_day_answers_every_query_exactly_like_a_scan() {
+    let dir = TempDir::new();
+    let live = std::sync::Arc::new(imp_aly::live::LiveDays::default());
+    fill_live(&dir.path, &live);
+    let engine = imp_aly::query::QueryEngine::default().with_live(live.clone());
+    assert_like_a_scan(&engine, &dir.path, "added");
+    let rebuilt = std::sync::Arc::new(imp_aly::live::LiveDays::default());
+    for day in DAYS {
+        let path = day_path(&dir.path, day, SOURCE);
+        let (summary, state) = imp_aly::live::build_from_disk(&path).unwrap();
+        rebuilt.put(&path, summary, state);
+    }
+    let engine = imp_aly::query::QueryEngine::default().with_live(rebuilt);
+    assert_like_a_scan(&engine, &dir.path, "rebuilt");
+}
+
+#[test]
+fn a_running_summary_that_misses_a_stored_part_is_not_used() {
+    let dir = TempDir::new();
+    let live = std::sync::Arc::new(imp_aly::live::LiveDays::default());
+    fill_live(&dir.path, &live);
+    let late = format!(
+        r#"["myapp","{}",{{"type":"error","visit":"late","at":{},"page":"/","plan":"pro"}}]"#,
+        DAYS[0],
+        day_ms(DAYS[0]).unwrap()
+    );
+    apply_segment_text(&dir.path, SOURCE, 10, &format!("{late}\n")).unwrap();
+    let engine = imp_aly::query::QueryEngine::default().with_live(live.clone());
+    for (index, query) in day_queries().iter().enumerate() {
+        let result = ask_with(&engine, &dir.path, query);
+        let expected = if can_use_summary(query) { 1.0 } else { 0.0 };
+        assert_eq!(summary_days_of(&result), Some(expected), "{index}");
+        assert_eq!(
+            without_servers(&result),
+            without_servers(&ask(&dir.path, query)),
+            "{index}"
+        );
+    }
+}
+
+#[test]
+fn the_running_summary_of_a_sealed_day_with_late_records_answers_like_a_scan() {
+    let dir = fill(&days(&DAYS), SOURCE, &all);
+    seal_all(&dir.path, SOURCE, &days(&DAYS));
+    let live = std::sync::Arc::new(imp_aly::live::LiveDays::default());
+    for (index, day) in DAYS.iter().enumerate() {
+        let path = day_path(&dir.path, day, SOURCE);
+        let late = format!(
+            r#"["myapp","{day}",{{"type":"seen","visit":"v1","at":{},"page":"/","zone":"myapp.zone-9","plan":"team"}}]"#,
+            day_ms(day).unwrap()
+        );
+        let before = imp_aly::live::disk_state(&path).unwrap();
+        if index == 0 {
+            let (summary, state) = imp_aly::live::build_from_disk(&path).unwrap();
+            live.put(&path, summary, state);
+        }
+        imp_aly::storage::apply_segment(
+            &dir.path,
+            SOURCE,
+            20 + index as u64,
+            &format!("{late}\n"),
+            &mut std::collections::BTreeMap::new(),
+            &mut imp_aly::storage::Counts::default(),
+            Some(&live),
+        )
+        .unwrap();
+        if index == 1 {
+            assert!(!live.has(&path));
+            assert!(before.rows() > 0);
+            let (summary, state) = imp_aly::live::build_from_disk(&path).unwrap();
+            live.put(&path, summary, state);
+        }
+    }
+    let engine = imp_aly::query::QueryEngine::default().with_live(live);
+    assert_like_a_scan(&engine, &dir.path, "late");
+}
+
+#[test]
+fn a_query_on_several_threads_gives_the_answer_of_one_thread() {
+    let list = period_days();
+    let dir = fill(&list, SOURCE, &all);
+    fill_into(&dir.path, &list[..10], OTHER_SOURCE, &|visit| {
+        visit % 2 == 0
+    });
+    seal_all(&dir.path, SOURCE, &list[..list.len() - 3]);
+    let now = imp_aly::days::parse_iso("2026-10-08T12:00:00Z").unwrap();
+    seal_due_periods(&dir.path, SOURCE, now, 0, &mut HashSet::new());
+    let one = imp_aly::query::QueryEngine::default().with_threads(1);
+    let four = imp_aly::query::QueryEngine::default().with_threads(4);
+    for (index, fields) in QUERIES.iter().enumerate() {
+        let query = query(fields, "2026-08-28", "2026-10-05");
+        let answer = |engine: &imp_aly::query::QueryEngine| {
+            json::stringify(&engine.run(&dir.path, &query, &|| false).unwrap())
+        };
+        assert_eq!(answer(&four), answer(&one), "query {index}");
+    }
+}
+
+#[test]
+fn a_month_summary_that_cannot_be_read_gives_way_to_its_weeks_and_days_on_any_number_of_threads() {
+    let list = period_days();
+    let queries: Vec<Query> = QUERIES
+        .iter()
+        .map(|fields| query(fields, "2026-08-28", "2026-10-05"))
+        .collect();
+    for damage in ["removed", "garbage", "truncated"] {
+        let dir = fill(&list, SOURCE, &all);
+        seal_all(&dir.path, SOURCE, &list);
+        let from_days: Vec<Value> = queries.iter().map(|query| ask(&dir.path, query)).collect();
+        let now = imp_aly::days::parse_iso("2026-10-08T12:00:00Z").unwrap();
+        seal_due_periods(&dir.path, SOURCE, now, 0, &mut HashSet::new());
+        let month = imp_aly::periods::period_source_dir(
+            &dir.path,
+            "myapp",
+            imp_aly::days::PeriodKind::Months,
+            "2026-09",
+            SOURCE,
+        );
+        let counts = format!("{month}/sealed-1/summary-counts.tsv");
+        match damage {
+            "removed" => std::fs::remove_file(&counts).unwrap(),
+            "garbage" => std::fs::write(&counts, "garbage\n").unwrap(),
+            _ => {
+                let text = std::fs::read_to_string(&counts).unwrap();
+                let kept: Vec<&str> = text.lines().collect();
+                std::fs::write(&counts, format!("{}\n", kept[..kept.len() - 1].join("\n")))
+                    .unwrap();
+            }
+        }
+        for threads in [1, 4] {
+            let engine = imp_aly::query::QueryEngine::default().with_threads(threads);
+            for (index, query) in queries.iter().enumerate() {
+                let answer = ask_with(&engine, &dir.path, query);
+                assert_eq!(
+                    answer, from_days[index],
+                    "{damage}: query {index} on {threads} threads"
+                );
+            }
+        }
+    }
+}

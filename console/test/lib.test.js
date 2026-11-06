@@ -111,23 +111,24 @@ test('a period is a preset or a custom range, and a bad value falls back to 30 d
 })
 
 test('the pages form a tree under the nearest page that is a prefix', () => {
-  expect(pageTree(['/users/:id/orders', '/', '/users', '/users/:id', '/users/invites', '/help']))
-    .toEqual([
-      { value: '/', label: '/' },
-      { value: '/help', label: '/help' },
-      {
-        value: '/users',
-        label: '/users',
-        children: [
-          {
-            value: '/users/:id',
-            label: '/users/:id',
-            children: [{ value: '/users/:id/orders', label: '/users/:id/orders' }],
-          },
-          { value: '/users/invites', label: '/users/invites' },
-        ],
-      },
-    ])
+  expect(
+    pageTree(['/users/:id/orders', '/', '/users', '/users/:id', '/users/invites', '/help']),
+  ).toEqual([
+    { value: '/', label: '/' },
+    { value: '/help', label: '/help' },
+    {
+      value: '/users',
+      label: '/users',
+      children: [
+        {
+          value: '/users/:id',
+          label: '/users/:id',
+          children: [{ value: '/users/:id/orders', label: '/users/:id/orders' }],
+        },
+        { value: '/users/invites', label: '/users/invites' },
+      ],
+    },
+  ])
   expect(pageTree(['/users/:id/details', '/users'])).toEqual([
     {
       value: '/users',
@@ -166,8 +167,9 @@ test('a stacked trend keeps the top keys and adds the rest as Other', () => {
     { name: '/a', values: [5, 2] },
     { name: OTHER, values: [3, 1] },
   ])
-  expect(stackedSeries(rows, { bar: 'week', field: 'page', buckets, keys: ['/b'], other: false }))
-    .toEqual([{ name: '/b', color: 'blue', values: [3, 0] }])
+  expect(
+    stackedSeries(rows, { bar: 'week', field: 'page', buckets, keys: ['/b'], other: false }),
+  ).toEqual([{ name: '/b', color: 'blue', values: [3, 0] }])
   expect(stackedSeries([], { bar: 'week', field: 'page', buckets, keys: [] })).toEqual([])
 })
 
@@ -184,11 +186,16 @@ test('pages get a flag when they are never reached, never used or rarely used', 
   expect(pageFlag({ views: 10, used: 0 })).toEqual(NEVER_USED)
   expect(pageFlag({ views: 200, used: 9 })).toEqual(RARELY_VIEWED)
   expect(pageFlag({ views: 200, used: 10 })).toEqual(null)
-  expect(pageRows([
-    { page: '/', type: 'page', records: 200 },
-    { page: '/', type: 'used', records: 50 },
-    { page: '/cart', type: 'page', records: 4 },
-  ], ['/', '/cart', '/account'])).toEqual([
+  expect(
+    pageRows(
+      [
+        { page: '/', type: 'page', records: 200 },
+        { page: '/', type: 'used', records: 50 },
+        { page: '/cart', type: 'page', records: 4 },
+      ],
+      ['/', '/cart', '/account'],
+    ),
+  ).toEqual([
     { id: '/', page: '/', views: 200, used: 50, share: 25, flag: null },
     { id: '/cart', page: '/cart', views: 4, used: 0, share: 0, flag: NEVER_USED },
     { id: '/account', page: '/account', views: 0, used: 0, share: null, flag: NEVER_REACHED },
@@ -212,12 +219,14 @@ test('the used series splits the shown records into used and not used', () => {
     { day: '2026-10-01', type: 'used', records: 4 },
     { day: '2026-10-02', type: 'page', records: 3 },
   ]
-  expect(usedSeries(rows, {
-    bar: 'day',
-    buckets: ['2026-10-01', '2026-10-02'],
-    shownType: 'page',
-    shownLabel: 'Viewed, not used',
-  })).toEqual([
+  expect(
+    usedSeries(rows, {
+      bar: 'day',
+      buckets: ['2026-10-01', '2026-10-02'],
+      shownType: 'page',
+      shownLabel: 'Viewed, not used',
+    }),
+  ).toEqual([
     { name: 'Used', color: 'blue', values: [4, 0] },
     { name: 'Viewed, not used', color: 'gray', values: [6, 3] },
   ])
@@ -228,27 +237,33 @@ test('zones get a flag when they are never used or rarely used', () => {
   expect(zoneFlag({ seen: 200, used: 9 })).toEqual(RARELY)
   expect(zoneFlag({ seen: 200, used: 10 })).toEqual(null)
   expect(zoneFlag({ seen: 99, used: 1 })).toEqual(null)
-  expect(zoneRows([
-    { zone: 'hero', page: '/', type: 'seen', records: 200 },
-    { zone: 'hero', page: '/', type: 'used', records: 50 },
-    { zone: null, page: '/', type: 'used', records: 80 },
-  ])).toEqual([{
-    id: 'hero /',
-    zone: 'hero',
-    page: '/',
-    seen: 200,
-    used: 50,
-    share: 25,
-    flag: null,
-  }])
+  expect(
+    zoneRows([
+      { zone: 'hero', page: '/', type: 'seen', records: 200 },
+      { zone: 'hero', page: '/', type: 'used', records: 50 },
+      { zone: null, page: '/', type: 'used', records: 80 },
+    ]),
+  ).toEqual([
+    {
+      id: 'hero /',
+      zone: 'hero',
+      page: '/',
+      seen: 200,
+      used: 50,
+      share: 25,
+      flag: null,
+    },
+  ])
 })
 
 test('the errors per page come with the views of the same answer', () => {
-  expect(errorRows([
-    { page: '/', type: 'page', records: 400 },
-    { page: '/', type: 'error', records: 2 },
-    { page: '/cart', type: 'error', records: 1 },
-  ])).toEqual([
+  expect(
+    errorRows([
+      { page: '/', type: 'page', records: 400 },
+      { page: '/', type: 'error', records: 2 },
+      { page: '/cart', type: 'error', records: 1 },
+    ]),
+  ).toEqual([
     { id: '/', page: '/', views: 400, errors: 2, per100: 0.5 },
     { id: '/cart', page: '/cart', views: 0, errors: 1, per100: null },
   ])
