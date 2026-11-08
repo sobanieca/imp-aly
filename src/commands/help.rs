@@ -262,8 +262,8 @@ API:
   GET  /status              key: the state of the server
   GET  /apps                key: the registered apps
   PUT  /apps/<name>         key: {{"appUrl": "..."}} or {{"build": "<app-analytics.json>"}},
-                            optional "segments"
-  GET  /apps/<name>         key: one app with its rejection counts
+                            optional "segments" and "origins"
+  GET  /apps/<name>        key: one app with its rejection counts
   POST /apps/<name>/refresh key: read app-analytics.json again
   DELETE /apps/<name>       key: stop accepting records of the app
   POST /query               key: a query, answers the counts per group (docs/query.md)
