@@ -10,6 +10,7 @@
     "icon": "assets/icon.svg"
   },
   "environments": {
-    "pages": "env/pages.json"
+    "pages": "env/pages.json",
+    "site": "env/site.json"
   }
 }

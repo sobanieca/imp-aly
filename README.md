@@ -54,8 +54,9 @@ machine:
 imp-aly console
 ```
 
-The docs are in [`docs/`](docs/). Read the [Introduction](docs/introduction.md) for the key words,
-then [Getting started](docs/getting-started.md).
+The docs are on the [website](https://sobanieca.github.io/imp-aly/docs/), and their sources are in
+[`docs/`](docs/). Read the [Introduction](docs/introduction.md) for the key words, then
+[Getting started](docs/getting-started.md).
 
 To let an AI agent query your analytics, run `imp-aly skill --init`. Then ask the agent with
 `/imp-aly`. See [CLI](docs/cli.md#ai-agents).
@@ -66,14 +67,15 @@ You need [Rust](https://rustup.rs/) 1.85 or newer, and [imp](https://github.com/
 build and check the page of the console. The server is Rust. The console is an imp project in
 `console/`.
 
-| Task                  | What it does                                                                                                                                      |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `cargo start`         | starts a demo: a server on ports 4411 and 4410 (admin) with 45 days of sample data in `.dev-data/` and new visits, and the console on port 4400   |
-| `cargo server`        | runs the server from source in the foreground on ports 4411 and 4410                                                                              |
-| `cargo console`       | builds the page of the console, and runs the console from source on port 4400                                                                     |
-| `cargo console-build` | builds the page of the console into `console/dist`                                                                                                |
-| `cargo test`          | runs the tests of the server                                                                                                                      |
-| `cargo verify`        | runs `cargo fmt`, `cargo clippy` and the tests, then `imp fmt`, `imp lint` and `imp test --unit` in `console/`                                    |
-| `cargo compile`       | builds the page of the console and the release binary `target/release/imp-aly`                                                                    |
+| Task                  | What it does                                                                                                                                    |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cargo start`         | starts a demo: a server on ports 4411 and 4410 (admin) with 45 days of sample data in `.dev-data/` and new visits, and the console on port 4400 |
+| `cargo server`        | runs the server from source in the foreground on ports 4411 and 4410                                                                            |
+| `cargo console`       | builds the page of the console, and runs the console from source on port 4400                                                                   |
+| `cargo console-build` | builds the page of the console into `console/dist`                                                                                              |
+| `cargo test`          | runs the tests of the server                                                                                                                    |
+| `cargo verify`        | runs `cargo fmt`, `cargo clippy` and the tests, then `imp fmt`, `imp lint` and `imp test --unit` in `console/`                                  |
+| `cargo compile`       | builds the page of the console and the release binary `target/release/imp-aly`                                                                  |
+| `cargo site`          | builds the website into `site/dist/` and serves it with [rfm](https://sobanieca.github.io/remote-file-manager/)                                 |
 
 The decisions behind the design are in [`adr/`](adr/).

@@ -8,3 +8,4 @@ publish = false
 imp-aly = { path = ".." }
 tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "time", "signal", "macros"] }
 ureq = { version = "3", default-features = false }
+pulldown-cmark = { version = "0.13", default-features = false, features = ["html"] }

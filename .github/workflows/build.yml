@@ -184,16 +184,10 @@ jobs:
           mkdir -p "$HOME/.local/bin"
           curl -fsSL https://sobanieca.github.io/imp-ui/install.sh | INSTALL_DIR="$HOME/.local/bin" bash
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-      - name: Assemble site
-        run: |
-          mkdir -p _site
-          cp -r site/. _site/
-          cp install.sh _site/
-          cargo versions-manifest > _site/versions.json
-          (cd console && imp build --pwa --env pages --output ../_site/console)
-          cp _site/console/index.html _site/404.html
+      - name: Build site
+        run: cargo xtask build-site --pages
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: _site
+          path: site/dist
       - uses: actions/deploy-pages@v4

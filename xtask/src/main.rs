@@ -1,5 +1,7 @@
 mod bench;
 mod demo_data;
+mod highlight;
+mod site;
 
 use demo_data::{DEMO_APPS, Random, build_of, seed_lines, visit_records};
 use imp_aly::api_client::{ApiTarget, call_server};
@@ -114,6 +116,11 @@ fn tag_format(tag: &str) -> Option<i64> {
 }
 
 fn versions_manifest() -> bool {
+    print!("{}", versions_manifest_text());
+    true
+}
+
+fn versions_manifest_text() -> String {
     let tags = git(&["tag", "--list", "v*"]).unwrap_or_default();
     let mut versions: Vec<(String, i64)> = Vec::new();
     for tag in tags.lines().filter(|tag| !tag.is_empty()) {
@@ -135,11 +142,10 @@ fn versions_manifest() -> bool {
                 .into()
         })
         .collect();
-    println!(
-        "{}",
+    format!(
+        "{}\n",
         json::pretty(&Object::new().with("versions", Value::Array(list)).into())
-    );
-    true
+    )
 }
 
 struct DevData {
@@ -331,6 +337,16 @@ To start again with new sample data, run \"cargo start --reset\".
     })
 }
 
+fn report(result: Result<(), String>) -> bool {
+    match result {
+        Ok(()) => true,
+        Err(error) => {
+            eprintln!("{error}");
+            false
+        }
+    }
+}
+
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let task = args.first().cloned().unwrap_or_default();
@@ -344,18 +360,21 @@ fn main() -> ExitCode {
             console_build() && cargo(&["build", "--release", "--locked", "--package", "imp-aly"])
         }
         "versions-manifest" => versions_manifest(),
+        "build-site" => {
+            let target = if args.iter().any(|arg| arg == "--pages") {
+                site::Target::Pages
+            } else {
+                site::Target::Local
+            };
+            report(site::build_site(target))
+        }
+        "site" => report(site::serve_site()),
         "bench" => bench::bench(&root(), &args[1..]),
         "bench-scan" => bench::scan_child(&args[1..]),
-        "start" => match start(&args[1..]) {
-            Ok(()) => true,
-            Err(error) => {
-                eprintln!("{error}");
-                false
-            }
-        },
+        "start" => report(start(&args[1..])),
         _ => {
             eprintln!(
-                "Usage: cargo xtask <verify|start|console|console-build|compile|versions-manifest|bench>"
+                "Usage: cargo xtask <verify|start|console|console-build|compile|site|build-site|versions-manifest|bench>"
             );
             false
         }

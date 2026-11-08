@@ -8,6 +8,9 @@
 # The built page of the console
 console/dist
 
+# The built site of cargo xtask build-site
+site/dist
+
 # The demo of cargo start
 .dev-data/
 

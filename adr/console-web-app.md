@@ -25,8 +25,10 @@ localhost.**
   is `standalone`, `minimal-ui` or `window-controls-overlay`. A page that is not a secure context
   cannot install, so it hides the button too.
 - CI builds the page a second time with the environment `pages`, which sets
-  `IMP_BASEPATH=/imp-aly/console`, and publishes it with the landing page. GitHub Pages answers a
-  missing path with the `404.html` of the site, so CI copies the `index.html` of the console there.
+  `IMP_BASEPATH=/imp-aly/console`, and publishes it with the site. `cargo site` builds it with the
+  environment `site`, which sets `IMP_BASEPATH=/console` for the local copy of the site. GitHub
+  Pages answers a missing path with the `404.html` of the site, so the build copies the
+  `index.html` of the console there.
   So a deep link or a reload of a console route opens the console.
 - The build of the binary embeds the files of `console/dist`, so the binary holds the page.
   `imp-aly console` serves only files. It listens on `127.0.0.1` and `::1`, refuses another `Host`,

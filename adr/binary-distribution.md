@@ -20,12 +20,13 @@ and publishes it with a SHA-256 file to a GitHub Release.**
   asset to a temporary file in the install folder, by default `/usr/local/bin`. It checks the
   checksum of that file, sets its mode, and renames it to `imp-aly`. A rename in one folder is
   atomic, so a running server or a failed install never sees half a binary. GitHub Pages serves the
-  script next to the landing page, `site/index.html`.
+  script on the site, see [static-site-with-docs](static-site-with-docs.md).
 - The workflow runs the pushes to `main` one after the other, in the concurrency group `release`
   with `cancel-in-progress: false`. So two quick pushes cannot both see that the tag is missing, and
   cannot both publish the same version. A pull request runs in a group of its own.
-- The Pages job runs after the release. `cargo versions-manifest` writes `versions.json` with each
-  released version and its data format, from `Cargo.toml` and `src/data_format.rs` of each tag.
+- The Pages job runs after the release. `cargo xtask build-site --pages` writes `versions.json`
+  with each released version and its data format, from `Cargo.toml` and `src/data_format.rs` of
+  each tag.
   `imp-aly update` reads it. See [automatic-updates](automatic-updates.md).
 - Every release stays on GitHub Releases, so the URL of each version stays valid.
 

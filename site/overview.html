@@ -1,0 +1,246 @@
+<div class="hero">
+  <h1>Analytics for your imp apps, on a VPS that you own.</h1>
+  <p class="lead"><code>imp-aly</code> is one small binary. It takes the records of <code>imp/analytics</code>, checks each one against the build file of your app, and stores them on the local disk. Then it answers your queries. No database, no third party, and the data stays on your machine.</p>
+  <div class="actions">
+    <a class="button primary" href="console/">Open the console</a>
+    <a class="button" href="docs/getting-started/">Get started</a>
+    <a class="button" href="docs/">Read the docs</a>
+  </div>
+  <div class="install-command">
+    <code>curl -fsSL sobanieca.github.io/imp-aly/install.sh | bash</code>
+    <button class="copy" type="button">Copy</button>
+  </div>
+</div>
+<section class="section">
+  <h2>How it works</h2>
+  <p>The public port takes records from any browser. The server checks them, writes them to a synced log, and then answers. The admin port answers only calls that are signed with the key. The key never goes over the network.</p>
+  <div class="map"
+  aria-label="Diagram: the browsers of your users send records to the public port of the imp-aly server on your VPS. Your machine reads the numbers from the admin port with the key.">
+  <svg viewBox="0 0 960 230" role="img">
+  <text class="t lbl" x="95" y="34"
+  text-anchor="middle">BROWSERS</text>
+  <rect class="box" x="10" y="50" width="170" height="130" rx="10" />
+  <text class="t" x="28" y="80">your imp app</text>
+  <text class="t small" x="28" y="102">imp/analytics</text>
+  <text class="t small" x="28" y="122">+ alySink</text>
+  <text class="t small" x="28" y="160">batches of records</text>
+  
+  <path class="flow" d="M180 115 H300" />
+  <text class="t small" x="240" y="102"
+  text-anchor="middle">POST /collect</text>
+  <text class="t small" x="240" y="140" text-anchor="middle">202</text>
+  
+  <text class="t lbl" x="480" y="34" text-anchor="middle">YOUR VPS</text>
+  <rect class="box vps" x="300" y="50" width="360" height="160"
+  rx="10" />
+  <text class="t" x="320" y="78">imp-aly server</text>
+  <text class="t small acc" x="560" y="78">:4411 public</text>
+  <rect class="inner" x="320" y="92" width="96" height="44" rx="6" />
+  <text class="t small" x="368" y="112" text-anchor="middle">checks</text>
+  <text class="t small" x="368" y="127"
+  text-anchor="middle">+ limit</text>
+  <rect class="inner" x="432" y="92" width="96" height="44" rx="6" />
+  <text class="t small" x="480" y="112" text-anchor="middle">synced</text>
+  <text class="t small" x="480" y="127" text-anchor="middle">log</text>
+  <rect class="inner" x="544" y="92" width="96" height="44" rx="6" />
+  <text class="t small" x="592" y="112" text-anchor="middle">column</text>
+  <text class="t small" x="592" y="127" text-anchor="middle">files</text>
+  <path class="arrow" d="M428 114 l-8 -4 v8 z" />
+  <path class="arrow" d="M540 114 l-8 -4 v8 z" />
+  <rect class="inner" x="432" y="150" width="208" height="40" rx="6" />
+  <text class="t small" x="536" y="174" text-anchor="middle">daily
+  summaries -&gt; queries</text>
+  <text class="t small acc" x="320" y="174">:4410 admin</text>
+  
+  <path class="link" d="M660 170 H780" />
+  <text class="t small" x="720" y="158" text-anchor="middle">key +</text>
+  <text class="t small" x="720" y="190" text-anchor="middle">one-time
+  token</text>
+  
+  <text class="t lbl" x="865" y="34"
+  text-anchor="middle">YOUR MACHINE</text>
+  <rect class="box" x="780" y="50" width="170" height="160" rx="10" />
+  <text class="t" x="798" y="80">imp-aly query</text>
+  <text class="t" x="798" y="104">imp-aly console</text>
+  <text class="t small" x="798" y="136">reports, charts,</text>
+  <text class="t small" x="798" y="154">backups</text>
+  <text class="t small" x="798" y="186">the key stays here</text>
+  
+  <circle class="pk" r="5">
+  <animateMotion dur="1.8s" repeatCount="indefinite"
+  path="M180,115 H300" keyPoints="0;1" keyTimes="0;1"
+  calcMode="linear" />
+  </circle>
+  <circle class="pk back" r="5">
+  <animateMotion dur="2.4s" repeatCount="indefinite"
+  path="M780,170 H660" keyPoints="0;1" keyTimes="0;1"
+  calcMode="linear" />
+  </circle>
+  </svg>
+  </div>
+</section>
+<section class="section">
+  <h2>What you get</h2>
+  <div class="cards">
+    <div class="card">
+      <h3>One file, no database</h3>
+      <p>The server is one binary with no runtime and no dependency. It keeps the records in plain text column files, one folder per app and day.</p>
+    </div>
+    <div class="card">
+      <h3>Safe from the first answer</h3>
+      <p>The server syncs each batch to a write-ahead log before it answers <code>202</code>. A crash a second later loses no accepted record.</p>
+    </div>
+    <div class="card">
+      <h3>Only correct records</h3>
+      <p>Each page, zone and outcome must be in the lists of <code>app-analytics.json</code> from <code>imp build</code>. Run <code>imp-aly app refresh</code> after each deploy. Strict field rules and a rate limit per address stop junk and floods.</p>
+    </div>
+    <div class="card">
+      <h3>History as long as the disk</h3>
+      <p>No age limit. When the disk gets full, the oldest days lose their records first and keep their small daily summaries.</p>
+    </div>
+    <div class="card">
+      <h3>Fast queries</h3>
+      <p>Most queries read only the daily summaries. Group by page, type, zone, outcome, country or your own segments, and by day, week or month. Count records and visits.</p>
+    </div>
+    <div class="card">
+      <h3>Viewed, and also used</h3>
+      <p>imp marks a page view as used at the first click, tap or key on the page. See which pages people open but do not use, with no setup in your app.</p>
+    </div>
+    <div class="card">
+      <h3>Several servers, one answer</h3>
+      <p><code>imp-aly query -s eu,us</code> asks each server and adds up the counts. The result is the same as from one server with all the records.</p>
+    </div>
+    <div class="card">
+      <h3>A key that stays home</h3>
+      <p>Each call carries a one-time token, signed for one request and valid for 60 seconds. The key itself is never sent.</p>
+    </div>
+    <div class="card">
+      <h3>Small backups</h3>
+      <p><code>imp-aly backup</code> saves the daily, week or month summaries to a compressed file. Restore it on any server and query it.</p>
+    </div>
+  </div>
+</section>
+<section class="section">
+  <h2>Setup, in full</h2>
+  <div class="cols">
+    <div class="col">
+      <h3>VPS <span>once</span></h3>
+      <pre class="code"><code><span class="dim">$</span> curl -fsSL sobanieca.github.io/imp-aly/install.sh | bash
+<span class="dim">$</span> sudo imp-aly server --port 4411
+<span class="dim">  Collect:   http://203.0.113.10:4411/collect/&lt;app&gt;
+  Admin:     http://203.0.113.10:4410
+  Key:       </span><span class="hl">kD3xW9q1mZ8pR4tY7uH2cV6bN0aS5fGj</span>
+<span class="dim">$</span> imp-aly app add myapp \
+    https://myapp.example/</code></pre>
+    </div>
+    <div class="col">
+      <h3>Your phone <span>whenever</span></h3>
+      <pre class="code"><code><span class="dim">Open</span> <a class="hl" href="console/">sobanieca.github.io/imp-aly/console</a>
+<span class="dim">Menu -&gt;</span> Install the app
+<span class="dim">Servers -&gt;</span> Add a server
+  https://aly.myapp.example:4410
+  <span class="dim">and the key</span></code></pre>
+    </div>
+    <div class="col wide">
+      <h3>Your imp app <span>main.js</span></h3>
+      <pre class="code"><code><span class="token-keyword">import</span> { onAnalytics } <span class="token-keyword">from</span> <span class="token-string">'imp/analytics'</span>
+<span class="token-keyword">import</span> { alySink } <span class="token-keyword">from</span> <span class="token-string">'imp/analytics/aly'</span>
+
+<span class="token-function">onAnalytics</span>(<span class="token-function">alySink</span>({
+  <span class="token-property">app</span>: <span class="token-string">'myapp'</span>,
+  <span class="token-property">servers</span>: [<span class="token-string">'https://aly.myapp.example'</span>],
+}))</code></pre>
+    </div>
+  </div>
+  <p class="note">The sink is part of <a href="https://github.com/sobanieca/imp-ui" target="_blank" rel="noopener">imp</a>. See <a href="docs/getting-started/">Getting started</a> for each step.</p>
+</section>
+<section class="section">
+  <h2>Read the numbers</h2>
+  <p>Ask with a JSON query in the terminal, or open <a href="console/">the console</a>: a web app for your phone or your computer, with reports of your apps, pages, zones, outcomes and errors, and your apps and servers. Both give the same numbers.</p>
+  <div class="cols">
+    <div class="col">
+      <h3>Terminal <span>imp-aly query</span></h3>
+      <pre class="code"><code><span class="dim">$</span> imp-aly query '{"app": "myapp", "groupBy": ["page"],
+    "measures": ["records", "visits"],
+    "where": {"type": "page"}}'
+<span class="dim">page            records   visits</span>
+/                  6319     4812
+/invoices          5410     3920
+/invoices/:id      2980     2177
+/settings           702      609
+<span class="dim">4 rows | 30 days | 41902 records scanned | 15411 matched</span></code></pre>
+    </div>
+    <div class="col">
+      <h3>Console <span>pages</span></h3>
+      <div class="console-preview">
+        <div class="tiles">
+          <div class="tile"><div class="k">Page views</div><div class="v">15411</div></div>
+          <div class="tile"><div class="k">Page uses</div><div class="v">12328</div></div>
+          <div class="tile"><div class="k">Used when viewed</div><div class="v good">80.0%</div></div>
+          <div class="tile"><div class="k">Never reached or used</div><div class="v">2</div></div>
+        </div>
+        <div class="chart">
+          <div class="k">Page uses per day, last 30 days</div>
+          <svg viewBox="0 0 600 120" role="img"
+          aria-label="Bar chart of page uses per day over 30 days, with lower bars on weekends and a slow rise">
+          <rect x="3" y="47" width="14" height="73" rx="2" />
+          <rect x="23" y="44" width="14" height="76" rx="2" />
+          <rect x="43" y="51" width="14" height="69" rx="2" />
+          <rect x="63" y="47" width="14" height="73" rx="2" />
+          <rect x="83" y="42" width="14" height="78" rx="2" />
+          <rect x="103" y="70" width="14" height="50" rx="2" />
+          <rect x="123" y="75" width="14" height="45" rx="2" />
+          <rect x="143" y="30" width="14" height="90" rx="2" />
+          <rect x="163" y="34" width="14" height="86" rx="2" />
+          <rect x="183" y="37" width="14" height="83" rx="2" />
+          <rect x="203" y="38" width="14" height="82" rx="2" />
+          <rect x="223" y="27" width="14" height="93" rx="2" />
+          <rect x="243" y="63" width="14" height="57" rx="2" />
+          <rect x="263" y="69" width="14" height="51" rx="2" />
+          <rect x="283" y="28" width="14" height="92" rx="2" />
+          <rect x="303" y="32" width="14" height="88" rx="2" />
+          <rect x="323" y="23" width="14" height="97" rx="2" />
+          <rect x="343" y="31" width="14" height="89" rx="2" />
+          <rect x="363" y="22" width="14" height="98" rx="2" />
+          <rect x="383" y="59" width="14" height="61" rx="2" />
+          <rect x="403" y="62" width="14" height="58" rx="2" />
+          <rect x="423" y="28" width="14" height="92" rx="2" />
+          <rect x="443" y="10" width="14" height="110" rx="2" />
+          <rect x="463" y="8" width="14" height="112" rx="2" />
+          <rect x="483" y="23" width="14" height="97" rx="2" />
+          <rect x="503" y="15" width="14" height="105" rx="2" />
+          <rect x="523" y="48" width="14" height="72" rx="2" />
+          <rect x="543" y="57" width="14" height="63" rx="2" />
+          <rect x="563" y="12" width="14" height="108" rx="2" />
+          <rect x="583" y="60" width="14" height="60" rx="2" />
+          </svg>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+<section class="section">
+  <h2>Ask an AI agent. It never gets the key.</h2>
+  <p><code>imp-aly skill --init</code> creates a <code>/imp-aly</code> skill for Claude Code, Codex and Cursor. The agent writes the queries and runs <code>imp-aly</code> with your saved servers. The key stays in its file.</p>
+  <div class="chat" aria-label="Example of a question to an AI agent">
+    <div class="you"><code>/imp-aly</code> which pages do people open but not use?</div>
+    <div class="run">imp-aly query '{"app": "myapp", "where": {"type": ["page", "used"], "zone": null}, "groupBy": ["page", "type"]}'</div>
+    <div class="bot"><code>/settings</code> had 702 views and only 31 uses, so 4% of the views. The other pages are used in 60% of their views or more.</div>
+  </div>
+</section>
+<section class="section" id="install">
+  <h2>Install</h2>
+  <div class="install-command">
+    <code>curl -fsSL sobanieca.github.io/imp-aly/install.sh | bash</code>
+    <button class="copy" type="button">Copy</button>
+  </div>
+  <p>Use the same command on the VPS and on your machine. It supports Linux and macOS on x64 and arm64. As root with systemd, <code>imp-aly server</code> installs a service that runs as its own user. <code>imp-aly help</code> lists every command. Until version 1.0.0, any part of imp-aly can change.</p>
+  <p>It installs to <code>/usr/local/bin</code>, for all users. If you can't write there, run it with <code>sudo bash</code> instead of <code>bash</code>, or install to a custom location: set <code>INSTALL_DIR</code> to a directory on your <code>PATH</code>, as in <code>curl -fsSL sobanieca.github.io/imp-aly/install.sh | INSTALL_DIR=~/.local/bin bash</code>.</p>
+</section>
+<footer class="footer">
+  <span><code>imp-aly</code> - MIT license</span>
+  <a href="docs/">Docs</a>
+  <a href="console/">Console</a>
+  <a href="https://github.com/sobanieca/imp-ui" target="_blank" rel="noopener">imp</a>
+  <a href="https://github.com/sobanieca/imp-aly/releases/latest" target="_blank" rel="noopener">Binaries for Linux and macOS</a>
+</footer>

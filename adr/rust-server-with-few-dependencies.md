@@ -32,6 +32,9 @@ disk space, the user id and the network interfaces. Only the page of the console
   the merge of the answers and the UTC days. They are JavaScript in `console/src/shared/`. A shared
   fixture, `console/test/merge-cases.json`, makes both sides give the same numbers.
 - The code has no comments. Names carry the intent, and the docs and the ADRs carry the reasons.
+- `xtask/` is the dev tool, and it is not part of the binary. It uses the crates of the server, and
+  `pulldown-cmark` without its default features. The site task needs a CommonMark parser for the
+  pages of `docs/`, and a correct parser is large. See `static-site-with-docs.md`.
 - `cargo verify` runs `cargo fmt --check`, `cargo clippy -D warnings` and the tests, then
   `imp fmt --check`, `imp lint` and `imp test --unit` in `console/`.
 

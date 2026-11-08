@@ -10,13 +10,14 @@ status field. When a decision changes, replace its ADR. When a decision is dropp
 
 ## Runtime and distribution
 
-| ADR                                                                       | Decision                                                   |
-| ------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| [rust-server-with-few-dependencies](rust-server-with-few-dependencies.md) | The server is Rust, with few dependencies                  |
-| [single-binary-systemd-service](single-binary-systemd-service.md)         | One binary that installs itself as a systemd service       |
-| [binary-distribution](binary-distribution.md)                             | Binaries on GitHub Releases, with a checksum               |
-| [automatic-updates](automatic-updates.md)                                 | A systemd timer installs a compatible release after 7 days |
-| [tls-certificate-check](tls-certificate-check.md)                         | The server checks its TLS certificate once an hour         |
+| ADR                                                                       | Decision                                                        |
+| ------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| [rust-server-with-few-dependencies](rust-server-with-few-dependencies.md) | The server is Rust, with few dependencies                       |
+| [single-binary-systemd-service](single-binary-systemd-service.md)         | One binary that installs itself as a systemd service            |
+| [binary-distribution](binary-distribution.md)                             | Binaries on GitHub Releases, with a checksum                    |
+| [static-site-with-docs](static-site-with-docs.md)                         | One static site with the landing page, the docs and the console |
+| [automatic-updates](automatic-updates.md)                                 | A systemd timer installs a compatible release after 7 days      |
+| [tls-certificate-check](tls-certificate-check.md)                         | The server checks its TLS certificate once an hour              |
 
 ## Collection
 

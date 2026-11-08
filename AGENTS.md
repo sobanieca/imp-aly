@@ -27,7 +27,7 @@ unit file as they are.** Bump the minor version for any change to them. Increase
 `ureq`, `flate2` and `libc`. Do not add a crate without a strong reason, and record the reason in
 `adr/rust-server-with-few-dependencies.md`. A helper that a crate would give is a small module in
 `src/` with a test. JSON, the argument parser, the URL parser, the tables and the tar format are
-such modules. `xtask/` is the dev tool. It uses the same crates.
+such modules. `xtask/` is the dev tool. It uses the same crates, and `pulldown-cmark` for the site.
 
 The console page is different:
 
@@ -61,7 +61,7 @@ See `adr/rust-server-with-few-dependencies.md` and `adr/console-web-app.md`.
 | `src/storage.rs`                              | the single writer thread: log parts to columns, restore, seal, retention                                                                     |
 | `src/column_store.rs`, `src/rle.rs`           | the column files, the append transaction, sealing, reading                                                                                   |
 | `src/seal_sort.rs`                            | the sort of a day in chunks, and the merge of the chunks into the run files                                                                  |
-| `src/line_files.rs`                           | the reading and writing of line files in blocks, and the line reader that passes each line as bytes                                         |
+| `src/line_files.rs`                           | the reading and writing of line files in blocks, and the line reader that passes each line as bytes                                          |
 | `src/summary.rs`                              | the daily summary of a sealed day: build, parse, check, and the merge of days into a week or a month                                         |
 | `src/live.rs`                                 | the running summary of each open day of the own source, its state on the disk, and its rebuild from the columns                              |
 | `src/periods.rs`                              | the week and month summaries of a source: paths, the check that one is current, the build at seal                                            |
@@ -70,7 +70,7 @@ See `adr/rust-server-with-few-dependencies.md` and `adr/console-web-app.md`.
 | `src/parallel.rs`                             | the run of the parts of a query on several threads, with the results in the order of the parts                                               |
 | `src/scan.rs`                                 | the scan of a day: the column readers in blocks of runs of `u32` ids, the dictionaries, the filters and groups on ids                        |
 | `src/query.rs`                                | the query engine over the day folders and the daily, week and month summaries, with a stop flag                                              |
-| `src/query_cache.rs`, `src/fast_hash.rs`      | the folders, sealed metas, parsed summaries and counts that the query engine keeps in memory, and the fast map of `u32` ids                   |
+| `src/query_cache.rs`, `src/fast_hash.rs`      | the folders, sealed metas, parsed summaries and counts that the query engine keeps in memory, and the fast map of `u32` ids                  |
 | `src/retention.rs`                            | the free space with `statvfs`, the free space rule, old days to summaries, then removal of days, weeks and months                            |
 | `src/auth.rs`                                 | the key, the key file, and the new key that root hands over in `/run/imp-aly` and the service takes on SIGHUP                                |
 | `src/token.rs`                                | the one-time tokens signed per request, and the SHA-256                                                                                      |
@@ -87,8 +87,9 @@ See `adr/rust-server-with-few-dependencies.md` and `adr/console-web-app.md`.
 | `src/testing.rs`, `tests/support/`            | the temporary folders and the test server with a raw HTTP client                                                                             |
 | `xtask/src/main.rs`, `xtask/src/demo_data.rs` | the dev tasks, the demo in `.dev-data/`, the sample records of the apps `shop`, `crm` and `docs`, and `versions.json`                        |
 | `xtask/src/bench.rs`                          | the query benchmark and its data in `.bench-data/`                                                                                           |
+| `xtask/src/site.rs`, `xtask/src/highlight.rs` | the site build: the docs pages from `docs/*.md`, the checks of their links, the layout, and the highlight of code blocks                     |
 | `console/`                                    | the imp project of the PWA: `src/app.js`, `src/screens/`, `src/parts/`, `src/lib/` (`vault.js`, `client.js`), `src/shared/`, `test/`         |
-| `site/index.html`                             | the landing page, one static file that GitHub Pages serves with `install.sh`                                                                 |
+| `site/`                                       | the sources of the site: `overview.html` (the landing page content), `site.css`, `site.js`, `mark.svg`; the build writes `site/dist/`        |
 
 Rules that keep the server safe:
 
@@ -132,16 +133,18 @@ Rules that keep the data correct:
 
 The tasks are cargo aliases in `.cargo/config.toml`. They run `xtask`.
 
-| Command               | What it does                                                                                                                                                    |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `cargo start`         | starts a demo: a server on ports 4411 and 4410 (admin) in `.dev-data/` with 45 days of sample data, a new visit every 3 seconds, and the console on port 4400   |
-| `cargo server`        | runs the server from source in the foreground on ports 4411 and 4410                                                                                            |
-| `cargo console`       | builds the page, then runs the console from source on port 4400                                                                                                 |
-| `cargo console-build` | runs `imp build --pwa` in `console/`, which writes `console/dist`                                                                                               |
-| `cargo test`          | runs the unit tests and `tests/`                                                                                                                                |
-| `cargo verify`        | runs `cargo fmt --check`, `cargo clippy -D warnings`, the tests, then `imp fmt --check`, `imp lint` and `imp test --unit` in `console/`                         |
-| `cargo compile`       | builds the page and the release binary `target/release/imp-aly` with the page inside                                                                            |
-| `cargo query-bench`   | writes 180 sealed days, 1M records of today and a day of 10M records in `.bench-data/` once, then prints the query times; `--reset` writes the data again |
+| Command                  | What it does                                                                                                                                                  |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cargo start`            | starts a demo: a server on ports 4411 and 4410 (admin) in `.dev-data/` with 45 days of sample data, a new visit every 3 seconds, and the console on port 4400 |
+| `cargo server`           | runs the server from source in the foreground on ports 4411 and 4410                                                                                          |
+| `cargo console`          | builds the page, then runs the console from source on port 4400                                                                                               |
+| `cargo console-build`    | runs `imp build --pwa` in `console/`, which writes `console/dist`                                                                                             |
+| `cargo test`             | runs the unit tests and `tests/`                                                                                                                              |
+| `cargo verify`           | runs `cargo fmt --check`, `cargo clippy -D warnings`, the tests, then `imp fmt --check`, `imp lint` and `imp test --unit` in `console/`                       |
+| `cargo compile`          | builds the page and the release binary `target/release/imp-aly` with the page inside                                                                          |
+| `cargo site`             | builds the site into `site/dist/` and serves that folder with `rfm`                                                                                           |
+| `cargo xtask build-site` | builds the site into `site/dist/`: the landing page, the docs, the console, `install.sh` and `versions.json`; `--pages` builds the console for GitHub Pages   |
+| `cargo query-bench`      | writes 180 sealed days, 1M records of today and a day of 10M records in `.bench-data/` once, then prints the query times; `--reset` writes the data again     |
 
 After a batch of changes, run `cargo fmt --all`, then `cargo verify`, and fix every issue. When you
 change the HTTP layer, a thread, the server start or the CLI, also run `cargo compile` and try the
@@ -168,6 +171,12 @@ ADRs record accepted decisions, one per file, as in imp.
   done.
 
 ## Docs (`docs/`)
+
+The site shows each page of `docs/` at `/docs/<name>/`. Add a new page to `PAGE_ORDER` in
+`xtask/src/site.rs`. A link between pages is a relative link such as `apps.md#segments`. The build
+fails on a link to a missing page or heading. `rfm` serves the local site. It is a static file
+server on the machine, not part of the repo. Install it from
+<https://sobanieca.github.io/remote-file-manager/>.
 
 `docs/` is for a person who runs the server and sends records from an imp app. That reader never
 reads the source. Explain what the reader does and what the server does for them. Do not point at
@@ -208,8 +217,9 @@ asks. `cargo verify` must pass before a commit.
 Bump `version` in `Cargo.toml` to release, and run `cargo build` so that `Cargo.lock` has it too. On
 a push to `main`, CI checks the code, builds the static binaries for Linux (musl) and macOS on x64
 and arm64 when the tag `v<version>` does not exist, runs a smoke test of each binary, and publishes
-them with SHA-256 files to a GitHub Release. Then GitHub Pages serves `install.sh`, the landing page
-in `site/` and `versions.json`, the list of released versions with their data format. The update
-timer on each server reads that list. Before `1.0.0`, it installs only a patch version of the same
+them with SHA-256 files to a GitHub Release. Then GitHub Pages serves the site of
+`cargo xtask build-site --pages`: the landing page, the docs, the console, `install.sh` and
+`versions.json`, the list of released versions with their data format. The update timer on each
+server reads that list. Before `1.0.0`, it installs only a patch version of the same
 minor version, and only 7 days after GitHub published it. See `adr/binary-distribution.md` and
 `adr/automatic-updates.md`.
