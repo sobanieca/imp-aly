@@ -1,7 +1,12 @@
 import { init, mount } from 'imp'
 import { root } from './app.js'
-import { alyDark } from './themes.js'
+import { THEMES } from './themes.js'
 
-await init({ theme: alyDark, translations: { en: () => import('./locales/en.js') } })
+await init({
+  themes: THEMES,
+  theme: 'system',
+  persist: true,
+  translations: { en: () => import('./locales/en.js') },
+})
 
 mount('#app', root())

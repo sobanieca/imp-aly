@@ -4,8 +4,8 @@
   "pwa": {
     "name": "imp-aly console",
     "shortName": "imp-aly",
-    "themeColor": "#0b1018",
-    "backgroundColor": "#0b1018",
+    "themeColor": "#101010",
+    "backgroundColor": "#101010",
     "display": "standalone",
     "icon": "assets/icon.svg"
   },

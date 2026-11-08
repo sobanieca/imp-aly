@@ -32,3 +32,5 @@ export const serversTag = ({ catalog, app, failures = [] }) => {
     names,
   )
 }
+
+export const sectionTag = (tag) => (tag?.color === 'red' ? tag : null)

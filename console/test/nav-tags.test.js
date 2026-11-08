@@ -8,7 +8,7 @@ import {
   onHealthChange,
   resetHealth,
 } from '../src/lib/health.js'
-import { serversTag, shortName } from '../src/lib/nav-tags.js'
+import { sectionTag, serversTag, shortName } from '../src/lib/nav-tags.js'
 
 const catalogOf = (servers, apps = []) => ({
   servers: { servers: servers.map((name) => ({ name, url: `https://${name}.example` })) },
@@ -103,4 +103,11 @@ test('a failure stays until the server answers again, and a removed server is fo
   stop.abort()
   noteOutcome('eu-1', new Error('cannot reach'))
   expect(changes).toEqual([1, 2, 1, 0, 1, 0])
+})
+
+test('the section tag shows only a failure', () => {
+  const failed = { text: '1 failed', color: 'red', title: 'eu-1' }
+  expect(sectionTag(failed)).toEqual(failed)
+  expect(sectionTag({ text: 'eu-1' })).toEqual(null)
+  expect(sectionTag(null)).toEqual(null)
 })

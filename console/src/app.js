@@ -4,15 +4,16 @@ import { router } from 'imp/router'
 import { computed, initState } from 'imp/state'
 import { icon } from 'imp/std'
 import { toast } from 'imp/std/feedback'
-import { flex } from 'imp/std/layout'
 import { appLogo, orgSelect, shell, themeSelect } from 'imp/std/shell'
 import {
   luChartColumn,
+  luChartNoAxesCombined,
   luFiles,
   luGauge,
   luMousePointerClick,
   luPackage,
   luServer,
+  luSettings2,
   luTarget,
   luTriangleAlert,
 } from 'imp/icons'
@@ -21,10 +22,10 @@ import { messageOf } from './lib/api.js'
 import { appNamesOf } from './lib/catalog.js'
 import { appsOf, CLIENT_OPTIONS } from './lib/client.js'
 import { failuresOf, keepServers, onHealthChange } from './lib/health.js'
-import { serversTag } from './lib/nav-tags.js'
+import { sectionTag, serversTag } from './lib/nav-tags.js'
 import { initScope } from './lib/scope.js'
 import { loadServers } from './lib/vault.js'
-import { alyDark, alyLight } from './themes.js'
+import { barsRoom, colorBars, cornerArt } from './parts/brand-art.js'
 import { installButton } from './parts/install-button.js'
 import { errorsScreen } from './screens/errors.js'
 import { outcomesScreen } from './screens/outcomes.js'
@@ -66,9 +67,11 @@ export const root = component('aly-root', {
       'aly.serversTag',
       serversTagOf(catalog.get(), chosenApp.get(), health.get()),
     )
-    computed([catalog, chosenApp, health], serversTagOf).watch(self, (tag) =>
-      serversNavTag.set(tag),
-    )
+    const manageNavTag = initState(self, 'aly.manageTag', sectionTag(serversNavTag.get()))
+    computed([catalog, chosenApp, health], serversTagOf).watch(self, (tag) => {
+      serversNavTag.set(tag)
+      manageNavTag.set(sectionTag(tag))
+    })
     let latest = 0
     const reload = async () => {
       const run = ++latest
@@ -87,13 +90,27 @@ export const root = component('aly-root', {
     revision.watch(self, reload)
     return shell(
       {
-        logo: flex(
-          { gap: 2, verticalAlign: 'center', wrap: true },
-          appLogo({
-            label: 'imp-aly',
-            tagline: 'console',
-            icon: icon(luChartColumn, { size: 'lg' }),
-          }),
+        logo: appLogo({
+          label: 'imp-aly',
+          tagline: 'console',
+          icon: icon(luChartColumn, { size: 'lg' }),
+        }),
+        map: app,
+        navbar: { label: 'Sections', background: colorBars() },
+        sidebar: { label: 'Pages' },
+        background: cornerArt(),
+        nav: {
+          [app.reports]: { icon: luChartNoAxesCombined },
+          [app.reports.overview]: { icon: luGauge },
+          [app.reports.pages]: { icon: luFiles },
+          [app.reports.zones]: { icon: luMousePointerClick },
+          [app.reports.outcomes]: { icon: luTarget },
+          [app.reports.errors]: { icon: luTriangleAlert },
+          [app.manage]: { icon: luSettings2, tag: 'aly.manageTag' },
+          [app.manage.registry]: { icon: luPackage },
+          [app.manage.servers]: { icon: luServer, tag: 'aly.serversTag' },
+        },
+        extras: [
           orgs.view((list) =>
             list.length
               ? orgSelect({
@@ -104,28 +121,9 @@ export const root = component('aly-root', {
                 })
               : null,
           ),
-        ),
-        map: app,
-        navbar: false,
-        nav: {
-          [app.reports]: { group: true },
-          [app.reports.overview]: { icon: luGauge },
-          [app.reports.pages]: { icon: luFiles },
-          [app.reports.zones]: { icon: luMousePointerClick },
-          [app.reports.outcomes]: { icon: luTarget },
-          [app.reports.errors]: { icon: luTriangleAlert },
-          [app.manage]: { group: true },
-          [app.manage.registry]: { icon: luPackage },
-          [app.manage.servers]: { icon: luServer, tag: 'aly.serversTag' },
-        },
-        extras: [
           installButton(),
-          themeSelect({
-            themes: [
-              { value: alyDark.name, label: 'Dark', theme: alyDark },
-              { value: alyLight.name, label: 'Light', theme: alyLight },
-            ],
-          }),
+          themeSelect({ variant: 'ghost' }),
+          barsRoom(),
         ],
       },
       toast(),

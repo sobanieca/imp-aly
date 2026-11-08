@@ -6,8 +6,8 @@ can install it on a phone or on a computer.
 
 Open it in one of two ways:
 
-- **On the web**, at `https://sobanieca.github.io/imp-aly/console/`. Click **Install the app** at
-  the bottom of the menu. On a phone, the button is in the navigation drawer. The installed console
+- **On the web**, at `https://sobanieca.github.io/imp-aly/console/`. Click **Install the app** in
+  the top bar. On a phone, the button is in the navigation drawer. The installed console
   opens like an app, and it starts also without a network.
 - **On your machine**, with `imp-aly console`. The binary serves the same page on
   `http://localhost:4400`.
@@ -39,6 +39,23 @@ Installation needs a secure page. GitHub Pages serves the console on `https`, so
 certificate for the page. A browser treats `http://localhost` as secure too. A page on another
 `http` address cannot install, and cannot sign the tokens.
 
+## The layout and the themes
+
+The top bar holds the sections **Reports** and **Manage**, the app menu, the theme menu and
+**Install the app**. The column on the left lists the pages of the current section. On a phone, the
+pages are in the bar at the bottom, and the sections and the menus are in the navigation drawer.
+
+The theme menu has four choices:
+
+| Theme  | What it shows                                                 |
+| ------ | ------------------------------------------------------------- |
+| System | the light or the dark theme, as the device is set             |
+| Light  | dark text on a light page                                     |
+| Dark   | light text on a black page                                    |
+| Dim    | light text on a grey page, softer than the dark theme         |
+
+The console keeps your choice in this browser.
+
 ## Add your servers
 
 The console starts with no server. Open **Servers** and click **Add a server**:
@@ -64,11 +81,12 @@ row.
 
 When a server does not answer, refuses the key or answers with a server error, the tag is red. It
 shows the number of these servers, such as `1 failed`, and its tooltip names them. Open **Servers**
-to see the problem of each server. The tag shows the name again when the server answers.
+to see the problem of each server. The section **Manage** in the top bar shows the red tag too. The
+tag shows the name again when the server answers.
 
 ### Apps and servers
 
-The menu under the logo shows the app of the reports. It lists each app that your servers have
+The app menu in the top bar shows the app of the reports. It lists each app that your servers have
 registered. An app on several servers shows one time. Choose another app there to switch. All
 reports show one app at a time. On a phone, the menu is in the navigation drawer.
 
@@ -127,7 +145,7 @@ The local console, `imp-aly console`, listens on the local addresses of the mach
 
 ## The bar
 
-The reports have a bar at the top:
+The reports have a bar above the numbers:
 
 | Control      | What it does                                                                           |
 | ------------ | -------------------------------------------------------------------------------------- |
@@ -206,7 +224,7 @@ records of the day, and a long day can make it slower. See [Query](query.md).
 
 ### Overview
 
-Overview shows the app of the menu under the logo. The tiles show the visits, the page views, the
+Overview shows the app of the app menu. The tiles show the visits, the page views, the
 share of the visits with an outcome and the errors per 100 page views. The chart shows the visits.
 The tables show the 5 pages with the most views and the 5 outcomes with the highest count. The table
 of the pages does not show the home page `/`, because most visits open it.

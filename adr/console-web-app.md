@@ -82,7 +82,12 @@ localhost.**
 - The page does not take a server or a key from its address. A key in a link goes into the history
   of the browser, into logs and into chats. The person types the values in the form. `cargo start`
   prints the name, the URL and the key of its demo server for that.
-- The page has a dark theme and a light theme. Its fonts are IBM Plex Sans, Space Grotesk and
+- The page looks like imp: a top bar with the sections, a column with the pages of a section, and
+  the colors of imp. Three color bars sit at the end of the top bar, and a grid with colored
+  squares sits in the bottom end corner. A faint grid under the whole page tells the console apart
+  from the imp site.
+- The page has a light, a dark and a dim theme, and a "System" choice that follows the device. imp
+  keeps the choice in `localStorage`. It holds no key. Its fonts are IBM Plex Sans, Space Grotesk and
   JetBrains Mono, under the SIL Open Font License. The page serves the font files itself, with their
   licenses in `fonts/`. So the page loads nothing from another site.
 - The key field of the server form is a `textField` with `secret: true`. imp keeps its value out of
