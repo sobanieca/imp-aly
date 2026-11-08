@@ -18,8 +18,8 @@ server lets each app accept records from the sites of all the other apps.
 with an `Origin` header that is not in the list of that app. There is no "every origin" mode.**
 
 - An origin is a scheme, a host and an optional port, with no path. An app has 1 to 32 origins.
-- `PUT /apps/<name>` takes `origins`. With `appUrl` and no `origins`, the list is the origin of the
-  URL. An uploaded build needs `origins`. `app add --origins` and the console form send the list.
+- `PUT /apps/<name>` takes `origins`. With no `origins`, the list is the origin of `appUrl`.
+  `app add --origins` and the console form send the list.
 - `apps.json` keeps the list. `refresh` does not change it. `app add` replaces it.
 - A request from an allowed origin gets `access-control-allow-origin` with that origin and
   `vary: origin`. A preflight follows the same rule.

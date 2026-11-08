@@ -111,16 +111,11 @@ build is served:
 imp-aly app add myapp https://myapp.example/
 ```
 
-The server reads the file at once and again every 10 minutes. You can also upload the file of the
-build folder, for example from your deploy pipeline:
+The server reads the file at once and again every 10 minutes. The server must be able to read the
+file at that URL.
 
-```sh
-imp-aly app add myapp dist --origins https://myapp.example
-```
-
-The app accepts records only from the browser pages of its origins. With a URL, the origin is the
-origin of the URL. An uploaded build needs `--origins`. See [Apps](apps.md) for the origins, the
-segments and the other app commands.
+The app accepts records only from the browser pages of its origins. By default, the origin is the
+origin of the URL. See [Apps](apps.md) for the origins, the segments and the other app commands.
 
 ## Send records from your app
 

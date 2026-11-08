@@ -30,10 +30,7 @@ pub fn build_text(pages: Option<&str>, zones: Option<&str>, outcomes: Option<&st
 }
 
 pub fn build_body() -> String {
-    format!(
-        r#"{{"origins":["https://myapp.example"],"build":{}}}"#,
-        json::quote(&build_text(None, None, None))
-    )
+    format!(r#"{{"appUrl":"{APP_URL}"}}"#)
 }
 
 pub fn now() -> i64 {
@@ -309,6 +306,13 @@ impl Server {
             body,
             &[("authorization", &auth)],
         )
+    }
+
+    pub fn host(&self, app_url: &str, build: String) {
+        self.files
+            .lock()
+            .unwrap()
+            .insert(format!("{app_url}app-analytics.json"), build);
     }
 
     pub fn register(&self) {

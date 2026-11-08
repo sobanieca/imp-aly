@@ -35,7 +35,7 @@ Usage:
   imp-aly server --uninstall            remove the systemd service
   imp-aly update [--check] [--auto]     install a newer version
   imp-aly key rotate [-a <file>]        change the key, and the server does not stop
-  imp-aly app add <name> <app url|build folder> [--segments plan,role] [--origins <list>]
+  imp-aly app add <name> <app url> [--segments plan,role] [--origins <list>]
   imp-aly app ls | show <name> | refresh <name> | rm <name>
   imp-aly query '<json>' | query <file.json> [--json]
   imp-aly backup [<file>] [--last <period>] [--by day|week|month] [-s <name>]
@@ -178,19 +178,18 @@ Backup (on the VPS, over SSH, or on another machine):
 
 Apps:
 
-  imp-aly app add myapp https://myapp.example/      the server reads the file
-  imp-aly app add myapp dist --segments plan --origins https://myapp.example
-                                                    upload the file of dist
+  imp-aly app add myapp https://myapp.example/
+  imp-aly app add myapp https://myapp.example/ --segments plan
 
   imp build writes app-analytics.json at the root of the build output. The
   server stores a record only when its page, zone and outcome name are in the
-  lists of this file. With a URL, the server reads the file in that folder at
-  once and again every 10 minutes. With a folder, the command uploads the file.
-  Run "app refresh" or "app add" after each deploy.
+  lists of this file. The URL is the folder where the build is served. The
+  server reads the file there at once and again every 10 minutes. Run
+  "app refresh" after each deploy.
 
-  An app accepts records only from the browser pages of its origins. With a
-  URL, the default is the origin of the URL. An uploaded build needs
-  --origins, like --origins https://myapp.example,https://www.myapp.example.
+  An app accepts records only from the browser pages of its origins. The
+  default is the origin of the URL. Give others with --origins, like
+  --origins https://myapp.example,https://www.myapp.example.
   The server answers 403 to a page of another origin.
 
 Saved servers (on your machine):
@@ -261,9 +260,8 @@ API:
   GET  /                    public: the name and the version
   GET  /status              key: the state of the server
   GET  /apps                key: the registered apps
-  PUT  /apps/<name>         key: {{"appUrl": "..."}} or {{"build": "<app-analytics.json>"}},
-                            optional "segments" and "origins"
-  GET  /apps/<name>        key: one app with its rejection counts
+  PUT  /apps/<name>         key: {{"appUrl": "..."}}, optional "segments" and "origins"
+  GET  /apps/<name>         key: one app with its rejection counts
   POST /apps/<name>/refresh key: read app-analytics.json again
   DELETE /apps/<name>       key: stop accepting records of the app
   POST /query               key: a query, answers the counts per group (docs/query.md)

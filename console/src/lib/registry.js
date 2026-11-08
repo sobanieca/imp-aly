@@ -13,7 +13,7 @@ export const registerApp = (api, servers, name, body) =>
   appOnServers(api, servers, 'PUT', appPath(name), body)
 
 export const refreshApp = (api, row) =>
-  appOnServers(api, row.fromUrl, 'POST', `${appPath(row.name)}/refresh`)
+  appOnServers(api, row.servers, 'POST', `${appPath(row.name)}/refresh`)
 
 export const removeApp = (api, row) => appOnServers(api, row.servers, 'DELETE', appPath(row.name))
 
@@ -63,8 +63,6 @@ export const originProblem = (origins) => {
     : `"${wrong}" is not an origin like https://myapp.example, with no path and no "/" at the end.`
 }
 
-const ORIGINS_NEEDED = 'An uploaded build needs the origins of the app, like https://myapp.example.'
-
 const COUNTRY_NOTE = 'The server can add the country to each record, so "country" is not a segment.'
 
 export const segmentsNote = (known) =>
@@ -74,36 +72,11 @@ export const segmentsNote = (known) =>
         .join(', ')}. ${COUNTRY_NOTE}`
     : `No app on the servers has a segment yet. ${COUNTRY_NOTE}`
 
-const SOURCE_FIELDS = { url: 'appUrl', file: 'files', text: 'build' }
-
-export const withoutOtherSources = (errors, source) =>
-  Object.fromEntries(
-    Object.entries(errors ?? {}).filter(
-      ([path]) => path === SOURCE_FIELDS[source] || !Object.values(SOURCE_FIELDS).includes(path),
-    ),
-  )
-
-export const buildProblem = (text) => {
-  if (!text?.trim()) return 'The build file is empty.'
-  let build
-  try {
-    build = JSON.parse(text)
-  } catch (error) {
-    return `The build file is not valid JSON: ${error.message}`
-  }
-  if (!build || typeof build !== 'object' || Array.isArray(build)) {
-    return 'The build file must be a JSON object with "pages", "zones" and "outcomes".'
-  }
-  return null
-}
-
-export const registerBody = (source, values) => {
-  const segments = values.segments ?? []
+export const registerBody = (values) => {
   const origins = values.origins ?? []
-  const given = origins.length ? { origins } : {}
-  if (source === 'url') return { body: { segments, ...given, appUrl: values.appUrl } }
-  const problem = buildProblem(values.build)
-  if (problem) return { fields: { [SOURCE_FIELDS[source]]: problem } }
-  if (!origins.length) return { fields: { origins: ORIGINS_NEEDED } }
-  return { body: { segments, origins, build: values.build } }
+  return {
+    segments: values.segments ?? [],
+    ...(origins.length ? { origins } : {}),
+    appUrl: values.appUrl,
+  }
 }

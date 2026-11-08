@@ -19,10 +19,7 @@ fn collects_valid_records_and_answers_queries() {
         send(server.admin_port, "GET", "/apps", None, &[]).status,
         401
     );
-    let body = format!(
-        r#"{{"origins":["https://myapp.example"],"build":{},"segments":["plan"]}}"#,
-        json::quote(&build_text(None, None, None))
-    );
+    let body = format!(r#"{{"appUrl":"{APP_URL}","segments":["plan"]}}"#);
     let added = server.admin("PUT", "/apps/myapp", Some(&body));
     assert_eq!(added.status, 200);
     assert_eq!(added.get("pages").as_array().unwrap().len(), 3);
@@ -105,10 +102,7 @@ fn a_server_keeps_its_source_id_over_a_restart() {
 #[test]
 fn a_removed_app_keeps_its_records_and_a_new_registration_brings_them_back() {
     let server = Server::start(|_| {});
-    let body = format!(
-        r#"{{"origins":["https://myapp.example"],"build":{},"segments":["plan"]}}"#,
-        json::quote(&build_text(None, None, None))
-    );
+    let body = format!(r#"{{"appUrl":"{APP_URL}","segments":["plan"]}}"#);
     server.admin("PUT", "/apps/myapp", Some(&body));
     server.call(
         "POST",
@@ -196,34 +190,32 @@ fn rejects_malformed_and_oversized_requests() {
             .status,
         400
     );
-    let no_slash = format!(
-        r#"{{"origins":["https://myapp.example"],"build":{}}}"#,
-        json::quote(&build_text(Some(r#"["no-slash"]"#), None, None))
+    server.host(
+        "https://no-slash.example/",
+        build_text(Some(r#"["no-slash"]"#), None, None),
     );
-    assert_eq!(server.admin("PUT", "/apps/x", Some(&no_slash)).status, 422);
-    assert_eq!(
-        server
-            .admin("PUT", "/apps/x", Some(r#"{"build":"{"}"#))
-            .status,
-        422
+    server.host("https://not-json.example/", "{".to_string());
+    for app_url in ["https://no-slash.example/", "https://not-json.example/"] {
+        let body = format!(r#"{{"appUrl":"{app_url}"}}"#);
+        assert_eq!(
+            server.admin("PUT", "/apps/x", Some(&body)).status,
+            422,
+            "{app_url}"
+        );
+    }
+    let upload = format!(
+        r#"{{"appUrl":"{APP_URL}","build":{}}}"#,
+        json::quote(&build_text(None, None, None))
     );
-    assert_eq!(
-        server
-            .admin("PUT", "/apps/x", Some(r#"{"build":{"pages":["/"]}}"#))
-            .status,
-        400
-    );
+    let unknown = server.admin("PUT", "/apps/x", Some(&upload));
+    assert_eq!(unknown.status, 400);
+    assert_eq!(unknown.get("error").as_str(), Some("unknown fields: build"));
     assert_eq!(
         server
             .admin("PUT", "/apps/x", Some(r#"{"segments":[]}"#))
             .status,
         400
     );
-    let both = format!(
-        r#"{{"origins":["https://myapp.example"],"build":{},"appUrl":"{APP_URL}"}}"#,
-        json::quote(&build_text(None, None, None))
-    );
-    assert_eq!(server.admin("PUT", "/apps/x", Some(&both)).status, 400);
     assert_eq!(
         server
             .admin("PUT", "/apps/x", Some(r#"{"appUrl":"myapp.example"}"#))
@@ -241,20 +233,14 @@ fn rejects_malformed_and_oversized_requests() {
         422
     );
     for segment in ["page", "Page", "week", "constructor", "toString"] {
-        let body = format!(
-            r#"{{"origins":["https://myapp.example"],"build":{},"segments":["{segment}"]}}"#,
-            json::quote(&build_text(None, None, None))
-        );
+        let body = format!(r#"{{"appUrl":"{APP_URL}","segments":["{segment}"]}}"#);
         assert_eq!(
             server.admin("PUT", "/apps/x", Some(&body)).status,
             400,
             "{segment}"
         );
     }
-    let twice = format!(
-        r#"{{"origins":["https://myapp.example"],"build":{},"segments":["plan","Plan"]}}"#,
-        json::quote(&build_text(None, None, None))
-    );
+    let twice = format!(r#"{{"appUrl":"{APP_URL}","segments":["plan","Plan"]}}"#);
     assert_eq!(server.admin("PUT", "/apps/x", Some(&twice)).status, 400);
     assert_eq!(
         server
@@ -506,11 +492,9 @@ fn rejects_the_records_of_a_bot_and_of_a_prerendered_page() {
 fn each_app_accepts_records_only_from_its_origins() {
     let server = Server::start(|_| {});
     server.register();
-    let other_body = format!(
-        r#"{{"origins":["https://other.example","http://localhost:5173"],"build":{}}}"#,
-        json::quote(&build_text(None, None, None))
-    );
-    let other_app = server.admin("PUT", "/apps/other", Some(&other_body));
+    server.host("https://other.example/", build_text(None, None, None));
+    let other_body = r#"{"appUrl":"https://other.example/","origins":["https://other.example","http://localhost:5173"]}"#;
+    let other_app = server.admin("PUT", "/apps/other", Some(other_body));
     assert_eq!(
         other_app.text_of("origins"),
         r#"["http://localhost:5173","https://other.example"]"#
@@ -554,17 +538,7 @@ fn each_app_accepts_records_only_from_its_origins() {
 #[test]
 fn an_app_needs_valid_origins() {
     let server = Server::start(|_| {});
-    let build = json::quote(&build_text(None, None, None));
     let put = |body: String| server.admin("PUT", "/apps/x", Some(&body));
-    let upload = put(format!(r#"{{"build":{build}}}"#));
-    assert_eq!(upload.status, 400);
-    assert!(
-        upload
-            .get("error")
-            .as_str()
-            .unwrap()
-            .contains("an uploaded build needs the origins of the app")
-    );
     for origins in [
         r#"[]"#,
         r#""https://myapp.example""#,
@@ -573,7 +547,7 @@ fn an_app_needs_valid_origins() {
         r#"[1]"#,
     ] {
         assert_eq!(
-            put(format!(r#"{{"build":{build},"origins":{origins}}}"#)).status,
+            put(format!(r#"{{"appUrl":"{APP_URL}","origins":{origins}}}"#)).status,
             400,
             "{origins}"
         );
@@ -583,7 +557,7 @@ fn an_app_needs_valid_origins() {
         .collect();
     assert_eq!(
         put(format!(
-            r#"{{"build":{build},"origins":[{}]}}"#,
+            r#"{{"appUrl":"{APP_URL}","origins":[{}]}}"#,
             many.join(",")
         ))
         .status,

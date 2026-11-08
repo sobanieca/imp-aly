@@ -1,7 +1,6 @@
 import { expect, mockModule, test } from 'imp/test'
 import { appOnServers } from '../src/lib/client.js'
 import {
-  buildProblem,
   refreshApp,
   registerApp,
   originProblem,
@@ -10,14 +9,13 @@ import {
   removeQuestion,
   segmentProblem,
   segmentsNote,
-  withoutOtherSources,
 } from '../src/lib/registry.js'
 
 mockModule('../src/lib/client.js', ({ spy }) => ({
   appOnServers: spy(() => Promise.resolve({ apps: [], failedServers: [] })),
 }))
 
-const row = { name: 'shop', servers: ['eu-1', 'us-2'], fromUrl: ['eu-1'] }
+const row = { name: 'shop', servers: ['eu-1', 'us-2'] }
 
 test('an action on a row goes only to the servers of that row', async () => {
   await removeApp('api', row)
@@ -25,7 +23,7 @@ test('an action on a row goes only to the servers of that row', async () => {
   await registerApp('api', ['us-2'], 'my-app', { segments: [] })
   expect(appOnServers.calls).toEqual([
     ['api', ['eu-1', 'us-2'], 'DELETE', '/apps/shop'],
-    ['api', ['eu-1'], 'POST', '/apps/shop/refresh'],
+    ['api', ['eu-1', 'us-2'], 'POST', '/apps/shop/refresh'],
     ['api', ['us-2'], 'PUT', '/apps/my-app', { segments: [] }],
   ])
 })
@@ -61,38 +59,18 @@ test('the register form lists the segments that the servers know', () => {
   expect(segmentsNote([])).toMatch(/^No app on the servers has a segment yet\./)
 })
 
-test('the register form checks that the build is a JSON object', () => {
-  expect(buildProblem('{"pages": ["/"], "zones": [], "outcomes": []}')).toEqual(null)
-  expect(buildProblem('')).toEqual('The build file is empty.')
-  expect(buildProblem('  ')).toEqual('The build file is empty.')
-  expect(buildProblem('{"pages": [')).toMatch(/^The build file is not valid JSON: /)
-  expect(buildProblem('["/"]')).toMatch(/must be a JSON object/)
-  expect(buildProblem('null')).toMatch(/must be a JSON object/)
-})
-
-test('the register form sends the build of the chosen source, and never invalid JSON', () => {
-  const build = '{"pages": ["/"]}'
+test('the register form sends the URL of the app, and the origins only when given', () => {
   const origins = ['https://shop.example']
-  const values = { appUrl: 'https://shop.example/', build, segments: ['plan'], origins }
-  expect(registerBody('url', values)).toEqual({
-    body: { segments: ['plan'], origins, appUrl: 'https://shop.example/' },
+  const values = { appUrl: 'https://shop.example/', segments: ['plan'], origins }
+  expect(registerBody(values)).toEqual({
+    segments: ['plan'],
+    origins,
+    appUrl: 'https://shop.example/',
   })
-  expect(registerBody('url', { ...values, origins: [] })).toEqual({
-    body: { segments: ['plan'], appUrl: 'https://shop.example/' },
+  expect(registerBody({ ...values, origins: [], segments: undefined })).toEqual({
+    segments: [],
+    appUrl: 'https://shop.example/',
   })
-  expect(registerBody('text', values)).toEqual({ body: { segments: ['plan'], origins, build } })
-  expect(registerBody('file', { ...values, segments: undefined })).toEqual({
-    body: { segments: [], origins, build },
-  })
-  expect(registerBody('text', { ...values, origins: undefined }).fields.origins).toMatch(
-    /needs the origins of the app/,
-  )
-  expect(registerBody('text', { ...values, build: '{"pages": [' }).fields.build).toMatch(
-    /not valid JSON/,
-  )
-  expect(registerBody('file', { ...values, build: '[]' }).fields.files).toMatch(
-    /must be a JSON object/,
-  )
 })
 
 test('the register form takes only origins with no path', () => {
@@ -110,12 +88,4 @@ test('the register form takes only origins with no path', () => {
   expect(
     originProblem(Array.from({ length: 33 }, (_, index) => `https://a${index}.example`)),
   ).toEqual('An app has at most 32 origins.')
-})
-
-test('a change of the source forgets the problems of the fields of the other sources', () => {
-  const errors = { name: 'bad name', appUrl: 'required', build: 'not JSON', files: 'required' }
-  expect(withoutOtherSources(errors, 'text')).toEqual({ name: 'bad name', build: 'not JSON' })
-  expect(withoutOtherSources(errors, 'url')).toEqual({ name: 'bad name', appUrl: 'required' })
-  expect(withoutOtherSources(errors, 'file')).toEqual({ name: 'bad name', files: 'required' })
-  expect(withoutOtherSources(null, 'url')).toEqual({})
 })

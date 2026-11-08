@@ -1,4 +1,4 @@
-use crate::app_build::{FetchFile, Lists, fetch_build, folder_url, parse_build};
+use crate::app_build::{FetchFile, Lists, fetch_build, folder_url};
 use crate::days::{iso, now_ms};
 use crate::error::{Error, Result};
 use crate::fsutil::{read_json, write_json_atomic};
@@ -58,19 +58,11 @@ pub fn validate_segments(segments: Option<&Value>) -> Result<Vec<String>> {
 
 const ORIGINS_HINT: &str = "origins is a list of browser origins, like [\"https://myapp.example\"]";
 
-pub fn validate_origins(
-    origins: Option<&Value>,
-    app_url: Option<&str>,
-) -> Result<BTreeSet<String>> {
+pub fn validate_origins(origins: Option<&Value>, app_url: &str) -> Result<BTreeSet<String>> {
     let Some(origins) = origins else {
-        return app_url
-            .and_then(origin_of)
+        return origin_of(app_url)
             .map(|origin| BTreeSet::from([origin]))
-            .ok_or_else(|| {
-                app_error(format!(
-                    "an uploaded build needs the origins of the app: {ORIGINS_HINT}"
-                ))
-            });
+            .ok_or_else(|| app_error(format!("give the origins of the app: {ORIGINS_HINT}")));
     };
     let Value::Array(list) = origins else {
         return Err(app_error(ORIGINS_HINT));
@@ -99,7 +91,7 @@ pub fn validate_origins(
 pub struct App {
     id: u64,
     pub name: String,
-    pub app_url: Option<String>,
+    pub app_url: String,
     pub lists: Arc<Lists>,
     pub segments: Arc<Vec<String>>,
     pub origins: Arc<BTreeSet<String>>,
@@ -197,11 +189,6 @@ pub struct Rules {
     pub segments: Arc<Vec<String>>,
 }
 
-struct Source {
-    app_url: Option<String>,
-    lists: Lists,
-}
-
 pub struct Apps {
     path: String,
     state: Mutex<Vec<App>>,
@@ -209,8 +196,6 @@ pub struct Apps {
     fetch_file: FetchFile,
     next_id: AtomicU64,
 }
-
-const UPLOAD_HINT: &str = "an upload gives build: the text of app-analytics.json";
 
 impl Apps {
     pub fn open(data_dir: &str, fetch_file: FetchFile) -> Result<Apps> {
@@ -226,6 +211,9 @@ impl Apps {
         if let Some(Value::Object(entries)) = stored.as_ref().and_then(|value| value.get("apps")) {
             let mut state = apps.lock();
             for (name, value) in entries.iter() {
+                let Some(app_url) = optional_text(value.get("appUrl")) else {
+                    continue;
+                };
                 if !is_app_name(name) {
                     continue;
                 }
@@ -237,7 +225,7 @@ impl Apps {
                 state.push(App {
                     id: apps.next_id.fetch_add(1, Ordering::Relaxed),
                     name: name.clone(),
-                    app_url: optional_text(value.get("appUrl")),
+                    app_url,
                     lists: Arc::new(lists),
                     segments: Arc::new(read_strings(value.get("segments"))),
                     origins: Arc::new(read_strings(value.get("origins")).into_iter().collect()),
@@ -316,39 +304,15 @@ impl Apps {
             .ok_or_else(|| Self::missing(name))
     }
 
-    fn read_source(&self, body: &Object) -> Result<Source> {
-        let url = body.get("appUrl");
-        let build = body.get("build");
-        if url.is_some() && build.is_some() {
-            return Err(app_error(
-                "give appUrl (a URL) or the uploaded build, not both",
-            ));
-        }
-        if let Some(url) = url {
-            let app_url = url.as_str().and_then(folder_url).ok_or_else(|| {
+    fn read_app_url(body: &Object) -> Result<String> {
+        body.get("appUrl")
+            .and_then(Value::as_str)
+            .and_then(folder_url)
+            .ok_or_else(|| {
                 app_error(
                     "appUrl is the http or https URL of the folder of the build, like https://myapp.example/",
                 )
-            })?;
-            let lists = fetch_build(&app_url, &self.fetch_file).map_err(|error| {
-                Error::status(422, format!("the build could not be read: {error}"))
-            })?;
-            return Ok(Source {
-                app_url: Some(app_url),
-                lists,
-            });
-        }
-        let Some(build) = build else {
-            return Err(app_error(format!("give appUrl, or {UPLOAD_HINT}")));
-        };
-        let Value::String(text) = build else {
-            return Err(app_error(UPLOAD_HINT));
-        };
-        let lists = parse_build(text).map_err(|error| Error::status(422, error))?;
-        Ok(Source {
-            app_url: None,
-            lists,
-        })
+            })
     }
 
     pub fn put(&self, name: &str, body: &Value) -> Result<Value> {
@@ -364,22 +328,17 @@ impl Apps {
         };
         let unknown: Vec<&str> = body
             .keys()
-            .filter(|key| !["appUrl", "build", "segments", "origins"].contains(&key.as_str()))
+            .filter(|key| !["appUrl", "segments", "origins"].contains(&key.as_str()))
             .map(String::as_str)
             .collect();
         if !unknown.is_empty() {
             return Err(app_error(format!("unknown fields: {}", unknown.join(", "))));
         }
         let segments = validate_segments(body.get("segments"))?;
-        let given = body
-            .get("origins")
-            .map(|origins| validate_origins(Some(origins), None))
-            .transpose()?;
-        let source = self.read_source(body)?;
-        let origins = match given {
-            Some(origins) => origins,
-            None => validate_origins(None, source.app_url.as_deref())?,
-        };
+        let app_url = Self::read_app_url(body)?;
+        let origins = validate_origins(body.get("origins"), &app_url)?;
+        let lists = fetch_build(&app_url, &self.fetch_file)
+            .map_err(|error| Error::status(422, format!("the build could not be read: {error}")))?;
         let now = iso(now_ms());
         let described = {
             let mut state = self.lock();
@@ -387,8 +346,8 @@ impl Apps {
             let mut app = App {
                 id: self.next_id.fetch_add(1, Ordering::Relaxed),
                 name: name.to_string(),
-                app_url: source.app_url,
-                lists: Arc::new(source.lists),
+                app_url,
+                lists: Arc::new(lists),
                 segments: Arc::new(segments),
                 origins: Arc::new(origins),
                 created_at: Some(now.clone()),
@@ -456,12 +415,7 @@ impl Apps {
                 .iter()
                 .find(|app| app.name == name)
                 .ok_or_else(|| Self::missing(name))?;
-            let Some(app_url) = app.app_url.clone() else {
-                return Err(app_error(format!(
-                    "app \"{name}\" has an uploaded build and no appUrl"
-                )));
-            };
-            (app.id, app_url)
+            (app.id, app.app_url.clone())
         };
         if self.reread(id, &app_url) {
             self.save()?;
@@ -478,7 +432,7 @@ impl Apps {
         let targets: Vec<(u64, String)> = self
             .lock()
             .iter()
-            .filter_map(|app| app.app_url.clone().map(|url| (app.id, url)))
+            .map(|app| (app.id, app.app_url.clone()))
             .collect();
         for (id, url) in targets {
             self.reread(id, &url);

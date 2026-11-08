@@ -2,17 +2,15 @@ use super::status::selection;
 use crate::api_client::{
     ApiTarget, CALL_TIMEOUT_MS, Settled, call_server, each_server, resolve_all,
 };
-use crate::app_build::BUILD_FILE;
 use crate::args::{Parsed, parse_timeout, require_only_flags};
 use crate::error::{Error, Result};
 use crate::json::{self, Object, Value};
 use crate::logger;
-use crate::paths::join;
 use crate::table::format_table;
 use crate::url::encode_component;
 
 const USAGE: &str = "use one of:
-  imp-aly app add <name> <app url or build folder> [--segments plan,role] [--origins <list>]
+  imp-aly app add <name> <app url> [--segments plan,role] [--origins <list>]
   imp-aly app ls
   imp-aly app show <name>
   imp-aly app refresh <name>
@@ -57,7 +55,7 @@ fn summary(app: &Value) -> String {
         count(app, "outcomes"),
         joined(app, "segments"),
         joined(app, "origins"),
-        app.get_str("appUrl").unwrap_or("uploaded")
+        app.get_str("appUrl").unwrap_or("")
     )
 }
 
@@ -84,19 +82,6 @@ fn finish<T>(settled: &Settled<T>, targets: &[ApiTarget]) -> Result<()> {
     )))
 }
 
-fn read_build_folder(folder: &str) -> Result<String> {
-    let meta = std::fs::metadata(folder)
-        .map_err(|error| Error::new(format!("cannot read the build folder {folder}: {error}")))?;
-    if !meta.is_dir() {
-        return Err(Error::new(format!(
-            "{folder} is not a folder - give the build folder that holds {BUILD_FILE}"
-        )));
-    }
-    let path = join(&[folder, BUILD_FILE]);
-    std::fs::read_to_string(&path)
-        .map_err(|error| Error::new(format!("cannot read {path}: {error}")))
-}
-
 fn split_list(value: Option<&str>) -> Vec<String> {
     value
         .map(|list| {
@@ -108,13 +93,13 @@ fn split_list(value: Option<&str>) -> Vec<String> {
         .unwrap_or_default()
 }
 
-pub fn add_body(source: &str, segments: &[String], origins: &[String]) -> Result<Value> {
-    let mut body = Object::new();
-    if is_url(source) {
-        body.insert("appUrl", source);
-    } else {
-        body.insert("build", read_build_folder(source)?);
+pub fn add_body(app_url: &str, segments: &[String], origins: &[String]) -> Result<Value> {
+    if !is_url(app_url) {
+        return Err(Error::new(format!(
+            "{app_url} is not a URL - give the http or https URL of the folder of the build, like https://myapp.example/"
+        )));
     }
+    let mut body = Object::new().with("appUrl", app_url);
     body.insert("segments", segments.to_vec());
     if !origins.is_empty() {
         body.insert("origins", origins.to_vec());
@@ -125,7 +110,7 @@ pub fn add_body(source: &str, segments: &[String], origins: &[String]) -> Result
 pub fn app(parsed: &Parsed) -> Result<()> {
     let action = parsed.positional.get(1).map(String::as_str);
     let name = parsed.positional.get(2);
-    let source = parsed.positional.get(3);
+    let app_url = parsed.positional.get(3);
     let rest = parsed.positional.len() > 4;
     if action == Some("add") {
         require_only_flags(
@@ -153,7 +138,7 @@ pub fn app(parsed: &Parsed) -> Result<()> {
     };
     match action {
         Some("add") => {
-            let (Some(name), Some(source), false) = (name, source, rest) else {
+            let (Some(name), Some(app_url), false) = (name, app_url, rest) else {
                 return Err(Error::new(USAGE));
             };
             let segments = split_list(parsed.get("segments"));
@@ -161,12 +146,7 @@ pub fn app(parsed: &Parsed) -> Result<()> {
             if parsed.has("origins") && origins.is_empty() {
                 return Err(Error::new("--origins needs at least one origin"));
             }
-            let body = add_body(source, &segments, &origins)?;
-            if origins.is_empty() && !is_url(source) {
-                return Err(Error::new(
-                    "an uploaded build needs --origins, the browser origins of the app, like --origins https://myapp.example",
-                ));
-            }
+            let body = add_body(app_url, &segments, &origins)?;
             let path = format!("/apps/{}", encode_component(name));
             let settled = each_server(&targets, |target| {
                 call_server(target, "PUT", &path, Some(&body), timeout)
@@ -250,7 +230,7 @@ pub fn app(parsed: &Parsed) -> Result<()> {
                                 },
                             );
                         }
-                        row.insert("build", entry.get_str("appUrl").unwrap_or("uploaded"));
+                        row.insert("build", entry.get_str("appUrl").unwrap_or(""));
                         Value::Object(row)
                     })
                     .collect();
@@ -259,7 +239,7 @@ pub fn app(parsed: &Parsed) -> Result<()> {
             finish(&settled, &targets)
         }
         Some(action @ ("show" | "refresh" | "rm")) => {
-            let (Some(name), None) = (name, source) else {
+            let (Some(name), None) = (name, app_url) else {
                 return Err(Error::new(USAGE));
             };
             let path = format!("/apps/{}", encode_component(name));

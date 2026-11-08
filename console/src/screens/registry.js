@@ -5,22 +5,13 @@ import { button, icon, menuButton, text } from 'imp/std'
 import { table } from 'imp/std/data'
 import { descriptionList, emptyState, tag } from 'imp/std/display'
 import { notice, notify } from 'imp/std/feedback'
-import {
-  comboBox,
-  fileUpload,
-  form,
-  FormError,
-  segmented,
-  submitForm,
-  textField,
-} from 'imp/std/inputs'
+import { comboBox, form, FormError, submitForm, textField } from 'imp/std/inputs'
 import { dialog, drawer, flex, stack } from 'imp/std/layout'
 import { luPlus } from 'imp/icons'
 import { messageOf } from '../lib/api.js'
 import { knownSegments, registryRows } from '../lib/catalog.js'
 import { formatCount, formatDateTime } from '../lib/format.js'
 import {
-  buildProblem,
   originProblem,
   refreshApp,
   registerApp,
@@ -29,7 +20,6 @@ import {
   removeQuestion,
   segmentProblem,
   segmentsNote,
-  withoutOtherSources,
 } from '../lib/registry.js'
 import {
   catalogNotice,
@@ -43,12 +33,6 @@ import { scopeBar } from '../parts/scope-bar.js'
 
 const APP_NAME = /^[a-z0-9][a-z0-9-]{0,62}$/
 
-const SOURCES = [
-  { value: 'url', label: 'URL' },
-  { value: 'file', label: 'File' },
-  { value: 'text', label: 'Text' },
-]
-
 const reportFailures = (title, failedServers) => {
   if (failedServers?.length) {
     notify({ kind: 'warning', title, description: failureText(failedServers), duration: 0 })
@@ -56,58 +40,6 @@ const reportFailures = (title, failedServers) => {
 }
 
 const BUILD_FILE = 'app-analytics.json'
-
-const sourceFields = (source, readFiles) => {
-  if (source === 'url') {
-    return textField({
-      field: 'appUrl',
-      label: 'URL of the app',
-      type: 'url',
-      required: true,
-      placeholder: 'https://myapp.example/',
-      help: `The folder of the build. The server reads ${BUILD_FILE} there, and again every 10 minutes.`,
-    })
-  }
-  if (source === 'file') {
-    return fileUpload({
-      field: 'files',
-      label: `File of the build (${BUILD_FILE})`,
-      accept: '.json,application/json',
-      required: true,
-      onFiles: readFiles,
-      help: `imp build writes ${BUILD_FILE} next to the app.`,
-    })
-  }
-  return textField({
-    field: 'build',
-    label: `Text of ${BUILD_FILE}`,
-    rows: 10,
-    required: true,
-    placeholder:
-      '{\n  "pages": ["/", "/invoices/:id"],\n  "zones": ["myapp.send"],\n  "outcomes": []\n}',
-    validate: buildProblem,
-    help: 'The route patterns in "pages", and the zone and outcome names in "zones" and "outcomes". A chosen file shows here, and you can change it.',
-  })
-}
-
-const buildSource = component('aly-build-source', {
-  setup: (self, { onRead }) => {
-    const source = useState(self, 'aly.register.source')
-    const values = useState(self, 'imp.form')
-    const errors = useState(self, 'imp.form.errors')
-    source.watch(self, (value) => errors.set((all) => withoutOtherSources(all, value)))
-    const readFiles = (files) => {
-      const reading = files[0]?.text() ?? Promise.resolve('')
-      onRead(reading)
-      return reading.then((build) => values.set((all) => ({ ...all, build })))
-    }
-    return stack(
-      { gap: 4 },
-      segmented({ label: 'The build comes from', value: source, options: SOURCES }),
-      source.view((value) => sourceFields(value, readFiles)),
-    )
-  },
-})
 
 const serverChoice = (names) =>
   names.length > 1
@@ -125,26 +57,19 @@ const serverChoice = (names) =>
 const registerForm = component('aly-register-form', {
   setup: (self, { serverNames, segments: known, onDone }) => {
     const api = useHttpClient(self, 'aly.api')
-    let fileText = Promise.resolve('')
-    const source = initState(self, 'aly.register.source', 'url')
     return form(
       {
         initialValues: {
           name: '',
           appUrl: '',
-          build: '',
-          files: [],
           segments: [],
           origins: [],
           servers: serverNames.length === 1 ? serverNames : [],
         },
         onSubmit: async (values) => {
-          const build = source.get() === 'file' ? await fileText : values.build
-          const { body, fields } = registerBody(source.get(), { ...values, build })
-          if (fields) throw new FormError('', { fields })
           let answer
           try {
-            answer = await registerApp(api, values.servers, values.name, body)
+            answer = await registerApp(api, values.servers, values.name, registerBody(values))
           } catch (error) {
             throw new FormError(messageOf(error), { cause: error })
           }
@@ -166,7 +91,14 @@ const registerForm = component('aly-register-form', {
         validate: (value) =>
           APP_NAME.test(value ?? '') ? null : 'Use 1 to 63 lowercase letters, digits and "-".',
       }),
-      buildSource({ onRead: (reading) => (fileText = reading) }),
+      textField({
+        field: 'appUrl',
+        label: 'URL of the app',
+        type: 'url',
+        required: true,
+        placeholder: 'https://myapp.example/',
+        help: `The folder where the build is served. The server reads ${BUILD_FILE} there, and again every 10 minutes.`,
+      }),
       comboBox({
         field: 'segments',
         label: 'Segments',
@@ -211,7 +143,7 @@ const appDetails = (entries) =>
             { term: 'Outcomes', details: formatCount(entry.outcomes.length) },
             { term: 'Segments', details: entry.segments.join(', ') || '-' },
             { term: 'Origins', details: (entry.origins ?? []).join(', ') || '-' },
-            { term: 'Files of the build', details: entry.appUrl ?? 'uploaded' },
+            { term: 'Files of the build', details: entry.appUrl },
             { term: 'Files read at', details: formatDateTime(entry.buildUpdatedAt) },
             { term: 'Registered at', details: formatDateTime(entry.createdAt) },
             { term: 'Accepted records', details: formatCount(entry.accepted) },
@@ -240,14 +172,10 @@ const appDetails = (entries) =>
     ),
   )
 
-const filesTag = (row) => {
-  if (row.buildErrors) return tag({ color: 'red', dot: true }, 'Cannot read')
-  if (row.fromUrl.length === row.servers.length) {
-    return tag({ color: 'green', dot: true }, 'From URL')
-  }
-  if (!row.fromUrl.length) return tag({ color: 'green', dot: true }, 'Uploaded')
-  return tag({ color: 'green', dot: true }, 'URL and upload')
-}
+const filesTag = (row) =>
+  row.buildErrors
+    ? tag({ color: 'red', dot: true }, 'Cannot read')
+    : tag({ color: 'green', dot: true }, 'Read')
 
 const countColumn = (key, label) => ({
   key,
@@ -386,12 +314,7 @@ export const registryScreen = component('aly-registry', {
                 label: `Actions for ${row.name}`,
                 items: [
                   { id: 'show', label: 'Details', onClick: () => show(row.name) },
-                  {
-                    id: 'refresh',
-                    label: 'Read the files again',
-                    disabled: !row.fromUrl.length,
-                    onClick: () => refresh(row),
-                  },
+                  { id: 'refresh', label: 'Read the files again', onClick: () => refresh(row) },
                   { id: 'remove', label: 'Remove', onClick: () => ask(row) },
                 ],
               }),

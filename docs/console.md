@@ -317,27 +317,23 @@ the previous period show in red.
 
 | Page            | What you can do                                                                                                                                                                                                                             |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Registered apps | see the apps of all servers, one row per app with its servers. Register an app from a URL, the build file or text, with origins and segments. See the reasons of the rejected records per server. Read the build file again. Remove an app. |
+| Registered apps | see the apps of all servers, one row per app with its servers. Register an app from its URL, with origins and segments. See the reasons of the rejected records per server. Read the build file again. Remove an app. |
 | Servers         | see the servers of the console, and the state of each one: the version, the source id, the free disk space and the problems of the storage. Add, change and remove a server.                                                                |
 
 "Register" registers the app on the servers that you choose, like `imp-aly app add -s a,b`. With one
 server, the console registers the app there. See [Apps](apps.md).
 
 "Origins" takes the browser origins of the pages of the app, such as `https://myapp.example`. Type
-an origin and press Enter. With a URL and no origin, the server takes the origin of the URL. A file
-or a text needs at least one origin.
+an origin and press Enter. With no origin, the server takes the origin of the URL of the app.
 
 The form lists the segments that the apps on your servers declare, with the names of these apps.
 Choose a segment from the list, or type a new name. The form checks each name like the server does.
 `country` and the other fields of a record are not segments. The server adds the country itself.
 
-"The build comes from" has three tabs: "URL", "File" and "Text". "Register" sends the build of the
-chosen tab. A chosen file also shows on the "Text" tab, so you can change it there. The form checks
-that the file or the text is a JSON object. When it is not, the form shows the problem on the field
-and sends nothing.
+"URL of the app" is the folder where the build is served. The server reads `app-analytics.json`
+there, and again every 10 minutes.
 
-"Read the files again" and "Remove" go only to the servers of the row. "Read the files again" goes
-to the servers that read the build file from a URL.
+"Read the files again" and "Remove" go only to the servers of the row.
 
 The console does not make backups. Make them with `imp-aly backup` on the VPS or on another machine.
 See [Backup](backup.md).

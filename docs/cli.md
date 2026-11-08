@@ -5,7 +5,7 @@ imp-aly server [options]              start the server
 imp-aly server --uninstall            remove the systemd service
 imp-aly update [--check] [--auto]     install a newer version
 imp-aly key rotate [-a <file>]        change the key, and the server does not stop
-imp-aly app add <name> <app url|build folder> [--segments plan,role] [--origins <list>]
+imp-aly app add <name> <app url> [--segments plan,role] [--origins <list>]
 imp-aly app ls | show <name> | refresh <name> | rm <name>
 imp-aly query '<json>' | query <file.json> [--json]
 imp-aly backup [<file>] [--last <period>] [--by <granularity>] [-s <name>]

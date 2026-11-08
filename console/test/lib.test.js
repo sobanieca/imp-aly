@@ -343,7 +343,6 @@ test('the registry has one row per app, with its servers and the sum of its reco
   expect(crm.servers).toEqual(['us'])
   expect({
     servers: shop.servers,
-    fromUrl: shop.fromUrl,
     pages: shop.pages,
     segments: shop.segments,
     accepted: shop.accepted,
@@ -351,7 +350,6 @@ test('the registry has one row per app, with its servers and the sum of its reco
     buildErrors: shop.buildErrors,
   }).toEqual({
     servers: ['eu', 'us'],
-    fromUrl: ['eu'],
     pages: ['/', '/cart'],
     segments: ['plan'],
     accepted: 6,

@@ -22,10 +22,11 @@ checks, with `page`, `zone` and the outcome `name` in the lists of the build fil
 - The registry is `apps.json`, written atomically. It holds `appUrl`, `pages`, `zones`, `outcomes`,
   `segments`, `createdAt`, `buildUpdatedAt` and `buildError` of each app. The private API changes
   it, see `one-time-token-admin-api.md`.
-- The file comes from a URL or from an upload. `appUrl` is the URL of the folder where the build
-  output is served. The server adds a `/` to its path when it has none, and reads
-  `app-analytics.json` relative to it. An upload gives the text of the file in `build`. The CLI
-  reads it from a build folder.
+- The file comes only from a URL. `appUrl` is the URL of the folder where the build output is
+  served. The server adds a `/` to its path when it has none, and reads `app-analytics.json`
+  relative to it. There is no upload of the file. imp-aly is for public apps, or for apps that serve
+  their build file on a URL that the server can reach. One source keeps the API, the CLI and the
+  console simple, and `refresh` works for every app.
 - One file means one read per refresh. A read is all or nothing: the three lists always come from
   the same build. The server reads the file of a URL at registration and every 10 minutes. When the
   read fails, the server keeps the last lists and records the error in `buildError`.
@@ -50,6 +51,8 @@ checks, with `page`, `zone` and the outcome `name` in the lists of the build fil
   segments, so the client sees when servers have different builds.
 
 ## Consequences
+
+- An app that cannot serve `app-analytics.json` on a URL that the server can reach cannot register.
 
 - A sender cannot add invented pages, zones, outcome names, unknown fields, or large text. The
   reports show only names that are in the code of the app.

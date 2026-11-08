@@ -41,6 +41,5 @@ export const registryRows = (catalog) =>
       accepted: sum(entries, 'accepted'),
       rejected: sum(entries, 'rejected'),
       buildErrors: entries.filter(({ buildError }) => buildError).length,
-      fromUrl: entries.filter(({ appUrl }) => appUrl).map(({ server }) => server),
     }
   })

@@ -228,12 +228,12 @@ the header is missing or holds another value. The server never stores the addres
 ## CORS and allowed origins
 
 Each app accepts records only from the browser pages of its origins. You give the origins when you
-register the app. With a URL and no origins, the server takes the origin of the URL. See
+register the app. With no origins, the server takes the origin of the URL of the app. See
 [Apps](apps.md#register-an-app).
 
 ```sh
 imp-aly app add myapp https://myapp.example/
-imp-aly app add myapp dist --origins https://myapp.example,https://www.myapp.example
+imp-aly app add myapp https://myapp.example/ --origins https://myapp.example,https://www.myapp.example
 ```
 
 An origin is a scheme, a host and an optional port, like `https://myapp.example` or

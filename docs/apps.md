@@ -37,23 +37,22 @@ forged record cannot add a page, a zone or an outcome name that the app does not
 
 ```sh
 imp-aly app add myapp https://myapp.example/
-imp-aly app add myapp dist --segments plan,role --origins https://myapp.example
+imp-aly app add myapp https://myapp.example/ --segments plan,role
 ```
 
 - **The name** is 1 to 63 lowercase letters, digits and `-`, and starts with a letter or a digit.
   The app sends its records to `/collect/<name>`.
-- **The build file** comes from a URL or from a folder.
-  - A URL is the address of the folder where the build output is served, such as
-    `https://myapp.example/` or `https://myapp.example/app/`. The server reads `app-analytics.json`
-    in that folder at once, and again every 10 minutes. When a read fails, the server keeps the last
-    lists and shows the error in `app ls`.
-  - A folder is the build output on your machine, such as `dist`. The command reads
-    `app-analytics.json` in it and uploads it. The server keeps it until you upload a new one.
+- **The URL** is the address of the folder where the build output is served, such as
+  `https://myapp.example/` or `https://myapp.example/app/`. The server reads `app-analytics.json` in
+  that folder at once, and again every 10 minutes. When a read fails, the server keeps the last
+  lists and shows the error in `app ls`.
+  - The server must be able to read the file. Serve it on a public URL, or on a URL that the VPS
+    can reach.
+  - A folder on your machine, such as `dist`, is not a URL. The command fails with it.
 - **The origins** are the browser origins of the pages of the app, such as `https://myapp.example`.
   The app accepts records only from these pages. See
   [Collecting records](collect.md#cors-and-allowed-origins).
-  - With a URL and no `--origins`, the origin is the origin of the URL.
-  - An uploaded build needs `--origins`.
+  - With no `--origins`, the origin is the origin of the URL.
   - `--origins` takes a list with commas, such as
     `--origins https://myapp.example,http://localhost:5173`. An app has at most 32 origins.
 - **The segments** are the extra fields that your sink adds to each record, such as `plan`. See
@@ -89,8 +88,7 @@ that deploys the app:
 imp-aly app refresh myapp
 ```
 
-`refresh` reads `app-analytics.json` at the URL again. For an uploaded file, run `app add` with the
-new build folder.
+`refresh` reads `app-analytics.json` at the URL again.
 
 ## Other commands
 
@@ -153,18 +151,16 @@ The commands call these endpoints. Each one needs a token, see [Security](securi
 | `GET /apps`                 |                                                 | `{ "apps": [...] }`       |
 | `GET /apps/<name>`          |                                                 | one app                   |
 | `PUT /apps/<name>`          | `{ "appUrl": "...", "segments": ["plan"] }`     | the app                   |
-| `PUT /apps/<name>`          | `{ "build": "{\"pages\": [\"/\"], ...}", ... }` | the app                   |
 | `POST /apps/<name>/refresh` |                                                 | the app                   |
 | `DELETE /apps/<name>`       |                                                 | `{ "removed": "<name>" }` |
 
-An upload gives `build`: the text of `app-analytics.json`. Give `appUrl` or `build`, not both.
-`origins` is a list of origins, such as `["https://myapp.example"]`. With `appUrl`, you can omit it.
-With `build`, you must give it.
+`appUrl` is required. `origins` is a list of origins, such as `["https://myapp.example"]`. When you
+omit it, the list is the origin of `appUrl`.
 
 An app in an answer has these fields:
 
 - `name`
-- `appUrl`: the URL of the folder of the build, with a `/` at the end, or null for an uploaded file
+- `appUrl`: the URL of the folder of the build, with a `/` at the end
 - `pages`, `zones` and `outcomes`: the lists of the build file, sorted
 - `segments`
 - `origins`: the browser origins that can send records, sorted

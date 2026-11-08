@@ -109,9 +109,8 @@ fn parsed(list: &[&str]) -> imp_aly::args::Parsed {
 }
 
 #[test]
-fn app_add_uploads_the_file_of_a_build_folder() {
+fn app_add_takes_the_url_of_the_app() {
     let server = Server::start(|_| {});
-    let dist = TempDir::new();
     let url = format!("http://127.0.0.1:{}", server.admin_port);
     let run = |action: &[&str]| {
         let mut list = vec!["app"];
@@ -119,47 +118,27 @@ fn app_add_uploads_the_file_of_a_build_folder() {
         list.extend_from_slice(&["--url", &url, "-a", KEY]);
         imp_aly::commands::app::app(&parsed(&list))
     };
-    let missing = run(&["add", "myapp", &dist.path]).unwrap_err();
-    assert!(missing.message.contains("app-analytics.json"), "{missing}");
-    std::fs::write(
-        dist.join("app-analytics.json"),
-        r#"{"pages":["/","/invoices/:id"],"zones":["myapp.send"],"outcomes":[]}"#,
-    )
-    .unwrap();
-    let file = dist.join("app-analytics.json");
-    assert!(
-        run(&["add", "myapp", &file])
-            .unwrap_err()
-            .message
-            .contains("is not a folder")
-    );
-    assert!(
-        run(&["add", "myapp", &dist.path])
-            .unwrap_err()
-            .message
-            .contains("an uploaded build needs --origins")
-    );
+    let folder = run(&["add", "myapp", "dist"]).unwrap_err();
+    assert!(folder.message.contains("dist is not a URL"), "{folder}");
     run(&[
         "add",
         "myapp",
-        &dist.path,
+        APP_URL,
         "--origins",
         "https://myapp.example, https://www.myapp.example",
     ])
     .unwrap();
     let shown = server.admin("GET", "/apps/myapp", None);
-    assert_eq!(shown.get("appUrl"), Value::Null);
-    assert_eq!(shown.text_of("pages"), r#"["/","/invoices/:id"]"#);
+    assert_eq!(shown.get("appUrl").as_str(), Some(APP_URL));
+    assert_eq!(
+        shown.text_of("pages"),
+        r#"["/","/invoices","/invoices/:id"]"#
+    );
     assert_eq!(
         shown.text_of("origins"),
         r#"["https://myapp.example","https://www.myapp.example"]"#
     );
-    assert!(
-        run(&["refresh", "myapp"])
-            .unwrap_err()
-            .message
-            .contains("uploaded build and no appUrl")
-    );
+    run(&["refresh", "myapp"]).unwrap();
 }
 
 fn write_ui() -> (TempDir, TempDir) {

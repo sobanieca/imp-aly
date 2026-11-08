@@ -5,6 +5,7 @@ mod site;
 
 use demo_data::{DEMO_APPS, Random, build_of, seed_lines, visit_records};
 use imp_aly::api_client::{ApiTarget, call_server};
+use imp_aly::app_build::{BUILD_FILE, FetchFile};
 use imp_aly::auth::{generate_key, read_key_file, write_key_file};
 use imp_aly::console::start_console;
 use imp_aly::json::{self, Object, Value};
@@ -13,8 +14,10 @@ use imp_aly::source::open_source;
 use imp_aly::static_files::Files;
 use imp_aly::storage::apply_segment_text;
 use imp_aly::update::{compare_versions, parse_version};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
+use std::sync::Arc;
 use std::time::Duration;
 
 const DAYS: i64 = 45;
@@ -188,6 +191,28 @@ fn open_dev_data(reset: bool) -> Result<DevData, String> {
     })
 }
 
+fn demo_app_url(name: &str) -> String {
+    format!("https://{name}.example/")
+}
+
+fn demo_builds() -> FetchFile {
+    let files: HashMap<String, String> = DEMO_APPS
+        .iter()
+        .map(|app| {
+            (
+                format!("{}{BUILD_FILE}", demo_app_url(app.name)),
+                json::stringify(&build_of(app)),
+            )
+        })
+        .collect();
+    Arc::new(move |url: &str| {
+        files
+            .get(url)
+            .cloned()
+            .ok_or_else(|| format!("GET {url} answered 404"))
+    })
+}
+
 fn start(args: &[String]) -> Result<(), String> {
     let reset = args.iter().any(|arg| arg == "--reset");
     let port = match args.iter().position(|arg| arg == "--port") {
@@ -229,6 +254,7 @@ fn start(args: &[String]) -> Result<(), String> {
         options.hostname = Some("127.0.0.1".to_string());
         options.min_free = None;
         options.country_header = Some(COUNTRY_HEADER.to_string());
+        options.fetch_file = Some(demo_builds());
         let server = start_server(options).await.map_err(|error| error.message)?;
         let admin_url = format!("http://127.0.0.1:{}", server.admin_port);
         if dev.fresh {
@@ -241,8 +267,7 @@ fn start(args: &[String]) -> Result<(), String> {
             };
             for app in DEMO_APPS {
                 let body: Value = Object::new()
-                    .with("build", json::stringify(&build_of(app)))
-                    .with("origins", vec![format!("https://{}.example", app.name)])
+                    .with("appUrl", demo_app_url(app.name))
                     .with(
                         "segments",
                         app.segments
