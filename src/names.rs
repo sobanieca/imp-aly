@@ -19,6 +19,8 @@ const TIME_AND_MEASURES: [&str; 5] = ["day", "week", "month", "records", "visits
 
 pub const MAX_SEGMENTS: usize = 16;
 
+pub const MAX_ORIGINS: usize = 32;
+
 pub fn is_reserved(name: &str) -> bool {
     BASE_COLUMNS.contains(&name)
         || TIME_AND_MEASURES.contains(&name)

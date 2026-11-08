@@ -227,25 +227,28 @@ the header is missing or holds another value. The server never stores the addres
 
 ## CORS and allowed origins
 
-By default, the endpoint accepts requests from every origin and answers with
-`access-control-allow-origin: *`. It answers the preflight `OPTIONS` request of a `fetch` with
-`content-type: application/json`. `alySink` and `sendBeacon` send a string body, so the browser
-sends no preflight.
-
-To accept records only from the pages of your apps, give their origins:
+Each app accepts records only from the browser pages of its origins. You give the origins when you
+register the app. With a URL and no origins, the server takes the origin of the URL. See
+[Apps](apps.md#register-an-app).
 
 ```sh
-sudo imp-aly server --port 4411 --allow-origin https://myapp.example,https://www.myapp.example
+imp-aly app add myapp https://myapp.example/
+imp-aly app add myapp dist --origins https://myapp.example,https://www.myapp.example
 ```
 
 An origin is a scheme, a host and an optional port, like `https://myapp.example` or
-`http://localhost:5173`. It has no path and no `/` at the end. With `--allow-origin`, the server
-does this for `/collect/<app>`:
+`http://localhost:5173`. It has no path and no `/` at the end. The server does this for
+`/collect/<app>`:
 
-- A request from an allowed origin gets `access-control-allow-origin` with that origin.
-- A request with another `Origin` header gets `403`, also a preflight. This includes `Origin: null`.
-  The server does not read the body.
+- A request from an origin of the app gets `access-control-allow-origin` with that origin, and
+  `vary: origin`.
+- A request with another `Origin` header gets `403`, also a preflight. This includes `Origin: null`
+  and the origins of the other apps on the server. The server does not read the body.
+- A request to an app that is not registered gets `404`, also a preflight.
 - A request without an `Origin` header passes. A browser always sends the header with a `POST`.
+
+The server answers the preflight `OPTIONS` request of a `fetch` with `content-type:
+application/json`. `alySink` and `sendBeacon` send a string body, so the browser sends no preflight.
 
 `alySink` sends the `Origin` header, and a `Referer` header with the origin only. When the origin of
 the page is not allowed, the server answers `403`. The browser hides this answer from the sink, so
@@ -253,6 +256,9 @@ the sink tries the next server.
 
 The check stops a script on another site from sending records to your server from the browsers of
 its visitors. Many browsers can come from many addresses, so the rate limit alone cannot stop them.
+
+**A page on a new origin loses its records until you add the origin.** This includes a dev server
+on `localhost` and a second domain of the app. Run `app add` again with the full list of origins.
 
 **A client outside a browser can send any `Origin` header.** The check does not stop such a client.
 The build file, the record checks and the rate limit protect the endpoint from it.

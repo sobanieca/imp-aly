@@ -9,7 +9,6 @@ use crate::error::{Error, Result};
 use crate::http::DEFAULT_MAX_CONNECTIONS;
 use crate::logger;
 use crate::net::{format_host, local_addresses};
-use crate::origins::parse_origins;
 use crate::paths::{absolute_path, join};
 use crate::rate_limit::{DEFAULT_TRUSTED_PROXIES, Window, default_limits, parse_trusted_proxies};
 use crate::retention::{DEFAULT_MIN_FREE, parse_min_free};
@@ -26,7 +25,7 @@ use std::sync::Arc;
 use tokio::signal::unix::{SignalKind, signal};
 use tokio::sync::mpsc;
 
-const SERVE_FLAGS: [&str; 22] = [
+const SERVE_FLAGS: [&str; 21] = [
     "port",
     "admin-port",
     "data",
@@ -38,7 +37,6 @@ const SERVE_FLAGS: [&str; 22] = [
     "max-requests",
     "max-connections",
     "country-header",
-    "allow-origin",
     "min-free",
     "tls-cert",
     "tls-key",
@@ -63,7 +61,6 @@ pub struct ServeOptions {
     pub max_requests: u64,
     pub max_connections: u64,
     pub country_header: Option<String>,
-    pub allow_origins: Option<Vec<String>>,
     pub min_free: String,
     pub tls_cert: Option<String>,
     pub tls_key: Option<String>,
@@ -143,19 +140,6 @@ pub fn read_serve_options(parsed: &Parsed) -> Result<ServeOptions> {
             list
         }
     };
-    let allow_origins = match parsed.get("allow-origin") {
-        None => None,
-        Some(value) => {
-            let list = split_list(value);
-            if list.is_empty() {
-                return Err(Error::new("--allow-origin needs at least one origin"));
-            }
-            Some(
-                parse_origins(&list)
-                    .map_err(|error| Error::new(format!("--allow-origin: {error}")))?,
-            )
-        }
-    };
     let mut limits = Vec::new();
     for window in default_limits() {
         let flag = format!("limit-{}", window.name);
@@ -184,7 +168,6 @@ pub fn read_serve_options(parsed: &Parsed) -> Result<ServeOptions> {
             .transpose()?
             .unwrap_or(DEFAULT_MAX_CONNECTIONS as u64),
         country_header: read_header_name(parsed.get("country-header"), "--country-header")?,
-        allow_origins,
         min_free,
         tls_cert: parsed.get("tls-cert").map(absolute_path),
         tls_key: parsed.get("tls-key").map(absolute_path),
@@ -229,9 +212,6 @@ pub fn service_args(options: &ServeOptions, data_dir: &str) -> Vec<String> {
     }
     if let Some(header) = &options.country_header {
         push("--country-header", header.clone());
-    }
-    if let Some(origins) = &options.allow_origins {
-        push("--allow-origin", origins.join(","));
     }
     if options.min_free != DEFAULT_MIN_FREE {
         push("--min-free", options.min_free.clone());
@@ -389,7 +369,6 @@ fn run(run: Run) -> Result<()> {
         server_options.max_requests = options.max_requests as usize;
         server_options.max_connections = options.max_connections as usize;
         server_options.country_header = options.country_header.clone();
-        server_options.allow_origins = options.allow_origins.clone();
         server_options.limits = options.limits.clone();
         server_options.min_free = Some(options.min_free.clone());
         let (restart, mut restart_requested) = mpsc::unbounded_channel::<()>();
@@ -555,8 +534,6 @@ mod tests {
             "64",
             "--max-connections",
             "512",
-            "--allow-origin",
-            "https://a.example",
             "--min-free",
             "5GB",
             "--limit-5s",
@@ -581,8 +558,6 @@ mod tests {
                 "64",
                 "--max-connections",
                 "512",
-                "--allow-origin",
-                "https://a.example",
                 "--min-free",
                 "5GB",
                 "--limit-5s",
@@ -595,7 +570,6 @@ mod tests {
             vec!["server", "--trusted-proxy", "10.0.0.0/8"],
             vec!["server", "--ip-header", "x", "--trusted-proxy", "nope"],
             vec!["server", "--min-free", "lots"],
-            vec!["server", "--allow-origin", "https://a.example/"],
             vec!["server", "--ip-header", "bad header"],
             vec!["server", "--max-connections", "0"],
             vec!["server", "--limit-1m", "x"],

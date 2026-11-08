@@ -5,7 +5,7 @@ imp-aly server [options]              start the server
 imp-aly server --uninstall            remove the systemd service
 imp-aly update [--check] [--auto]     install a newer version
 imp-aly key rotate [-a <file>]        change the key, and the server does not stop
-imp-aly app add <name> <app url|build folder> [--segments plan,role]
+imp-aly app add <name> <app url|build folder> [--segments plan,role] [--origins <list>]
 imp-aly app ls | show <name> | refresh <name> | rm <name>
 imp-aly query '<json>' | query <file.json> [--json]
 imp-aly backup [<file>] [--last <period>] [--by <granularity>] [-s <name>]
@@ -41,7 +41,6 @@ sudo imp-aly server --port 4411
 | `--max-requests <n>`       | requests in progress on each port, then `503`; one address can have 1/32 of them, then `429` | `1024`                        |
 | `--max-connections <n>`    | open connections on each port; one address can hold 1/32 of them                             | `4096`                        |
 | `--country-header <name>`  | store the country from this header                                                           | no country                    |
-| `--allow-origin <list>`    | accept records only from these browser origins                                               | every origin                  |
 | `--min-free <size>`        | the free disk space to keep, as `10%` or `5GB`                                               | `10%`                         |
 | `--tls-cert <file>`        | serve HTTPS with this certificate, in PEM                                                    | plain HTTP                    |
 | `--tls-key <file>`         | the private key of the certificate, in PEM                                                   |                               |

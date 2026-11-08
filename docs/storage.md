@@ -295,7 +295,7 @@ These steps move the data of the service to a new disk that is mounted at `/mnt/
 3. Start the service again with the new folder, and with every option of step 1:
 
    ```sh
-   sudo imp-aly server --data /mnt/data/imp-aly --port 4411 --allow-origin https://myapp.example
+   sudo imp-aly server --data /mnt/data/imp-aly --port 4411 --country-header cf-ipcountry
    ```
 
    The command writes the new unit file, makes the user `imp-aly` the owner of the new folder, and
@@ -311,7 +311,7 @@ These steps move the data of the service to a new disk that is mounted at `/mnt/
 
 **The service loses the options that you do not give again.** The command writes the unit file only
 from the options of the command. An option that you leave out goes back to its default, such as
-`--allow-origin`, `--tls-cert` or `--min-free`. Always copy the options from step 1.
+`--country-header`, `--tls-cert` or `--min-free`. Always copy the options from step 1.
 
 The new folder must not be in `/root`. The user `imp-aly` must be able to open each parent folder of
 the new folder. When it cannot, the command stops and changes nothing.

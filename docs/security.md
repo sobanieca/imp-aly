@@ -125,8 +125,9 @@ Anybody can send records to `/collect/<app>`. The server limits what a sender ca
 - **The requests in progress.** The server works on at most 1,024 requests at one time on each port.
   Above this number, it answers `503` at once. One address can have at most 32 of them, then the
   server answers `429`.
-- **The allowed origins.** With `--allow-origin`, the server refuses records from a browser page of
-  another site. So a script on another site cannot use the browsers of its visitors to send records.
+- **The allowed origins.** Each app accepts records only from the browser pages of its origins. So a
+  script on another site cannot use the browsers of its visitors to send records. An app also
+  cannot get records from the pages of another app on the same server.
   See [Collecting records](collect.md#cors-and-allowed-origins).
 - **The proxy header.** With `--ip-header`, the server reads the header only from a trusted proxy. A
   client that connects directly cannot give a false address.

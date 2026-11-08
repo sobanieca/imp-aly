@@ -133,10 +133,27 @@ fn app_add_uploads_the_file_of_a_build_folder() {
             .message
             .contains("is not a folder")
     );
-    run(&["add", "myapp", &dist.path]).unwrap();
+    assert!(
+        run(&["add", "myapp", &dist.path])
+            .unwrap_err()
+            .message
+            .contains("an uploaded build needs --origins")
+    );
+    run(&[
+        "add",
+        "myapp",
+        &dist.path,
+        "--origins",
+        "https://myapp.example, https://www.myapp.example",
+    ])
+    .unwrap();
     let shown = server.admin("GET", "/apps/myapp", None);
     assert_eq!(shown.get("appUrl"), Value::Null);
     assert_eq!(shown.text_of("pages"), r#"["/","/invoices/:id"]"#);
+    assert_eq!(
+        shown.text_of("origins"),
+        r#"["https://myapp.example","https://www.myapp.example"]"#
+    );
     assert!(
         run(&["refresh", "myapp"])
             .unwrap_err()

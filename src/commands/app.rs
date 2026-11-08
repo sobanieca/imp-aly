@@ -12,7 +12,7 @@ use crate::table::format_table;
 use crate::url::encode_component;
 
 const USAGE: &str = "use one of:
-  imp-aly app add <name> <app url or build folder> [--segments plan,role]
+  imp-aly app add <name> <app url or build folder> [--segments plan,role] [--origins <list>]
   imp-aly app ls
   imp-aly app show <name>
   imp-aly app refresh <name>
@@ -39,19 +39,24 @@ fn texts(app: &Value, key: &str) -> Vec<String> {
         .unwrap_or_default()
 }
 
+fn joined(app: &Value, key: &str) -> String {
+    let list = texts(app, key);
+    if list.is_empty() {
+        "-".to_string()
+    } else {
+        list.join(", ")
+    }
+}
+
 fn summary(app: &Value) -> String {
-    let segments = texts(app, "segments");
     format!(
-        "{}: {} pages, {} zones, {} outcomes, segments {}, build {}",
+        "{}: {} pages, {} zones, {} outcomes, segments {}, origins {}, build {}",
         app.get_str("name").unwrap_or(""),
         count(app, "pages"),
         count(app, "zones"),
         count(app, "outcomes"),
-        if segments.is_empty() {
-            "-".to_string()
-        } else {
-            segments.join(", ")
-        },
+        joined(app, "segments"),
+        joined(app, "origins"),
         app.get_str("appUrl").unwrap_or("uploaded")
     )
 }
@@ -92,7 +97,18 @@ fn read_build_folder(folder: &str) -> Result<String> {
         .map_err(|error| Error::new(format!("cannot read {path}: {error}")))
 }
 
-pub fn add_body(source: &str, segments: &[String]) -> Result<Value> {
+fn split_list(value: Option<&str>) -> Vec<String> {
+    value
+        .map(|list| {
+            list.split(',')
+                .map(|entry| entry.trim().to_string())
+                .filter(|entry| !entry.is_empty())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+pub fn add_body(source: &str, segments: &[String], origins: &[String]) -> Result<Value> {
     let mut body = Object::new();
     if is_url(source) {
         body.insert("appUrl", source);
@@ -100,6 +116,9 @@ pub fn add_body(source: &str, segments: &[String]) -> Result<Value> {
         body.insert("build", read_build_folder(source)?);
     }
     body.insert("segments", segments.to_vec());
+    if !origins.is_empty() {
+        body.insert("origins", origins.to_vec());
+    }
     Ok(body.into())
 }
 
@@ -111,7 +130,7 @@ pub fn app(parsed: &Parsed) -> Result<()> {
     if action == Some("add") {
         require_only_flags(
             parsed,
-            &["auth", "url", "server", "segments", "timeout"],
+            &["auth", "url", "server", "segments", "origins", "timeout"],
             "app add",
         )?;
     } else {
@@ -137,16 +156,17 @@ pub fn app(parsed: &Parsed) -> Result<()> {
             let (Some(name), Some(source), false) = (name, source, rest) else {
                 return Err(Error::new(USAGE));
             };
-            let segments: Vec<String> = parsed
-                .get("segments")
-                .map(|list| {
-                    list.split(',')
-                        .map(|segment| segment.trim().to_string())
-                        .filter(|segment| !segment.is_empty())
-                        .collect()
-                })
-                .unwrap_or_default();
-            let body = add_body(source, &segments)?;
+            let segments = split_list(parsed.get("segments"));
+            let origins = split_list(parsed.get("origins"));
+            if parsed.has("origins") && origins.is_empty() {
+                return Err(Error::new("--origins needs at least one origin"));
+            }
+            let body = add_body(source, &segments, &origins)?;
+            if origins.is_empty() && !is_url(source) {
+                return Err(Error::new(
+                    "an uploaded build needs --origins, the browser origins of the app, like --origins https://myapp.example",
+                ));
+            }
             let path = format!("/apps/{}", encode_component(name));
             let settled = each_server(&targets, |target| {
                 call_server(target, "PUT", &path, Some(&body), timeout)
@@ -201,6 +221,7 @@ pub fn app(parsed: &Parsed) -> Result<()> {
                     "zones",
                     "outcomes",
                     "segments",
+                    "origins",
                     "accepted",
                     "rejected",
                     "build",
@@ -214,19 +235,21 @@ pub fn app(parsed: &Parsed) -> Result<()> {
                 let rows: Vec<Value> = apps
                     .iter()
                     .map(|entry| {
-                        let segments = texts(entry, "segments").join(",");
                         let mut row = entry.as_object().cloned().unwrap_or_default();
                         row.insert("pages", count(entry, "pages"));
                         row.insert("zones", count(entry, "zones"));
                         row.insert("outcomes", count(entry, "outcomes"));
-                        row.insert(
-                            "segments",
-                            if segments.is_empty() {
-                                Value::Null
-                            } else {
-                                Value::from(segments)
-                            },
-                        );
+                        for key in ["segments", "origins"] {
+                            let list = texts(entry, key).join(",");
+                            row.insert(
+                                key,
+                                if list.is_empty() {
+                                    Value::Null
+                                } else {
+                                    Value::from(list)
+                                },
+                            );
+                        }
                         row.insert("build", entry.get_str("appUrl").unwrap_or("uploaded"));
                         Value::Object(row)
                     })

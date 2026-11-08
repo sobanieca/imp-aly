@@ -35,7 +35,7 @@ Usage:
   imp-aly server --uninstall            remove the systemd service
   imp-aly update [--check] [--auto]     install a newer version
   imp-aly key rotate [-a <file>]        change the key, and the server does not stop
-  imp-aly app add <name> <app url|build folder> [--segments plan,role]
+  imp-aly app add <name> <app url|build folder> [--segments plan,role] [--origins <list>]
   imp-aly app ls | show <name> | refresh <name> | rm <name>
   imp-aly query '<json>' | query <file.json> [--json]
   imp-aly backup [<file>] [--last <period>] [--by day|week|month] [-s <name>]
@@ -82,9 +82,6 @@ Server (on the VPS):
                             closes new connections (default {DEFAULT_MAX_CONNECTIONS}); one address
                             can have 1/32 of them, a trusted proxy has no share
   --country-header <name>   store the country from this header (cf-ipcountry, ...)
-  --allow-origin <list>     accept records only from these browser origins, like
-                            https://myapp.example,https://www.myapp.example
-                            (default: every origin)
   --min-free <size>         free disk space to keep, as 10% or 5GB (default {DEFAULT_MIN_FREE});
                             the records of the oldest days are removed to keep it,
                             then their daily summaries, then the week and month
@@ -182,13 +179,19 @@ Backup (on the VPS, over SSH, or on another machine):
 Apps:
 
   imp-aly app add myapp https://myapp.example/      the server reads the file
-  imp-aly app add myapp dist --segments plan        upload the file of dist
+  imp-aly app add myapp dist --segments plan --origins https://myapp.example
+                                                    upload the file of dist
 
   imp build writes app-analytics.json at the root of the build output. The
   server stores a record only when its page, zone and outcome name are in the
   lists of this file. With a URL, the server reads the file in that folder at
   once and again every 10 minutes. With a folder, the command uploads the file.
   Run "app refresh" or "app add" after each deploy.
+
+  An app accepts records only from the browser pages of its origins. With a
+  URL, the default is the origin of the URL. An uploaded build needs
+  --origins, like --origins https://myapp.example,https://www.myapp.example.
+  The server answers 403 to a page of another origin.
 
 Saved servers (on your machine):
 

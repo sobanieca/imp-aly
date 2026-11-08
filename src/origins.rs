@@ -1,5 +1,5 @@
 use crate::url::Url;
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 
 pub fn parse_origin(text: &str) -> Result<String, String> {
     let value = text.trim();
@@ -11,8 +11,8 @@ pub fn parse_origin(text: &str) -> Result<String, String> {
     }
 }
 
-pub fn parse_origins(list: &[String]) -> Result<Vec<String>, String> {
-    list.iter().map(|entry| parse_origin(entry)).collect()
+pub fn origin_of(url: &str) -> Option<String> {
+    Url::parse(url).map(|url| url.origin())
 }
 
 pub struct OriginAnswer {
@@ -20,42 +20,21 @@ pub struct OriginAnswer {
     pub headers: Vec<(&'static str, String)>,
 }
 
-pub struct OriginCheck {
-    origins: Option<HashSet<String>>,
-}
-
-impl OriginCheck {
-    pub fn new(allowed: Option<&[String]>) -> Result<Self, String> {
-        match allowed {
-            Some(list) if !list.is_empty() => Ok(OriginCheck {
-                origins: Some(parse_origins(list)?.into_iter().collect()),
-            }),
-            _ => Ok(OriginCheck { origins: None }),
-        }
-    }
-
-    pub fn check(&self, origin: Option<&str>) -> OriginAnswer {
-        let Some(origins) = &self.origins else {
-            return OriginAnswer {
-                allowed: true,
-                headers: vec![("access-control-allow-origin", "*".to_string())],
-            };
-        };
-        let vary = ("vary", "origin".to_string());
-        match origin {
-            None => OriginAnswer {
-                allowed: true,
-                headers: vec![vary],
-            },
-            Some(origin) if origins.contains(origin) => OriginAnswer {
-                allowed: true,
-                headers: vec![("access-control-allow-origin", origin.to_string()), vary],
-            },
-            Some(_) => OriginAnswer {
-                allowed: false,
-                headers: vec![vary],
-            },
-        }
+pub fn check_origin(allowed: Option<&BTreeSet<String>>, origin: Option<&str>) -> OriginAnswer {
+    let vary = ("vary", "origin".to_string());
+    match (allowed, origin) {
+        (Some(allowed), Some(origin)) if allowed.contains(origin) => OriginAnswer {
+            allowed: true,
+            headers: vec![("access-control-allow-origin", origin.to_string()), vary],
+        },
+        (Some(_), Some(_)) => OriginAnswer {
+            allowed: false,
+            headers: vec![vary],
+        },
+        _ => OriginAnswer {
+            allowed: true,
+            headers: vec![vary],
+        },
     }
 }
 
@@ -72,5 +51,36 @@ mod tests {
         assert!(parse_origin("https://myapp.example:443").is_err());
         assert!(parse_origin("ftp://myapp.example").is_err());
         assert!(parse_origin("myapp.example").is_err());
+    }
+
+    #[test]
+    fn the_origin_of_an_app_url_has_no_path() {
+        assert_eq!(
+            origin_of("https://myapp.example/app/").as_deref(),
+            Some("https://myapp.example")
+        );
+        assert_eq!(
+            origin_of("http://localhost:5173/").as_deref(),
+            Some("http://localhost:5173")
+        );
+    }
+
+    #[test]
+    fn only_a_listed_origin_passes() {
+        let allowed: BTreeSet<String> = ["https://myapp.example".to_string()].into();
+        let listed = check_origin(Some(&allowed), Some("https://myapp.example"));
+        assert!(listed.allowed);
+        assert_eq!(
+            listed.headers[0],
+            (
+                "access-control-allow-origin",
+                "https://myapp.example".to_string()
+            )
+        );
+        assert!(!check_origin(Some(&allowed), Some("https://other.example")).allowed);
+        assert!(!check_origin(Some(&allowed), Some("null")).allowed);
+        let direct = check_origin(Some(&allowed), None);
+        assert!(direct.allowed);
+        assert_eq!(direct.headers, [("vary", "origin".to_string())]);
     }
 }

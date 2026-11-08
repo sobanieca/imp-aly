@@ -55,7 +55,7 @@ See `adr/rust-server-with-few-dependencies.md` and `adr/console-web-app.md`.
 | `src/rate_limit.rs`                           | the sliding windows per client address                                                                                                       |
 | `src/in_flight.rs`                            | the requests in progress of a port, and the share of one client address                                                                      |
 | `src/ip.rs`                                   | the client address, the trusted proxies, and the `/64` and `/48` keys                                                                        |
-| `src/origins.rs`                              | the allowed browser origins of the public endpoint                                                                                           |
+| `src/origins.rs`                              | the origins of an app, and the check of the `Origin` header of a request to the public endpoint                                              |
 | `src/bots.rs`                                 | the check of the headers of a bot and of a prerendered page                                                                                  |
 | `src/wal.rs`                                  | the write-ahead log with group commit and parts, on its own thread                                                                           |
 | `src/storage.rs`                              | the single writer thread: log parts to columns, restore, seal, retention                                                                     |

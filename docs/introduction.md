@@ -150,8 +150,9 @@ the key can register apps and run queries.
 ## How it works, step by step
 
 1. **You register an app.** You give the server a name and the URL of the build:
-   `imp-aly app add myapp https://myapp.example/`. The server reads the build file there. You can
-   also declare segments.
+   `imp-aly app add myapp https://myapp.example/`. The server reads the build file there. The app
+   accepts records only from the pages of the origin of this URL. You can give other origins, and
+   declare segments.
 2. **The app sends records.** The sink of the app collects the records and sends them in a batch to
    `/collect/myapp`.
 3. **The server checks the records.** It checks the rate limit of the client address, then each

@@ -3,7 +3,8 @@ use crate::days::{iso, now_ms};
 use crate::error::{Error, Result};
 use crate::fsutil::{read_json, write_json_atomic};
 use crate::json::{Object, Value, stringify};
-use crate::names::{MAX_SEGMENTS, is_app_name, is_segment_name, reserved_names};
+use crate::names::{MAX_ORIGINS, MAX_SEGMENTS, is_app_name, is_segment_name, reserved_names};
+use crate::origins::{origin_of, parse_origin};
 use crate::paths::join;
 use crate::token::sha256_hex;
 use std::collections::BTreeSet;
@@ -55,6 +56,45 @@ pub fn validate_segments(segments: Option<&Value>) -> Result<Vec<String>> {
     Ok(out)
 }
 
+const ORIGINS_HINT: &str = "origins is a list of browser origins, like [\"https://myapp.example\"]";
+
+pub fn validate_origins(
+    origins: Option<&Value>,
+    app_url: Option<&str>,
+) -> Result<BTreeSet<String>> {
+    let Some(origins) = origins else {
+        return app_url
+            .and_then(origin_of)
+            .map(|origin| BTreeSet::from([origin]))
+            .ok_or_else(|| {
+                app_error(format!(
+                    "an uploaded build needs the origins of the app: {ORIGINS_HINT}"
+                ))
+            });
+    };
+    let Value::Array(list) = origins else {
+        return Err(app_error(ORIGINS_HINT));
+    };
+    if list.is_empty() {
+        return Err(app_error(format!(
+            "give at least one origin: {ORIGINS_HINT}"
+        )));
+    }
+    if list.len() > MAX_ORIGINS {
+        return Err(app_error(format!(
+            "an app has at most {MAX_ORIGINS} origins"
+        )));
+    }
+    let mut out = BTreeSet::new();
+    for origin in list {
+        let Value::String(text) = origin else {
+            return Err(app_error(ORIGINS_HINT));
+        };
+        out.insert(parse_origin(text).map_err(app_error)?);
+    }
+    Ok(out)
+}
+
 #[derive(Clone)]
 pub struct App {
     id: u64,
@@ -62,6 +102,7 @@ pub struct App {
     pub app_url: Option<String>,
     pub lists: Arc<Lists>,
     pub segments: Arc<Vec<String>>,
+    pub origins: Arc<BTreeSet<String>>,
     created_at: Option<String>,
     build_updated_at: Option<String>,
     build_error: Option<String>,
@@ -92,6 +133,7 @@ impl App {
             .with("zones", strings(&self.lists.zones))
             .with("outcomes", strings(&self.lists.outcomes))
             .with("segments", string_list(&self.segments))
+            .with("origins", strings(&self.origins))
             .with("createdAt", self.created_at.clone())
             .with("buildUpdatedAt", self.build_updated_at.clone())
             .with("buildError", self.build_error.clone())
@@ -111,6 +153,7 @@ impl App {
             .with("zones", strings(&self.lists.zones))
             .with("outcomes", strings(&self.lists.outcomes))
             .with("segments", string_list(&self.segments))
+            .with("origins", strings(&self.origins))
             .with("createdAt", self.created_at.clone())
             .with("buildUpdatedAt", self.build_updated_at.clone())
             .with("buildError", self.build_error.clone())
@@ -197,6 +240,7 @@ impl Apps {
                     app_url: optional_text(value.get("appUrl")),
                     lists: Arc::new(lists),
                     segments: Arc::new(read_strings(value.get("segments"))),
+                    origins: Arc::new(read_strings(value.get("origins")).into_iter().collect()),
                     created_at: optional_text(value.get("createdAt")),
                     build_updated_at: optional_text(value.get("buildUpdatedAt")),
                     build_error: optional_text(value.get("buildError")),
@@ -236,6 +280,13 @@ impl Apps {
                 lists: app.lists.clone(),
                 segments: app.segments.clone(),
             })
+    }
+
+    pub fn origins(&self, name: &str) -> Option<Arc<BTreeSet<String>>> {
+        self.lock()
+            .iter()
+            .find(|app| app.name == name)
+            .map(|app| app.origins.clone())
     }
 
     pub fn config(&self, name: &str) -> Option<String> {
@@ -313,14 +364,22 @@ impl Apps {
         };
         let unknown: Vec<&str> = body
             .keys()
-            .filter(|key| !["appUrl", "build", "segments"].contains(&key.as_str()))
+            .filter(|key| !["appUrl", "build", "segments", "origins"].contains(&key.as_str()))
             .map(String::as_str)
             .collect();
         if !unknown.is_empty() {
             return Err(app_error(format!("unknown fields: {}", unknown.join(", "))));
         }
         let segments = validate_segments(body.get("segments"))?;
+        let given = body
+            .get("origins")
+            .map(|origins| validate_origins(Some(origins), None))
+            .transpose()?;
         let source = self.read_source(body)?;
+        let origins = match given {
+            Some(origins) => origins,
+            None => validate_origins(None, source.app_url.as_deref())?,
+        };
         let now = iso(now_ms());
         let described = {
             let mut state = self.lock();
@@ -331,6 +390,7 @@ impl Apps {
                 app_url: source.app_url,
                 lists: Arc::new(source.lists),
                 segments: Arc::new(segments),
+                origins: Arc::new(origins),
                 created_at: Some(now.clone()),
                 build_updated_at: Some(now),
                 build_error: None,

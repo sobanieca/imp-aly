@@ -4,6 +4,7 @@ import {
   buildProblem,
   refreshApp,
   registerApp,
+  originProblem,
   registerBody,
   removeApp,
   removeQuestion,
@@ -71,20 +72,44 @@ test('the register form checks that the build is a JSON object', () => {
 
 test('the register form sends the build of the chosen source, and never invalid JSON', () => {
   const build = '{"pages": ["/"]}'
-  const values = { appUrl: 'https://shop.example/', build, segments: ['plan'] }
+  const origins = ['https://shop.example']
+  const values = { appUrl: 'https://shop.example/', build, segments: ['plan'], origins }
   expect(registerBody('url', values)).toEqual({
+    body: { segments: ['plan'], origins, appUrl: 'https://shop.example/' },
+  })
+  expect(registerBody('url', { ...values, origins: [] })).toEqual({
     body: { segments: ['plan'], appUrl: 'https://shop.example/' },
   })
-  expect(registerBody('text', values)).toEqual({ body: { segments: ['plan'], build } })
+  expect(registerBody('text', values)).toEqual({ body: { segments: ['plan'], origins, build } })
   expect(registerBody('file', { ...values, segments: undefined })).toEqual({
-    body: { segments: [], build },
+    body: { segments: [], origins, build },
   })
+  expect(registerBody('text', { ...values, origins: undefined }).fields.origins).toMatch(
+    /needs the origins of the app/,
+  )
   expect(registerBody('text', { ...values, build: '{"pages": [' }).fields.build).toMatch(
     /not valid JSON/,
   )
   expect(registerBody('file', { ...values, build: '[]' }).fields.files).toMatch(
     /must be a JSON object/,
   )
+})
+
+test('the register form takes only origins with no path', () => {
+  expect(originProblem(undefined)).toEqual(null)
+  expect(originProblem(['https://shop.example', 'http://localhost:5173'])).toEqual(null)
+  for (const origin of [
+    'https://shop.example/',
+    'shop.example',
+    'https://Shop.example',
+    'https://shop.example:443',
+    'ftp://shop.example',
+  ]) {
+    expect(originProblem([origin])).toMatch(/is not an origin like/)
+  }
+  expect(
+    originProblem(Array.from({ length: 33 }, (_, index) => `https://a${index}.example`)),
+  ).toEqual('An app has at most 32 origins.')
 })
 
 test('a change of the source forgets the problems of the fields of the other sources', () => {

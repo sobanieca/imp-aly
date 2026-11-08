@@ -236,6 +236,7 @@ fn start(args: &[String]) -> Result<(), String> {
             for app in DEMO_APPS {
                 let body: Value = Object::new()
                     .with("build", json::stringify(&build_of(app)))
+                    .with("origins", vec![format!("https://{}.example", app.name)])
                     .with(
                         "segments",
                         app.segments

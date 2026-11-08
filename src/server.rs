@@ -15,7 +15,7 @@ use crate::json::{self, Object, Value, format_number};
 use crate::live::LiveDays;
 use crate::logger;
 use crate::names::is_app_name;
-use crate::origins::OriginCheck;
+use crate::origins::check_origin;
 use crate::paths::join;
 use crate::query::QueryEngine;
 use crate::query_core::{Query, parse_query};
@@ -114,7 +114,6 @@ pub struct ServerOptions {
     pub ip_header: Option<String>,
     pub trusted_proxies: Vec<String>,
     pub country_header: Option<String>,
-    pub allow_origins: Option<Vec<String>>,
     pub limits: Vec<Window>,
     pub max_clients: usize,
     pub max_requests: usize,
@@ -152,7 +151,6 @@ impl ServerOptions {
                 .map(|entry| entry.to_string())
                 .collect(),
             country_header: None,
-            allow_origins: None,
             limits: default_limits(),
             max_clients: DEFAULT_MAX_CLIENTS,
             max_requests: DEFAULT_MAX_REQUESTS,
@@ -315,7 +313,6 @@ struct State {
     verifier: Mutex<TokenVerifier>,
     public_flight: InFlight,
     admin_flight: InFlight,
-    origin: OriginCheck,
     ip_header: Option<String>,
     trusted: Vec<crate::ip::Network>,
     country_header: Option<String>,
@@ -762,8 +759,17 @@ impl State {
             && !name.is_empty()
             && !name.contains('/')
         {
+            if !is_app_name(name) || self.apps.origins(name).is_none() {
+                return Err(Error::status(
+                    404,
+                    format!("no app \"{name}\" is registered"),
+                ));
+            }
             if !allowed {
-                return Err(Error::status(403, "this origin cannot send records"));
+                return Err(Error::status(
+                    403,
+                    format!("this origin cannot send records of \"{name}\""),
+                ));
             }
             if request.method == "OPTIONS" {
                 let mut response = Response::new(204);
@@ -836,9 +842,13 @@ impl Write for ChannelWriter {
 impl PortHandler {
     async fn respond(&self, request: &mut Request) -> Response {
         let state = &self.state;
-        let collect = self.port == Port::Public && request.path.starts_with("/collect/");
-        let (allowed, headers) = if collect {
-            let answer = state.origin.check(request.header("origin"));
+        let collect = match self.port {
+            Port::Public => request.path.strip_prefix("/collect/"),
+            Port::Admin => None,
+        };
+        let (allowed, headers) = if let Some(name) = collect {
+            let origins = state.apps.origins(name);
+            let answer = check_origin(origins.as_deref(), request.header("origin"));
             (
                 answer.allowed,
                 answer
@@ -1047,7 +1057,6 @@ pub async fn start_server(options: ServerOptions) -> Result<RunningServer> {
         None => None,
     };
     let trusted = parse_trusted_proxies(&options.trusted_proxies).map_err(Error::new)?;
-    let origin = OriginCheck::new(options.allow_origins.as_deref()).map_err(Error::new)?;
     let data_dir = options.data_dir.clone();
     create_dir_all(&data_dir)?;
     let lock = acquire_lock(&data_dir)?;
@@ -1100,7 +1109,6 @@ pub async fn start_server(options: ServerOptions) -> Result<RunningServer> {
         verifier: Mutex::new(TokenVerifier::new(&options.key)),
         public_flight: InFlight::new(options.max_requests, options.max_client_requests),
         admin_flight: InFlight::new(options.max_requests, options.max_client_requests),
-        origin,
         ip_header: options.ip_header.clone(),
         trusted: trusted.clone(),
         country_header: options.country_header.clone(),

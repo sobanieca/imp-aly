@@ -31,7 +31,7 @@ pub fn build_text(pages: Option<&str>, zones: Option<&str>, outcomes: Option<&st
 
 pub fn build_body() -> String {
     format!(
-        r#"{{"build":{}}}"#,
+        r#"{{"origins":["https://myapp.example"],"build":{}}}"#,
         json::quote(&build_text(None, None, None))
     )
 }

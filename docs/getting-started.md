@@ -115,10 +115,12 @@ The server reads the file at once and again every 10 minutes. You can also uploa
 build folder, for example from your deploy pipeline:
 
 ```sh
-imp-aly app add myapp dist
+imp-aly app add myapp dist --origins https://myapp.example
 ```
 
-See [Apps](apps.md) for segments and for the other app commands.
+The app accepts records only from the browser pages of its origins. With a URL, the origin is the
+origin of the URL. An uploaded build needs `--origins`. See [Apps](apps.md) for the origins, the
+segments and the other app commands.
 
 ## Send records from your app
 

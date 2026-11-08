@@ -20,7 +20,7 @@ fn collects_valid_records_and_answers_queries() {
         401
     );
     let body = format!(
-        r#"{{"build":{},"segments":["plan"]}}"#,
+        r#"{{"origins":["https://myapp.example"],"build":{},"segments":["plan"]}}"#,
         json::quote(&build_text(None, None, None))
     );
     let added = server.admin("PUT", "/apps/myapp", Some(&body));
@@ -37,7 +37,8 @@ fn collects_valid_records_and_answers_queries() {
     let posted = server.call("POST", "/collect/myapp", Some(&batch), &[]);
     assert_eq!(posted.status, 202);
     assert_eq!(posted.text, r#"{"accepted":3,"rejected":1}"#);
-    assert_eq!(posted.header("access-control-allow-origin"), Some("*"));
+    assert_eq!(posted.header("access-control-allow-origin"), None);
+    assert_eq!(added.text_of("origins"), r#"["https://myapp.example"]"#);
     let single = server.call(
         "POST",
         "/collect/myapp",
@@ -105,7 +106,7 @@ fn a_server_keeps_its_source_id_over_a_restart() {
 fn a_removed_app_keeps_its_records_and_a_new_registration_brings_them_back() {
     let server = Server::start(|_| {});
     let body = format!(
-        r#"{{"build":{},"segments":["plan"]}}"#,
+        r#"{{"origins":["https://myapp.example"],"build":{},"segments":["plan"]}}"#,
         json::quote(&build_text(None, None, None))
     );
     server.admin("PUT", "/apps/myapp", Some(&body));
@@ -196,7 +197,7 @@ fn rejects_malformed_and_oversized_requests() {
         400
     );
     let no_slash = format!(
-        r#"{{"build":{}}}"#,
+        r#"{{"origins":["https://myapp.example"],"build":{}}}"#,
         json::quote(&build_text(Some(r#"["no-slash"]"#), None, None))
     );
     assert_eq!(server.admin("PUT", "/apps/x", Some(&no_slash)).status, 422);
@@ -219,7 +220,7 @@ fn rejects_malformed_and_oversized_requests() {
         400
     );
     let both = format!(
-        r#"{{"build":{},"appUrl":"{APP_URL}"}}"#,
+        r#"{{"origins":["https://myapp.example"],"build":{},"appUrl":"{APP_URL}"}}"#,
         json::quote(&build_text(None, None, None))
     );
     assert_eq!(server.admin("PUT", "/apps/x", Some(&both)).status, 400);
@@ -241,7 +242,7 @@ fn rejects_malformed_and_oversized_requests() {
     );
     for segment in ["page", "Page", "week", "constructor", "toString"] {
         let body = format!(
-            r#"{{"build":{},"segments":["{segment}"]}}"#,
+            r#"{{"origins":["https://myapp.example"],"build":{},"segments":["{segment}"]}}"#,
             json::quote(&build_text(None, None, None))
         );
         assert_eq!(
@@ -251,7 +252,7 @@ fn rejects_malformed_and_oversized_requests() {
         );
     }
     let twice = format!(
-        r#"{{"build":{},"segments":["plan","Plan"]}}"#,
+        r#"{{"origins":["https://myapp.example"],"build":{},"segments":["plan","Plan"]}}"#,
         json::quote(&build_text(None, None, None))
     );
     assert_eq!(server.admin("PUT", "/apps/x", Some(&twice)).status, 400);
@@ -313,28 +314,35 @@ fn a_new_key_works_at_once_and_the_old_key_stops() {
 #[test]
 fn answers_a_cors_preflight_and_registers_an_app_from_a_url() {
     let server = Server::start(|_| {});
-    let preflight = server.call(
-        "OPTIONS",
-        "/collect/myapp",
-        None,
-        &[
-            ("origin", "https://myapp.example"),
-            ("access-control-request-method", "POST"),
-        ],
-    );
-    assert_eq!(preflight.status, 204);
-    assert_eq!(
-        preflight.header("access-control-allow-methods"),
-        Some("POST")
-    );
+    let preflight = |origin: &str| {
+        server.call(
+            "OPTIONS",
+            "/collect/myapp",
+            None,
+            &[
+                ("origin", origin),
+                ("access-control-request-method", "POST"),
+            ],
+        )
+    };
+    assert_eq!(preflight("https://myapp.example").status, 404);
     let added = server.admin(
         "PUT",
         "/apps/myapp",
         Some(r#"{"appUrl":"https://myapp.example"}"#),
     );
     assert_eq!(added.get("appUrl").as_str(), Some(APP_URL));
+    assert_eq!(added.text_of("origins"), r#"["https://myapp.example"]"#);
     assert_eq!(added.text_of("zones"), r#"["myapp.list","myapp.send"]"#);
     assert_eq!(*server.fetched.lock().unwrap(), [BUILD_URL]);
+    let allowed = preflight("https://myapp.example");
+    assert_eq!(allowed.status, 204);
+    assert_eq!(allowed.header("access-control-allow-methods"), Some("POST"));
+    assert_eq!(
+        allowed.header("access-control-allow-origin"),
+        Some("https://myapp.example")
+    );
+    assert_eq!(preflight("https://other.example").status, 403);
     assert_eq!(
         server
             .admin("POST", "/apps/myapp/refresh", None)
@@ -495,56 +503,104 @@ fn rejects_the_records_of_a_bot_and_of_a_prerendered_page() {
 }
 
 #[test]
-fn accepts_records_only_from_the_allowed_origins() {
-    let server = Server::start(|options| {
-        options.allow_origins = Some(vec!["https://myapp.example".to_string()])
-    });
+fn each_app_accepts_records_only_from_its_origins() {
+    let server = Server::start(|_| {});
     server.register();
-    let batch = format!("[{}]", record(r#""type":"error""#));
-    let allowed = server.call(
-        "POST",
-        "/collect/myapp",
-        Some(&batch),
-        &[("origin", "https://myapp.example")],
+    let other_body = format!(
+        r#"{{"origins":["https://other.example","http://localhost:5173"],"build":{}}}"#,
+        json::quote(&build_text(None, None, None))
     );
+    let other_app = server.admin("PUT", "/apps/other", Some(&other_body));
+    assert_eq!(
+        other_app.text_of("origins"),
+        r#"["http://localhost:5173","https://other.example"]"#
+    );
+    let batch = format!("[{}]", record(r#""type":"error""#));
+    let post = |app: &str, origin: Option<&str>| {
+        let headers: Vec<(&str, &str)> =
+            origin.map(|value| ("origin", value)).into_iter().collect();
+        server.call("POST", &format!("/collect/{app}"), Some(&batch), &headers)
+    };
+    let allowed = post("myapp", Some("https://myapp.example"));
     assert_eq!(allowed.status, 202);
     assert_eq!(
         allowed.header("access-control-allow-origin"),
         Some("https://myapp.example")
     );
     assert_eq!(allowed.header("vary"), Some("origin"));
-    let other = server.call(
-        "POST",
-        "/collect/myapp",
-        Some(&batch),
-        &[("origin", "https://evil.example")],
-    );
+    let other = post("myapp", Some("https://other.example"));
     assert_eq!(other.status, 403);
     assert_eq!(other.header("access-control-allow-origin"), None);
-    assert_eq!(
-        server
-            .call(
-                "POST",
-                "/collect/myapp",
-                Some(&batch),
-                &[("origin", "null")]
-            )
-            .status,
-        403
-    );
+    assert_eq!(post("other", Some("https://other.example")).status, 202);
+    assert_eq!(post("other", Some("http://localhost:5173")).status, 202);
+    assert_eq!(post("other", Some("https://myapp.example")).status, 403);
+    assert_eq!(post("myapp", Some("null")).status, 403);
+    assert_eq!(post("missing", Some("https://myapp.example")).status, 404);
     let preflight = server.call(
         "OPTIONS",
         "/collect/myapp",
         None,
         &[
-            ("origin", "https://evil.example"),
+            ("origin", "https://other.example"),
             ("access-control-request-method", "POST"),
         ],
     );
     assert_eq!(preflight.status, 403);
-    let direct = server.call("POST", "/collect/myapp", Some(&batch), &[]);
+    let direct = post("myapp", None);
     assert_eq!(direct.status, 202);
     assert_eq!(direct.header("access-control-allow-origin"), None);
+}
+
+#[test]
+fn an_app_needs_valid_origins() {
+    let server = Server::start(|_| {});
+    let build = json::quote(&build_text(None, None, None));
+    let put = |body: String| server.admin("PUT", "/apps/x", Some(&body));
+    let upload = put(format!(r#"{{"build":{build}}}"#));
+    assert_eq!(upload.status, 400);
+    assert!(
+        upload
+            .get("error")
+            .as_str()
+            .unwrap()
+            .contains("an uploaded build needs the origins of the app")
+    );
+    for origins in [
+        r#"[]"#,
+        r#""https://myapp.example""#,
+        r#"["https://myapp.example/"]"#,
+        r#"["myapp.example"]"#,
+        r#"[1]"#,
+    ] {
+        assert_eq!(
+            put(format!(r#"{{"build":{build},"origins":{origins}}}"#)).status,
+            400,
+            "{origins}"
+        );
+    }
+    let many: Vec<String> = (0..33)
+        .map(|index| format!(r#""https://a{index}.example""#))
+        .collect();
+    assert_eq!(
+        put(format!(
+            r#"{{"build":{build},"origins":[{}]}}"#,
+            many.join(",")
+        ))
+        .status,
+        400
+    );
+    assert_eq!(
+        put(format!(
+            r#"{{"appUrl":"{APP_URL}","origins":["https://myapp.example/"]}}"#
+        ))
+        .status,
+        400
+    );
+    assert!(server.fetched.lock().unwrap().is_empty());
+    let given = put(format!(
+        r#"{{"appUrl":"{APP_URL}","origins":["https://www.myapp.example"]}}"#
+    ));
+    assert_eq!(given.text_of("origins"), r#"["https://www.myapp.example"]"#);
 }
 
 fn window(name: &str, ms: u64, limit: u64) -> Window {
@@ -595,7 +651,7 @@ fn drops_requests_of_an_address_over_the_limit() {
         &[],
     );
     assert_eq!(blocked.status, 429);
-    assert_eq!(blocked.header("access-control-allow-origin"), Some("*"));
+    assert_eq!(blocked.header("vary"), Some("origin"));
 }
 
 #[test]
@@ -652,6 +708,14 @@ fn open_slow_post(port: u16, path: &str, length: usize) -> TcpStream {
     stream
 }
 
+fn answered(stream: &TcpStream) -> bool {
+    let mut byte = [0u8; 1];
+    stream.set_nonblocking(true).unwrap();
+    let peeked = stream.peek(&mut byte);
+    stream.set_nonblocking(false).unwrap();
+    matches!(peeked, Ok(count) if count > 0)
+}
+
 fn finish(mut stream: TcpStream, body: &str) -> Answer {
     stream.write_all(body.as_bytes()).unwrap();
     let mut response = Vec::new();
@@ -664,12 +728,17 @@ fn answers_503_above_the_requests_in_progress() {
     let server = Server::start(|options| options.max_requests = 1);
     server.register();
     let body = format!("[{}]", record(r#""type":"error""#));
-    let slow = open_slow_post(server.port, "/collect/myapp", body.len());
-    server.wait_for(|| server.call("GET", "/", None, &[]).status == 503);
+    let mut slow = open_slow_post(server.port, "/collect/myapp", body.len());
+    server.wait_for(|| {
+        if answered(&slow) {
+            slow = open_slow_post(server.port, "/collect/myapp", body.len());
+        }
+        server.call("GET", "/", None, &[]).status == 503
+    });
     let busy = server.call("POST", "/collect/myapp", Some(&body), &[]);
     assert_eq!(busy.status, 503);
     assert_eq!(busy.header("retry-after"), Some("5"));
-    assert_eq!(busy.header("access-control-allow-origin"), Some("*"));
+    assert_eq!(busy.header("vary"), Some("origin"));
     assert_eq!(finish(slow, &body).status, 202);
     assert_eq!(server.call("GET", "/", None, &[]).status, 200);
 }
@@ -682,9 +751,18 @@ fn one_address_holds_only_its_share_of_the_requests_in_progress() {
     });
     server.register();
     let body = format!("[{}]", record(r#""type":"error""#));
-    let first = open_slow_post(server.port, "/collect/myapp", body.len());
-    let second = open_slow_post(server.port, "/collect/myapp", body.len());
-    server.wait_for(|| server.call("GET", "/", None, &[]).status == 429);
+    let open = || open_slow_post(server.port, "/collect/myapp", body.len());
+    let mut first = open();
+    let mut second = open();
+    server.wait_for(|| {
+        if answered(&first) {
+            first = open();
+        }
+        if answered(&second) {
+            second = open();
+        }
+        server.call("GET", "/", None, &[]).status == 429
+    });
     let refused = server.call("POST", "/collect/myapp", Some(&body), &[]);
     assert_eq!(refused.status, 429);
     assert_eq!(

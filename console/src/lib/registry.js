@@ -1,5 +1,6 @@
 import {
   BASE_COLUMNS,
+  MAX_ORIGINS,
   MAX_SEGMENTS,
   RESERVED_NAMES,
   SEGMENT_NAME_PATTERN,
@@ -44,6 +45,26 @@ export const segmentProblem = (segments) => {
   return null
 }
 
+const isOrigin = (value) => {
+  try {
+    const url = new URL(value)
+    return ['http:', 'https:'].includes(url.protocol) && url.origin === value
+  } catch {
+    return false
+  }
+}
+
+export const originProblem = (origins) => {
+  const list = origins ?? []
+  if (list.length > MAX_ORIGINS) return `An app has at most ${MAX_ORIGINS} origins.`
+  const wrong = list.find((origin) => !isOrigin(origin))
+  return wrong === undefined
+    ? null
+    : `"${wrong}" is not an origin like https://myapp.example, with no path and no "/" at the end.`
+}
+
+const ORIGINS_NEEDED = 'An uploaded build needs the origins of the app, like https://myapp.example.'
+
 const COUNTRY_NOTE = 'The server can add the country to each record, so "country" is not a segment.'
 
 export const segmentsNote = (known) =>
@@ -78,8 +99,11 @@ export const buildProblem = (text) => {
 
 export const registerBody = (source, values) => {
   const segments = values.segments ?? []
-  if (source === 'url') return { body: { segments, appUrl: values.appUrl } }
+  const origins = values.origins ?? []
+  const given = origins.length ? { origins } : {}
+  if (source === 'url') return { body: { segments, ...given, appUrl: values.appUrl } }
   const problem = buildProblem(values.build)
   if (problem) return { fields: { [SOURCE_FIELDS[source]]: problem } }
-  return { body: { segments, build: values.build } }
+  if (!origins.length) return { fields: { origins: ORIGINS_NEEDED } }
+  return { body: { segments, origins, build: values.build } }
 }

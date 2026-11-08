@@ -106,7 +106,7 @@ jobs:
           sleep 3
           mkdir "$RUNNER_TEMP/build"
           printf '{"pages":["/","/invoices"],"zones":["smoke.list"],"outcomes":["smoke.sent"]}' > "$RUNNER_TEMP/build/app-analytics.json"
-          ./${{ matrix.asset }} app add smoke "$RUNNER_TEMP/build" -a "$RUNNER_TEMP/key"
+          ./${{ matrix.asset }} app add smoke "$RUNNER_TEMP/build" --origins https://smoke.example -a "$RUNNER_TEMP/key"
           at="$(date +%s)000"
           curl -fsS -X POST http://127.0.0.1:4411/collect/smoke -d "[
             {\"type\":\"error\",\"visit\":\"v1\",\"at\":$at,\"page\":\"/invoices\"},
@@ -114,6 +114,7 @@ jobs:
             {\"type\":\"outcome\",\"visit\":\"v1\",\"at\":$at,\"page\":\"/invoices\",\"name\":\"smoke.sent\"},
             {\"type\":\"outcome\",\"visit\":\"v1\",\"at\":$at,\"page\":\"/invoices\",\"name\":\"smoke.forged\"}
           ]" | grep '"rejected":1'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:4411/collect/smoke -H 'origin: https://other.example' -d '[]')" = 403
           sleep 4
           ./${{ matrix.asset }} query '{"app":"smoke"}' --json -a "$RUNNER_TEMP/key" | grep '"matched": 3'
           curl -fsS -i -X OPTIONS http://127.0.0.1:4410/query \

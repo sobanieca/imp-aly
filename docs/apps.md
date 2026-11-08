@@ -1,7 +1,7 @@
 # imp-aly - Apps
 
-The server accepts records only for a registered app. An app has a name, the build file and an
-optional list of segments.
+The server accepts records only for a registered app. An app has a name, the build file, the origins
+of its pages and an optional list of segments.
 
 ## The build file
 
@@ -37,7 +37,7 @@ forged record cannot add a page, a zone or an outcome name that the app does not
 
 ```sh
 imp-aly app add myapp https://myapp.example/
-imp-aly app add myapp dist --segments plan,role
+imp-aly app add myapp dist --segments plan,role --origins https://myapp.example
 ```
 
 - **The name** is 1 to 63 lowercase letters, digits and `-`, and starts with a letter or a digit.
@@ -49,10 +49,21 @@ imp-aly app add myapp dist --segments plan,role
     lists and shows the error in `app ls`.
   - A folder is the build output on your machine, such as `dist`. The command reads
     `app-analytics.json` in it and uploads it. The server keeps it until you upload a new one.
+- **The origins** are the browser origins of the pages of the app, such as `https://myapp.example`.
+  The app accepts records only from these pages. See
+  [Collecting records](collect.md#cors-and-allowed-origins).
+  - With a URL and no `--origins`, the origin is the origin of the URL.
+  - An uploaded build needs `--origins`.
+  - `--origins` takes a list with commas, such as
+    `--origins https://myapp.example,http://localhost:5173`. An app has at most 32 origins.
 - **The segments** are the extra fields that your sink adds to each record, such as `plan`. See
   [Segments](#segments).
 
-`app add` replaces an app of the same name. The counts of accepted and rejected records stay.
+One server holds many apps. Register each app with its own name and its own origins. Each app sends
+its records to its own `/collect/<name>`, and accepts only the pages of its own origins.
+
+`app add` replaces an app of the same name, also its origins. The counts of accepted and rejected
+records stay.
 
 With several servers, give all of them to each `app` command, so that each server has the same build
 file and the same segments:
@@ -147,6 +158,8 @@ The commands call these endpoints. Each one needs a token, see [Security](securi
 | `DELETE /apps/<name>`       |                                                 | `{ "removed": "<name>" }` |
 
 An upload gives `build`: the text of `app-analytics.json`. Give `appUrl` or `build`, not both.
+`origins` is a list of origins, such as `["https://myapp.example"]`. With `appUrl`, you can omit it.
+With `build`, you must give it.
 
 An app in an answer has these fields:
 
@@ -154,6 +167,7 @@ An app in an answer has these fields:
 - `appUrl`: the URL of the folder of the build, with a `/` at the end, or null for an uploaded file
 - `pages`, `zones` and `outcomes`: the lists of the build file, sorted
 - `segments`
+- `origins`: the browser origins that can send records, sorted
 - `createdAt`
 - `buildUpdatedAt`: the time of the last successful read of the file
 - `buildError`: the error of the last read, or null

@@ -21,6 +21,7 @@ import { knownSegments, registryRows } from '../lib/catalog.js'
 import { formatCount, formatDateTime } from '../lib/format.js'
 import {
   buildProblem,
+  originProblem,
   refreshApp,
   registerApp,
   registerBody,
@@ -134,6 +135,7 @@ const registerForm = component('aly-register-form', {
           build: '',
           files: [],
           segments: [],
+          origins: [],
           servers: serverNames.length === 1 ? serverNames : [],
         },
         onSubmit: async (values) => {
@@ -176,6 +178,16 @@ const registerForm = component('aly-register-form', {
         validate: segmentProblem,
       }),
       text({ size: 'sm', tone: 'secondary' }, segmentsNote(known)),
+      comboBox({
+        field: 'origins',
+        label: 'Origins',
+        multiple: true,
+        custom: true,
+        options: [],
+        placeholder: 'https://myapp.example ...',
+        help: 'The browser origins of the pages of the app. The server refuses records from the pages of other origins. With a URL and no origin, the server takes the origin of the URL. Type an origin and press Enter.',
+        validate: originProblem,
+      }),
       serverChoice(serverNames),
       flex(button({ variant: 'primary', events: { click: submitForm } }, 'Register')),
     )
@@ -198,6 +210,7 @@ const appDetails = (entries) =>
             { term: 'Zones', details: formatCount(entry.zones.length) },
             { term: 'Outcomes', details: formatCount(entry.outcomes.length) },
             { term: 'Segments', details: entry.segments.join(', ') || '-' },
+            { term: 'Origins', details: (entry.origins ?? []).join(', ') || '-' },
             { term: 'Files of the build', details: entry.appUrl ?? 'uploaded' },
             { term: 'Files read at', details: formatDateTime(entry.buildUpdatedAt) },
             { term: 'Registered at', details: formatDateTime(entry.createdAt) },
