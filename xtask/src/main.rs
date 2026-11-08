@@ -213,6 +213,23 @@ fn demo_builds() -> FetchFile {
     })
 }
 
+fn demo_apps_text() -> String {
+    let mut text = format!("  {:<10}{:<27}{}\n", "Name", "URL", "Segments");
+    for app in DEMO_APPS {
+        let segments = if app.segments.is_empty() {
+            "-".to_string()
+        } else {
+            app.segments.join(", ")
+        };
+        text.push_str(&format!(
+            "  {:<10}{:<27}{segments}\n",
+            app.name,
+            demo_app_url(app.name)
+        ));
+    }
+    text
+}
+
 fn start(args: &[String]) -> Result<(), String> {
     let reset = args.iter().any(|arg| arg == "--reset");
     let port = match args.iter().position(|arg| arg == "--port") {
@@ -333,12 +350,18 @@ imp-aly {} - demo
             and a new visit every {} seconds
   Folder:   {}
 
-To add the demo server, open {url}/servers, press \"Add a server\",
+To add the demo server, open {url}/manage/servers, press \"Add a server\",
 and type these values:
 
   Name:     demo
   URL:      {admin_url}
   Key:      {}
+
+Then open {url}/manage/registry. When an app is not in the list,
+or has no URL, press \"Register an app\" and type these values:
+
+{}
+The demo server reads the build files of the apps only from these URLs.
 
 Press Ctrl+C to stop. The folder stays for the next start.
 To start again with new sample data, run \"cargo start --reset\".
@@ -352,6 +375,7 @@ To start again with new sample data, run \"cargo start --reset\".
             VISIT_EVERY.as_secs(),
             dev.root.display(),
             dev.key,
+            demo_apps_text(),
             url = console.url,
         );
         let _ = tokio::signal::ctrl_c().await;
