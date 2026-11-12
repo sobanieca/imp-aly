@@ -6,7 +6,7 @@ can install it on a phone or on a computer.
 
 Open it in one of two ways:
 
-- **On the web**, at `https://sobanieca.github.io/imp-aly/console/`. Click **Install the app** in
+- **On the web**, at `https://aly.imp-ui.com/console/`. Click **Install the app** in
   the top bar. On a phone, the button is in the navigation drawer. The installed console
   opens like an app, and it starts also without a network.
 - **On your machine**, with `imp-aly console`. The binary serves the same page on

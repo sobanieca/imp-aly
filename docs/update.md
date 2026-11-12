@@ -72,7 +72,7 @@ another format. So a wrong version cannot change your data.
 
 1. It takes a lock, so two updates never run at the same time. A second update fails at once. When
    another update replaced the binary after this update started, this update stops.
-2. It reads the list of versions from https://sobanieca.github.io/imp-aly/versions.json. The timer
+2. It reads the list of versions from https://aly.imp-ui.com/versions.json. The timer
    also reads the publish dates of the releases from the GitHub API. Then it selects the version.
 3. It downloads the SHA-256 file from the GitHub Release of that version. Then it downloads the
    binary to `.imp-aly.new` next to the binary. It checks the SHA-256, and it runs the new binary

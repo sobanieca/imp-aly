@@ -409,14 +409,7 @@ fn main() -> ExitCode {
             console_build() && cargo(&["build", "--release", "--locked", "--package", "imp-aly"])
         }
         "versions-manifest" => versions_manifest(),
-        "build-site" => {
-            let target = if args.iter().any(|arg| arg == "--pages") {
-                site::Target::Pages
-            } else {
-                site::Target::Local
-            };
-            report(site::build_site(target))
-        }
+        "build-site" => report(site::build_site()),
         "site" => report(site::serve_site()),
         "bench" => bench::bench(&root(), &args[1..]),
         "bench-scan" => bench::scan_child(&args[1..]),

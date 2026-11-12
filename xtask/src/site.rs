@@ -1,10 +1,12 @@
 use crate::highlight::{escape, highlight};
+use imp_aly::app_build::{BUILD_FILE, parse_build};
+use imp_aly::json::quote;
 use pulldown_cmark::{CodeBlockKind, CowStr, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::process::Command;
 
-pub const SITE_URL: &str = "https://sobanieca.github.io/imp-aly";
+pub const SITE_URL: &str = "https://aly.imp-ui.com";
 
 const REPO_URL: &str = "https://github.com/sobanieca/imp-aly";
 
@@ -29,11 +31,18 @@ const PAGE_ORDER: &[&str] = &[
 const STATIC_FILES: &[(&str, &str)] = &[
     ("site/site.css", "site.css"),
     ("site/site.js", "site.js"),
+    ("site/aly.js", "aly.js"),
     ("site/mark.svg", "mark.svg"),
     ("install.sh", "install.sh"),
 ];
 
 const OVERVIEW: &str = "site/overview.html";
+
+const ALY_APP: &str = "imp-aly-site";
+
+const ALY_SERVER_ENV: &str = "IMP_ALY_SITE_SERVER";
+
+const CONSOLE_OUTCOME: &str = "site.console-opened";
 
 const FONTS: &str = "console/public/fonts";
 
@@ -66,21 +75,6 @@ const EARLY_SCRIPT: &str = "<script>
       }
       document.documentElement.dataset.scheme = scheme
     </script>";
-
-#[derive(Clone, Copy, PartialEq)]
-pub enum Target {
-    Local,
-    Pages,
-}
-
-impl Target {
-    fn console_env(self) -> &'static str {
-        match self {
-            Target::Local => "site",
-            Target::Pages => "pages",
-        }
-    }
-}
 
 struct DocLink {
     slug: String,
@@ -403,6 +397,14 @@ fn nav_link(href: &str, label: &str, current: bool) -> String {
     )
 }
 
+fn outcome_link(href: &str, label: &str, outcome: &str) -> String {
+    format!(
+        "<a href=\"{}\" data-outcome=\"{outcome}\">{}</a>",
+        escape(href),
+        escape(label)
+    )
+}
+
 fn svg_icon(class: &str, elements: &str) -> String {
     format!(
         "<svg class=\"{class}\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" \
@@ -417,11 +419,11 @@ fn bar(route: &str) -> String {
     let sections = [
         nav_link(home, "Overview", route.is_empty()),
         nav_link(&format!("{base}docs/"), "Docs", route.starts_with("docs/")),
-        nav_link(&format!("{base}console/"), "Console", false),
+        outcome_link(&format!("{base}console/"), "Console", CONSOLE_OUTCOME),
         nav_link(REPO_URL, "GitHub", false),
     ];
     format!(
-        "<header class=\"bar\"><a class=\"brand\" href=\"{home}\" aria-label=\"imp-aly - home\">\
+        "<header class=\"bar\" data-zone=\"site.bar\"><a class=\"brand\" href=\"{home}\" aria-label=\"imp-aly - home\">\
          <img src=\"{base}mark.svg\" alt=\"\"><span>imp-aly</span></a>\
          <nav aria-label=\"Sections\"><ul class=\"links\">{}</ul></nav>\
          <div class=\"end\"><button class=\"scheme\" type=\"button\" \
@@ -464,7 +466,10 @@ fn docs_nav(docs: &[Doc], current: Option<&str>, base: &str) -> String {
             format!("<li>{link}</li>")
         })
         .collect();
-    format!("<nav aria-label=\"Documentation pages\"><ul class=\"pages\">{items}</ul></nav>")
+    format!(
+        "<nav aria-label=\"Documentation pages\" data-zone=\"site.docs-nav\">\
+         <ul class=\"pages\">{items}</ul></nav>"
+    )
 }
 
 fn docs_index(docs: &[Doc]) -> String {
@@ -502,7 +507,7 @@ fn pages_of(docs: &[Doc], overview: &str) -> Vec<Page> {
                           register apps, query, store, back up and secure the data."
                 .to_string(),
             main: format!(
-                "<div class=\"docs\">{}<article class=\"paper md\">{}</article></div>",
+                "<div class=\"docs\">{}<article class=\"paper md\" data-zone=\"site.docs-page\">{}</article></div>",
                 docs_nav(docs, None, "../"),
                 docs_index(docs)
             ),
@@ -514,7 +519,7 @@ fn pages_of(docs: &[Doc], overview: &str) -> Vec<Page> {
             title: format!("{} - imp-aly", doc.label),
             description: doc.rendered.description.clone(),
             main: format!(
-                "<div class=\"docs\">{}<article class=\"paper md\">{}</article></div>",
+                "<div class=\"docs\">{}<article class=\"paper md\" data-zone=\"site.docs-page\">{}</article></div>",
                 docs_nav(docs, Some(&doc.slug), "../../"),
                 doc.rendered.html
             ),
@@ -523,8 +528,25 @@ fn pages_of(docs: &[Doc], overview: &str) -> Vec<Page> {
     pages
 }
 
-fn document_of(page: &Page) -> String {
+fn page_pattern(route: &str) -> String {
+    format!("/{route}")
+}
+
+fn aly_script(page: &Page, base: &str, server: Option<&str>) -> String {
+    let Some(server) = server else {
+        return String::new();
+    };
+    format!(
+        "\n    <script type=\"module\" src=\"{base}aly.js\" data-aly-server=\"{}\" \
+         data-aly-app=\"{ALY_APP}\" data-aly-page=\"{}\"></script>",
+        escape(server),
+        escape(&page_pattern(&page.route))
+    )
+}
+
+fn document_of(page: &Page, server: Option<&str>) -> String {
     let base = base_of(&page.route);
+    let aly = aly_script(page, &base, server);
     let url = format!("{SITE_URL}/{}", page.route);
     let title = escape(&page.title);
     let description = escape(&page.description);
@@ -550,7 +572,7 @@ fn document_of(page: &Page) -> String {
   <body>
     {}
     <div class=\"canvas\">{}<main>{}</main></div>
-    <script type=\"module\" src=\"{base}site.js\"></script>
+    <script type=\"module\" src=\"{base}site.js\"></script>{aly}
   </body>
 </html>
 ",
@@ -569,6 +591,37 @@ fn sitemap_of(pages: &[Page]) -> String {
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
          <urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n{urls}</urlset>\n"
     )
+}
+
+fn attribute_values(html: &str, name: &str) -> Vec<String> {
+    let marker = format!("{name}=\"");
+    html.split(&marker)
+        .skip(1)
+        .filter_map(|rest| rest.split_once('"').map(|(value, _)| value.to_string()))
+        .collect()
+}
+
+fn json_list<'a>(values: impl Iterator<Item = &'a String>) -> String {
+    let items: Vec<String> = values.map(|value| quote(value)).collect();
+    format!("[{}]", items.join(", "))
+}
+
+fn analytics_file_of(pages: &[Page], documents: &[&str]) -> Result<String, String> {
+    let mut zones = std::collections::BTreeSet::new();
+    let mut outcomes = std::collections::BTreeSet::new();
+    for document in documents {
+        zones.extend(attribute_values(document, "data-zone"));
+        outcomes.extend(attribute_values(document, "data-outcome"));
+    }
+    let routes: Vec<String> = pages.iter().map(|page| page_pattern(&page.route)).collect();
+    let text = format!(
+        "{{\n  \"pages\": {},\n  \"zones\": {},\n  \"outcomes\": {}\n}}\n",
+        json_list(routes.iter()),
+        json_list(zones.iter()),
+        json_list(outcomes.iter())
+    );
+    parse_build(&text).map_err(|error| format!("site/dist/{BUILD_FILE}: {error}"))?;
+    Ok(text)
 }
 
 fn write_file(path: &Path, text: &str) -> Result<(), String> {
@@ -599,17 +652,10 @@ fn copy_folder(from: &Path, to: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn build_console(dist: &Path, target: Target) -> Result<(), String> {
+fn build_console(dist: &Path) -> Result<(), String> {
     let output = dist.join("console");
     let output = output.to_string_lossy();
-    let args = [
-        "build",
-        "--pwa",
-        "--env",
-        target.console_env(),
-        "--output",
-        &output,
-    ];
+    let args = ["build", "--pwa", "--env", "site", "--output", &output];
     if !crate::imp(&args) {
         return Err("imp build of the console failed".to_string());
     }
@@ -619,25 +665,35 @@ fn build_console(dist: &Path, target: Target) -> Result<(), String> {
     )
 }
 
-pub fn build_site(target: Target) -> Result<(), String> {
+pub fn build_site() -> Result<(), String> {
     let root = crate::root();
     let dist = root.join("site").join("dist");
     let docs = render_docs(&root)?;
     let overview = std::fs::read_to_string(root.join(OVERVIEW))
         .map_err(|error| format!("{OVERVIEW}: {error}"))?;
     let pages = pages_of(&docs, &overview);
+    let server = std::env::var(ALY_SERVER_ENV)
+        .ok()
+        .map(|server| server.trim_end_matches('/').to_string())
+        .filter(|server| !server.is_empty());
     match std::fs::remove_dir_all(&dist) {
         Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
             return Err(format!("{}: {error}", dist.display()));
         }
         _ => {}
     }
-    for page in &pages {
-        write_file(
-            &dist.join(&page.route).join("index.html"),
-            &document_of(page),
-        )?;
+    let documents: Vec<String> = pages
+        .iter()
+        .map(|page| document_of(page, server.as_deref()))
+        .collect();
+    for (page, document) in pages.iter().zip(&documents) {
+        write_file(&dist.join(&page.route).join("index.html"), document)?;
     }
+    let documents: Vec<&str> = documents.iter().map(String::as_str).collect();
+    write_file(
+        &dist.join(BUILD_FILE),
+        &analytics_file_of(&pages, &documents)?,
+    )?;
     write_file(&dist.join("sitemap.xml"), &sitemap_of(&pages))?;
     write_file(
         &dist.join("versions.json"),
@@ -647,20 +703,30 @@ pub fn build_site(target: Target) -> Result<(), String> {
         copy_file(&root.join(from), &dist.join(to))?;
     }
     copy_folder(&root.join(FONTS), &dist.join("fonts"))?;
-    build_console(&dist, target)?;
-    println!("site: {} pages written into site/dist/", pages.len());
+    build_console(&dist)?;
+    match &server {
+        Some(server) => println!(
+            "site: {} pages written into site/dist/, with records for {ALY_APP} sent to {server}",
+            pages.len()
+        ),
+        None => println!(
+            "site: {} pages written into site/dist/ (set {ALY_SERVER_ENV} to send records to \
+             imp-aly)",
+            pages.len()
+        ),
+    }
     Ok(())
 }
 
 pub fn serve_site() -> Result<(), String> {
-    build_site(Target::Local)?;
+    build_site()?;
     let status = Command::new("rfm")
         .current_dir(crate::root().join("site").join("dist"))
         .status()
         .map_err(|error| {
             format!(
                 "cannot run rfm ({error}) - install it from \
-                 https://sobanieca.github.io/remote-file-manager/"
+                 https://adam.sobaniec.com/remote-file-manager/"
             )
         })?;
     if status.success() {
@@ -749,6 +815,54 @@ mod tests {
         let short = shorten(&text);
         assert!(short.len() <= DESCRIPTION_LIMIT);
         assert!(short.ends_with("word..."));
+    }
+
+    #[test]
+    fn the_analytics_file_lists_the_pages_zones_and_outcomes() {
+        let pages = [
+            Page {
+                route: String::new(),
+                title: String::new(),
+                description: String::new(),
+                main: String::new(),
+            },
+            Page {
+                route: "docs/apps/".to_string(),
+                title: String::new(),
+                description: String::new(),
+                main: String::new(),
+            },
+        ];
+        let text = analytics_file_of(
+            &pages,
+            &[
+                "<div data-zone=\"site.b\"><a data-outcome=\"site.c\">",
+                "<div data-zone=\"site.a\"><div data-zone=\"site.b\">",
+            ],
+        )
+        .unwrap();
+        let lists = parse_build(&text).unwrap();
+        assert_eq!(
+            lists.pages.into_iter().collect::<Vec<_>>(),
+            ["/", "/docs/apps/"]
+        );
+        assert_eq!(
+            lists.zones.into_iter().collect::<Vec<_>>(),
+            ["site.a", "site.b"]
+        );
+        assert_eq!(lists.outcomes.into_iter().collect::<Vec<_>>(), ["site.c"]);
+    }
+
+    #[test]
+    fn a_zone_that_is_not_a_namespaced_name_fails_the_build() {
+        let pages = [Page {
+            route: String::new(),
+            title: String::new(),
+            description: String::new(),
+            main: String::new(),
+        }];
+        let error = analytics_file_of(&pages, &["<div data-zone=\"hero\">"]).unwrap_err();
+        assert!(error.contains("zones[0]"));
     }
 
     #[test]

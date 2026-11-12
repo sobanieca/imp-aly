@@ -30,7 +30,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p "$HOME/.local/bin"
-          curl -fsSL https://sobanieca.github.io/imp-ui/install.sh | INSTALL_DIR="$HOME/.local/bin" bash
+          curl -fsSL https://imp-ui.com/install.sh | INSTALL_DIR="$HOME/.local/bin" bash
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - name: Build the console page
         working-directory: console
@@ -90,7 +90,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p "$HOME/.local/bin"
-          curl -fsSL https://sobanieca.github.io/imp-ui/install.sh | INSTALL_DIR="$HOME/.local/bin" bash
+          curl -fsSL https://imp-ui.com/install.sh | INSTALL_DIR="$HOME/.local/bin" bash
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - name: Build the console page
         working-directory: console
@@ -118,7 +118,7 @@ jobs:
           sleep 4
           ./${{ matrix.asset }} query '{"app":"smoke"}' --json -a "$RUNNER_TEMP/key" | grep '"matched": 3'
           curl -fsS -i -X OPTIONS http://127.0.0.1:4410/query \
-            -H 'origin: https://sobanieca.github.io' \
+            -H 'origin: https://aly.imp-ui.com' \
             -H 'access-control-request-method: POST' | grep -i 'access-control-allow-origin: \*'
           ./${{ matrix.asset }} console --port 4400 &
           sleep 2
@@ -182,10 +182,12 @@ jobs:
         shell: bash
         run: |
           mkdir -p "$HOME/.local/bin"
-          curl -fsSL https://sobanieca.github.io/imp-ui/install.sh | INSTALL_DIR="$HOME/.local/bin" bash
+          curl -fsSL https://imp-ui.com/install.sh | INSTALL_DIR="$HOME/.local/bin" bash
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - name: Build site
-        run: cargo xtask build-site --pages
+        env:
+          IMP_ALY_SITE_SERVER: "" # https://aly.admware.com once the server is set up
+        run: cargo xtask build-site
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

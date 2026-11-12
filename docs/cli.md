@@ -229,7 +229,7 @@ imp-aly query report.json
 `imp-aly console` serves the console web app on your machine, at `http://localhost:4400`. It shows
 the reports of your apps in charts, and it registers and removes apps. Add the servers and their
 keys in the page. The page does not use the saved servers of the CLI. `--port <port>` changes the
-port. The same app is at `https://sobanieca.github.io/imp-aly/console/`, ready to install on a
+port. The same app is at `https://aly.imp-ui.com/console/`, ready to install on a
 phone. See [Console](console.md).
 
 ## AI agents

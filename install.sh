@@ -5,7 +5,7 @@ set -e
 REPO="sobanieca/imp-aly"
 DEFAULT_INSTALL_DIR="/usr/local/bin"
 BINARY_NAME="imp-aly"
-SCRIPT_URL="sobanieca.github.io/imp-aly/install.sh"
+SCRIPT_URL="aly.imp-ui.com/install.sh"
 
 usage() {
   cat <<USAGE

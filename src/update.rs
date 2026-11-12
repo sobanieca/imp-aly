@@ -11,7 +11,7 @@ use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-pub const MANIFEST_URL: &str = "https://sobanieca.github.io/imp-aly/versions.json";
+pub const MANIFEST_URL: &str = "https://aly.imp-ui.com/versions.json";
 
 pub const DOWNLOAD_URL: &str = "https://github.com/sobanieca/imp-aly/releases/download";
 

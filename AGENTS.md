@@ -143,7 +143,7 @@ The tasks are cargo aliases in `.cargo/config.toml`. They run `xtask`.
 | `cargo verify`           | runs `cargo fmt --check`, `cargo clippy -D warnings`, the tests, then `imp fmt --check`, `imp lint` and `imp test --unit` in `console/`                       |
 | `cargo compile`          | builds the page and the release binary `target/release/imp-aly` with the page inside                                                                          |
 | `cargo site`             | builds the site into `site/dist/` and serves that folder with `rfm`                                                                                           |
-| `cargo xtask build-site` | builds the site into `site/dist/`: the landing page, the docs, the console, `install.sh` and `versions.json`; `--pages` builds the console for GitHub Pages   |
+| `cargo xtask build-site` | builds the site into `site/dist/`: the landing page, the docs, the console, `install.sh` and `versions.json`                                                  |
 | `cargo query-bench`      | writes 180 sealed days, 1M records of today and a day of 10M records in `.bench-data/` once, then prints the query times; `--reset` writes the data again     |
 
 After a batch of changes, run `cargo fmt --all`, then `cargo verify`, and fix every issue. When you
@@ -176,7 +176,7 @@ The site shows each page of `docs/` at `/docs/<name>/`. Add a new page to `PAGE_
 `xtask/src/site.rs`. A link between pages is a relative link such as `apps.md#segments`. The build
 fails on a link to a missing page or heading. `rfm` serves the local site. It is a static file
 server on the machine, not part of the repo. Install it from
-<https://sobanieca.github.io/remote-file-manager/>.
+<https://adam.sobaniec.com/remote-file-manager/>.
 
 `docs/` is for a person who runs the server and sends records from an imp app. That reader never
 reads the source. Explain what the reader does and what the server does for them. Do not point at
@@ -218,8 +218,12 @@ Bump `version` in `Cargo.toml` to release, and run `cargo build` so that `Cargo.
 a push to `main`, CI checks the code, builds the static binaries for Linux (musl) and macOS on x64
 and arm64 when the tag `v<version>` does not exist, runs a smoke test of each binary, and publishes
 them with SHA-256 files to a GitHub Release. Then GitHub Pages serves the site of
-`cargo xtask build-site --pages`: the landing page, the docs, the console, `install.sh` and
-`versions.json`, the list of released versions with their data format. The update timer on each
+`cargo xtask build-site`: the landing page, the docs, the console, `install.sh` and
+`versions.json`, the list of released versions with their data format. With
+`IMP_ALY_SITE_SERVER` set to the URL of an imp-aly server, the pages of the site, but not the
+console, load `site/aly.js` and send their visits as the app `imp-aly-site`. The build writes
+`app-analytics.json` from the routes and the `data-zone` and `data-outcome` names of the pages, and
+checks it with the parser of the server. The update timer on each
 server reads that list. Before `1.0.0`, it installs only a patch version of the same
 minor version, and only 7 days after GitHub published it. See `adr/binary-distribution.md` and
 `adr/automatic-updates.md`.

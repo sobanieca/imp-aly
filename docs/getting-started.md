@@ -14,13 +14,13 @@ The server is one file. It needs no database, no runtime and no other service.
 Run this command on the VPS:
 
 ```sh
-curl -fsSL https://sobanieca.github.io/imp-aly/install.sh | bash
+curl -fsSL https://aly.imp-ui.com/install.sh | bash
 ```
 
 The script supports Linux and macOS, on x64 and arm64. It installs `imp-aly` to `/usr/local/bin`,
 for all users. If you can't write to that folder, the script stops with an error: run it with
 `sudo bash` instead of `bash`. To install to a custom location, set `INSTALL_DIR` to a folder on your
-`PATH`, such as `curl -fsSL https://sobanieca.github.io/imp-aly/install.sh | INSTALL_DIR=~/.local/bin bash`.
+`PATH`, such as `curl -fsSL https://aly.imp-ui.com/install.sh | INSTALL_DIR=~/.local/bin bash`.
 Run the same command again to update.
 
 ## Start the server
@@ -180,7 +180,7 @@ accepts each token once. See [Security](security.md).
 
 ## See the numbers in the console
 
-Open `https://sobanieca.github.io/imp-aly/console/` on your phone or your computer, and install it
+Open `https://aly.imp-ui.com/console/` on your phone or your computer, and install it
 from the menu of the browser. Or run `imp-aly console` and open `http://localhost:4400`. In
 **Servers**, add the URL of the admin port and the key. The installed console needs HTTPS on the
 admin port, see [Serve HTTPS](#serve-https).

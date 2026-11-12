@@ -12,9 +12,8 @@ servers. A choice of servers on each report was one more control that could ask 
 
 **The console is a Progressive Web App built with imp. It keeps the servers and their keys in the
 browser, and calls the admin port of each server directly with an imp HTTP client. It signs a
-one-time token for each call. GitHub Pages serves it at
-`https://sobanieca.github.io/imp-aly/console/`, and `imp-aly console` serves the same page on
-localhost.**
+one-time token for each call. GitHub Pages serves it at `https://aly.imp-ui.com/console/`, and
+`imp-aly console` serves the same page on localhost.**
 
 - The page is an imp project in `console/`. `imp build --pwa` writes `console/dist` with a manifest,
   the icons and an offline service worker. So a phone can install the page from the browser.
@@ -24,10 +23,9 @@ localhost.**
   button. The page counts as installed when `navigator.standalone` is true, or when the display mode
   is `standalone`, `minimal-ui` or `window-controls-overlay`. A page that is not a secure context
   cannot install, so it hides the button too.
-- CI builds the page a second time with the environment `pages`, which sets
-  `IMP_BASEPATH=/imp-aly/console`, and publishes it with the site. `cargo site` builds it with the
-  environment `site`, which sets `IMP_BASEPATH=/console` for the local copy of the site. GitHub
-  Pages answers a missing path with the `404.html` of the site, so the build copies the
+- CI builds the page a second time with the environment `site`, which sets `IMP_BASEPATH=/console`,
+  and publishes it with the site. `cargo site` builds the same page for the local copy of the site.
+  GitHub Pages answers a missing path with the `404.html` of the site, so the build copies the
   `index.html` of the console there.
   So a deep link or a reload of a console route opens the console.
 - The build of the binary embeds the files of `console/dist`, so the binary holds the page.

@@ -24,7 +24,7 @@ and publishes it with a SHA-256 file to a GitHub Release.**
 - The workflow runs the pushes to `main` one after the other, in the concurrency group `release`
   with `cancel-in-progress: false`. So two quick pushes cannot both see that the tag is missing, and
   cannot both publish the same version. A pull request runs in a group of its own.
-- The Pages job runs after the release. `cargo xtask build-site --pages` writes `versions.json`
+- The Pages job runs after the release. `cargo xtask build-site` writes `versions.json`
   with each released version and its data format, from `Cargo.toml` and `src/data_format.rs` of
   each tag.
   `imp-aly update` reads it. See [automatic-updates](automatic-updates.md).

@@ -1,6 +1,6 @@
 # imp-aly
 
-Website: https://sobanieca.github.io/imp-aly/
+Website: https://aly.imp-ui.com/
 
 A small analytics server for [imp](https://github.com/sobanieca/imp-ui) apps. Run it on your own
 VPS. It takes the records of `imp/analytics`, checks each one against the build file of your app,
@@ -20,7 +20,7 @@ imp-aly is not released yet. Until version `1.0.0`, any part of it can change.
 ## Install and start
 
 ```sh
-curl -fsSL https://sobanieca.github.io/imp-aly/install.sh | bash
+curl -fsSL https://aly.imp-ui.com/install.sh | bash
 sudo imp-aly server --port 4411
 imp-aly app add myapp https://myapp.example/
 ```
@@ -46,7 +46,7 @@ imp-aly query '{"app": "myapp", "groupBy": ["page", "type"], "measures": ["recor
 ```
 
 Or open the console, a web app with charts of your apps, and pages for the apps and the servers.
-Install it on your phone from https://sobanieca.github.io/imp-aly/console/, add your servers with
+Install it on your phone from https://aly.imp-ui.com/console/, add your servers with
 their keys, and choose an app. Each report asks the servers that have the app. Or serve it on your
 machine:
 
@@ -54,7 +54,7 @@ machine:
 imp-aly console
 ```
 
-The docs are on the [website](https://sobanieca.github.io/imp-aly/docs/), and their sources are in
+The docs are on the [website](https://aly.imp-ui.com/docs/), and their sources are in
 [`docs/`](docs/). Read the [Introduction](docs/introduction.md) for the key words, then
 [Getting started](docs/getting-started.md).
 
@@ -76,6 +76,6 @@ build and check the page of the console. The server is Rust. The console is an i
 | `cargo test`          | runs the tests of the server                                                                                                                    |
 | `cargo verify`        | runs `cargo fmt`, `cargo clippy` and the tests, then `imp fmt`, `imp lint` and `imp test --unit` in `console/`                                  |
 | `cargo compile`       | builds the page of the console and the release binary `target/release/imp-aly`                                                                  |
-| `cargo site`          | builds the website into `site/dist/` and serves it with [rfm](https://sobanieca.github.io/remote-file-manager/)                                 |
+| `cargo site`          | builds the website into `site/dist/` and serves it with [rfm](https://adam.sobaniec.com/remote-file-manager/)                                 |
 
 The decisions behind the design are in [`adr/`](adr/).

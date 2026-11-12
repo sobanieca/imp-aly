@@ -1,17 +1,17 @@
-<div class="hero">
+<div class="hero" data-zone="site.hero">
   <h1>Analytics for your imp apps, on a VPS that you own.</h1>
   <p class="lead"><code>imp-aly</code> is one small binary. It takes the records of <code>imp/analytics</code>, checks each one against the build file of your app, and stores them on the local disk. Then it answers your queries. No database, no third party, and the data stays on your machine.</p>
   <div class="actions">
-    <a class="button primary" href="console/">Open the console</a>
+    <a class="button primary" href="console/" data-outcome="site.console-opened">Open the console</a>
     <a class="button" href="docs/getting-started/">Get started</a>
     <a class="button" href="docs/">Read the docs</a>
   </div>
   <div class="install-command">
-    <code>curl -fsSL sobanieca.github.io/imp-aly/install.sh | bash</code>
-    <button class="copy" type="button">Copy</button>
+    <code>curl -fsSL aly.imp-ui.com/install.sh | bash</code>
+    <button class="copy" type="button" data-outcome="site.install-copied">Copy</button>
   </div>
 </div>
-<section class="section">
+<section class="section" data-zone="site.how-it-works">
   <h2>How it works</h2>
   <p>The public port takes records from any browser. The server checks them, writes them to a synced log, and then answers. The admin port answers only calls that are signed with the key. The key never goes over the network.</p>
   <div class="map"
@@ -79,7 +79,7 @@
   </svg>
   </div>
 </section>
-<section class="section">
+<section class="section" data-zone="site.what-you-get">
   <h2>What you get</h2>
   <div class="cards">
     <div class="card">
@@ -120,12 +120,12 @@
     </div>
   </div>
 </section>
-<section class="section">
+<section class="section" data-zone="site.setup">
   <h2>Setup, in full</h2>
   <div class="cols">
     <div class="col">
       <h3>VPS <span>once</span></h3>
-      <pre class="code"><code><span class="dim">$</span> curl -fsSL sobanieca.github.io/imp-aly/install.sh | bash
+      <pre class="code"><code><span class="dim">$</span> curl -fsSL aly.imp-ui.com/install.sh | bash
 <span class="dim">$</span> sudo imp-aly server --port 4411
 <span class="dim">  Collect:   http://203.0.113.10:4411/collect/&lt;app&gt;
   Admin:     http://203.0.113.10:4410
@@ -135,7 +135,7 @@
     </div>
     <div class="col">
       <h3>Your phone <span>whenever</span></h3>
-      <pre class="code"><code><span class="dim">Open</span> <a class="hl" href="console/">sobanieca.github.io/imp-aly/console</a>
+      <pre class="code"><code><span class="dim">Open</span> <a class="hl" href="console/" data-outcome="site.console-opened">aly.imp-ui.com/console</a>
 <span class="dim">Menu -&gt;</span> Install the app
 <span class="dim">Servers -&gt;</span> Add a server
   https://aly.myapp.example:4410
@@ -154,9 +154,9 @@
   </div>
   <p class="note">The sink is part of <a href="https://github.com/sobanieca/imp-ui" target="_blank" rel="noopener">imp</a>. See <a href="docs/getting-started/">Getting started</a> for each step.</p>
 </section>
-<section class="section">
+<section class="section" data-zone="site.read-the-numbers">
   <h2>Read the numbers</h2>
-  <p>Ask with a JSON query in the terminal, or open <a href="console/">the console</a>: a web app for your phone or your computer, with reports of your apps, pages, zones, outcomes and errors, and your apps and servers. Both give the same numbers.</p>
+  <p>Ask with a JSON query in the terminal, or open <a href="console/" data-outcome="site.console-opened">the console</a>: a web app for your phone or your computer, with reports of your apps, pages, zones, outcomes and errors, and your apps and servers. Both give the same numbers.</p>
   <div class="cols">
     <div class="col">
       <h3>Terminal <span>imp-aly query</span></h3>
@@ -219,7 +219,7 @@
     </div>
   </div>
 </section>
-<section class="section">
+<section class="section" data-zone="site.ai-agent">
   <h2>Ask an AI agent. It never gets the key.</h2>
   <p><code>imp-aly skill --init</code> creates a <code>/imp-aly</code> skill for Claude Code, Codex and Cursor. The agent writes the queries and runs <code>imp-aly</code> with your saved servers. The key stays in its file.</p>
   <div class="chat" aria-label="Example of a question to an AI agent">
@@ -228,19 +228,19 @@
     <div class="bot"><code>/settings</code> had 702 views and only 31 uses, so 4% of the views. The other pages are used in 60% of their views or more.</div>
   </div>
 </section>
-<section class="section" id="install">
+<section class="section" id="install" data-zone="site.install">
   <h2>Install</h2>
   <div class="install-command">
-    <code>curl -fsSL sobanieca.github.io/imp-aly/install.sh | bash</code>
-    <button class="copy" type="button">Copy</button>
+    <code>curl -fsSL aly.imp-ui.com/install.sh | bash</code>
+    <button class="copy" type="button" data-outcome="site.install-copied">Copy</button>
   </div>
   <p>Use the same command on the VPS and on your machine. It supports Linux and macOS on x64 and arm64. As root with systemd, <code>imp-aly server</code> installs a service that runs as its own user. <code>imp-aly help</code> lists every command. Until version 1.0.0, any part of imp-aly can change.</p>
-  <p>It installs to <code>/usr/local/bin</code>, for all users. If you can't write there, run it with <code>sudo bash</code> instead of <code>bash</code>, or install to a custom location: set <code>INSTALL_DIR</code> to a directory on your <code>PATH</code>, as in <code>curl -fsSL sobanieca.github.io/imp-aly/install.sh | INSTALL_DIR=~/.local/bin bash</code>.</p>
+  <p>It installs to <code>/usr/local/bin</code>, for all users. If you can't write there, run it with <code>sudo bash</code> instead of <code>bash</code>, or install to a custom location: set <code>INSTALL_DIR</code> to a directory on your <code>PATH</code>, as in <code>curl -fsSL aly.imp-ui.com/install.sh | INSTALL_DIR=~/.local/bin bash</code>.</p>
 </section>
-<footer class="footer">
+<footer class="footer" data-zone="site.footer">
   <span><code>imp-aly</code> - MIT license</span>
   <a href="docs/">Docs</a>
-  <a href="console/">Console</a>
+  <a href="console/" data-outcome="site.console-opened">Console</a>
   <a href="https://github.com/sobanieca/imp-ui" target="_blank" rel="noopener">imp</a>
   <a href="https://github.com/sobanieca/imp-aly/releases/latest" target="_blank" rel="noopener">Binaries for Linux and macOS</a>
 </footer>

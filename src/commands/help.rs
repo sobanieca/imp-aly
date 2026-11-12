@@ -228,7 +228,7 @@ Queries (how the server reads the data):
 
 Console (a web app for your phone or your machine):
 
-  https://sobanieca.github.io/imp-aly/console/   open it, and install it from the browser
+  https://aly.imp-ui.com/console/   open it, and install it from the browser
   imp-aly console                           serve it on http://localhost:{DEFAULT_CONSOLE_PORT}
   imp-aly console --port 9000               on another port
 
