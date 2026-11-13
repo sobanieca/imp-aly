@@ -1,8 +1,12 @@
 name: CI
 
-# Runs only on demand: start it from the Actions tab (a run on main also releases and
-# deploys the site), or add the `ci` label to a PR to check it and every later push to it.
+# Runs on a push to main: it checks the code, releases the version of Cargo.toml when its tag
+# does not exist, and deploys the site. Start it from the Actions tab to run it again, or add the
+# `ci` label to a PR to check it and every later push to it.
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
   pull_request:
     branches:
