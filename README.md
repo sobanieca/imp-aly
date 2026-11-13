@@ -2,7 +2,7 @@
 
 Website: https://aly.imp-ui.com/
 
-A small analytics server for [imp](https://github.com/sobanieca/imp-ui) apps. Run it on your own
+A small analytics server for [imp](https://imp-ui.com/) apps. Run it on your own
 VPS. It takes the records of `imp/analytics`, checks each one against the build file of your app,
 stores them on the local disk in plain text column files, and answers queries.
 
@@ -36,7 +36,7 @@ onAnalytics(alySink({ app: 'myapp', servers: ['https://analytics.myapp.example']
 
 The sink sends the records in batches to `<server>/collect/<app>`. With several servers in the list,
 it sends each visit to one server, and to the next server when that server fails. See
-[Analytics](https://github.com/sobanieca/imp-ui/blob/main/docs/analytics.md#imp-aly) in the imp
+[Analytics](https://imp-ui.com/docs/analytics#imp-aly) in the imp
 docs.
 
 And read the numbers:
@@ -63,7 +63,7 @@ To let an AI agent query your analytics, run `imp-aly skill --init`. Then ask th
 
 ## Work on imp-aly
 
-You need [Rust](https://rustup.rs/) 1.85 or newer, and [imp](https://github.com/sobanieca/imp-ui) to
+You need [Rust](https://rustup.rs/) 1.85 or newer, and [imp](https://imp-ui.com/) to
 build and check the page of the console. The server is Rust. The console is an imp project in
 `console/`.
 
