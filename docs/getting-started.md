@@ -138,7 +138,7 @@ The sink sends the records in batches to `https://analytics.myapp.example/collec
 the first record of a visit at once, and the next records every 5 seconds or 20 records. It also
 sends a batch when the page hides. When the server rejects records, the sink logs a warning in the
 browser console. The
-[Analytics](https://github.com/sobanieca/imp-ui/blob/main/docs/analytics.md#imp-aly) page of imp
+[Analytics](https://imp-ui.com/docs/analytics#imp-aly) page of imp
 gives all the options.
 
 The server accepts the records exactly as imp makes them. It drops a record whose `page`, zone or

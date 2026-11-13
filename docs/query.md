@@ -255,7 +255,7 @@ together. Each server stores the visits that reach it. `imp-aly query` adds up t
 
 3. Put the URLs of all servers in the `servers` option of `alySink` in your app. The sink picks one
    server for each visit from the visit id. A visit is one load of the page. See the
-   [Analytics](https://github.com/sobanieca/imp-ui/blob/main/docs/analytics.md#imp-aly) page of imp.
+   [Analytics](https://imp-ui.com/docs/analytics#imp-aly) page of imp.
 4. Ask all servers together:
 
    ```sh

@@ -123,7 +123,7 @@ onAnalytics(
 ```
 
 Register the sink in the `setup` of the component that holds the state, so it can read the state.
-See [Segments](https://github.com/sobanieca/imp-ui/blob/main/docs/analytics.md#segments) in the imp
+See [Segments](https://imp-ui.com/docs/analytics#segments) in the imp
 docs.
 
 Declare each segment when you register the app. The server rejects a record that has a field that
