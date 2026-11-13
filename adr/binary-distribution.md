@@ -13,7 +13,8 @@ and publishes it with a SHA-256 file to a GitHub Release.**
 - The version in `Cargo.toml` is the source of truth. `--version` prints it.
 - The targets are Linux (musl, static) and macOS on x64 and arm64. Each one builds on a runner of
   its own platform with `cargo build --release --locked`, after `imp build --pwa` built the page of
-  the console. Each one runs a smoke test: start, register an app, send a record, query it, and
+  the console. The build of a Linux binary fails when `objdump -p` shows a `NEEDED` shared
+  library. Each one runs a smoke test: start, register an app, send a record, query it, and
   serve the console.
 - The assets are `imp-aly-{linux|macos}-{x64|arm64}` and a `.sha256` file for each.
 - `install.sh` detects the platform, downloads the latest asset and its checksum, and copies the

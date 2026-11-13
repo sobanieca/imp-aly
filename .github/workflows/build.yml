@@ -106,6 +106,13 @@ jobs:
         run: |
           cargo build --release --locked --package imp-aly --target ${{ matrix.target }}
           cp target/${{ matrix.target }}/release/imp-aly ${{ matrix.asset }}
+      - name: ${{ matrix.asset }} links no shared library
+        if: runner.os == 'Linux'
+        run: |
+          if objdump -p "${{ matrix.asset }}" | grep NEEDED; then
+            echo "${{ matrix.asset }} must be a static binary"
+            exit 1
+          fi
       - name: Smoke test
         run: |
           test "$(./${{ matrix.asset }} --version)" = "${{ needs.version.outputs.version }}"
