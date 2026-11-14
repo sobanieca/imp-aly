@@ -12,7 +12,6 @@ import { messageOf } from '../lib/api.js'
 import { knownSegments, registryRows } from '../lib/catalog.js'
 import { formatCount, formatDateTime } from '../lib/format.js'
 import {
-  originProblem,
   refreshApp,
   registerApp,
   registerBody,
@@ -63,7 +62,6 @@ const registerForm = component('aly-register-form', {
           name: '',
           appUrl: '',
           segments: [],
-          origins: [],
           servers: serverNames.length === 1 ? serverNames : [],
         },
         onSubmit: async (values) => {
@@ -97,7 +95,7 @@ const registerForm = component('aly-register-form', {
         type: 'url',
         required: true,
         placeholder: 'https://myapp.example/',
-        help: `The folder where the build is served. The server reads ${BUILD_FILE} there, and again every 10 minutes.`,
+        help: `The address where people open the app. The server reads ${BUILD_FILE} at this address, and again every 10 minutes. The app accepts records only from the pages of this origin.`,
       }),
       comboBox({
         field: 'segments',
@@ -110,16 +108,6 @@ const registerForm = component('aly-register-form', {
         validate: segmentProblem,
       }),
       text({ size: 'sm', tone: 'secondary' }, segmentsNote(known)),
-      comboBox({
-        field: 'origins',
-        label: 'Origins',
-        multiple: true,
-        custom: true,
-        options: [],
-        placeholder: 'https://myapp.example ...',
-        help: 'The browser origins of the pages of the app. The server refuses records from the pages of other origins. With a URL and no origin, the server takes the origin of the URL. Type an origin and press Enter.',
-        validate: originProblem,
-      }),
       serverChoice(serverNames),
       flex(button({ variant: 'primary', events: { click: submitForm } }, 'Register')),
     )

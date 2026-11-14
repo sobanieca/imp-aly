@@ -1,6 +1,5 @@
 import {
   BASE_COLUMNS,
-  MAX_ORIGINS,
   MAX_SEGMENTS,
   RESERVED_NAMES,
   SEGMENT_NAME_PATTERN,
@@ -45,24 +44,6 @@ export const segmentProblem = (segments) => {
   return null
 }
 
-const isOrigin = (value) => {
-  try {
-    const url = new URL(value)
-    return ['http:', 'https:'].includes(url.protocol) && url.origin === value
-  } catch {
-    return false
-  }
-}
-
-export const originProblem = (origins) => {
-  const list = origins ?? []
-  if (list.length > MAX_ORIGINS) return `An app has at most ${MAX_ORIGINS} origins.`
-  const wrong = list.find((origin) => !isOrigin(origin))
-  return wrong === undefined
-    ? null
-    : `"${wrong}" is not an origin like https://myapp.example, with no path and no "/" at the end.`
-}
-
 const COUNTRY_NOTE = 'The server can add the country to each record, so "country" is not a segment.'
 
 export const segmentsNote = (known) =>
@@ -72,11 +53,7 @@ export const segmentsNote = (known) =>
         .join(', ')}. ${COUNTRY_NOTE}`
     : `No app on the servers has a segment yet. ${COUNTRY_NOTE}`
 
-export const registerBody = (values) => {
-  const origins = values.origins ?? []
-  return {
-    segments: values.segments ?? [],
-    ...(origins.length ? { origins } : {}),
-    appUrl: values.appUrl,
-  }
-}
+export const registerBody = (values) => ({
+  segments: values.segments ?? [],
+  appUrl: values.appUrl,
+})

@@ -16,6 +16,4 @@ export const RESERVED_NAMES = new Set([
 
 export const MAX_SEGMENTS = 16
 
-export const MAX_ORIGINS = 32
-
 export const isAppName = (value) => typeof value === 'string' && APP_NAME_PATTERN.test(value)
