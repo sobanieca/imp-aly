@@ -202,7 +202,7 @@ jobs:
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - name: Build site
         env:
-          IMP_ALY_SITE_SERVER: "" # https://aly.admware.com once the server is set up
+          IMP_ALY_SITE_SERVER: https://aly.admware.com
         run: cargo xtask build-site
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
