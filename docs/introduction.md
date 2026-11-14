@@ -60,6 +60,9 @@ the key can register apps and run queries.
   - `error` - an error occurred on a screen.
 - **Visit** - one session of a user in one browser tab. All the records of the session have the same
   `visit` id. The server counts visits, not people.
+- **Dedupe window** - 8 hours by default. In this window, the server keeps the records of a page
+  from one client address only for the first visit that opened the page. A reload or a new tab then
+  does not count as a new visit of the page.
 - **Page** - the screen of a record, as its pattern from the app map, such as `/invoices/:id`. It is
   never the real path, such as `/invoices/42`.
 - **Zone** - a named part of a screen, such as `myapp.invoice-list`. The `seen` and `used` records

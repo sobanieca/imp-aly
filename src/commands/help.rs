@@ -1,6 +1,7 @@
 use crate::VERSION;
 use crate::api_client::{CALL_TIMEOUT_MS, QUERY_TIMEOUT_MS};
 use crate::console::DEFAULT_CONSOLE_PORT;
+use crate::dedupe::DEFAULT_DEDUPE;
 use crate::http::DEFAULT_MAX_CONNECTIONS;
 use crate::rate_limit::{DEFAULT_TRUSTED_PROXIES, default_limits};
 use crate::retention::DEFAULT_MIN_FREE;
@@ -90,6 +91,10 @@ Server (on the VPS):
   --tls-key <file>          and this private key (PEM); the server checks both files
                             once an hour and loads a renewed certificate
 {limit_lines}
+  --dedupe <time>           count one visit per page and address in this window,
+                            like 30m, 8h or 1d, at most 7d, or off (default {DEFAULT_DEDUPE});
+                            the server drops the records of a page from the other
+                            visits of the same address in the window
   --foreground              do not touch systemd, run in the foreground
   --no-auto-update          do not install the timer that updates imp-aly
   --uninstall               stop and remove the systemd service and the update timer

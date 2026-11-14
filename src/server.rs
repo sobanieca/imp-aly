@@ -3,6 +3,7 @@ use crate::apps::Apps;
 use crate::backup::{parse_backup_options, write_backup};
 use crate::data_format::{DATA_FORMAT, check_data_format};
 use crate::days::{day_of, iso, now_ms};
+use crate::dedupe::{DEFAULT_DEDUPE_MS, DEFAULT_MAX_VIEWS, Dedupe};
 use crate::error::{Error, Result};
 use crate::file_watch::{WatchHandle, watch_files};
 use crate::fsutil::{create_dir_all, remove_if_exists};
@@ -116,6 +117,8 @@ pub struct ServerOptions {
     pub country_header: Option<String>,
     pub limits: Vec<Window>,
     pub max_clients: usize,
+    pub dedupe_ms: Option<u64>,
+    pub max_views: usize,
     pub max_requests: usize,
     pub max_client_requests: Option<usize>,
     pub max_connections: usize,
@@ -153,6 +156,8 @@ impl ServerOptions {
             country_header: None,
             limits: default_limits(),
             max_clients: DEFAULT_MAX_CLIENTS,
+            dedupe_ms: Some(DEFAULT_DEDUPE_MS),
+            max_views: DEFAULT_MAX_VIEWS,
             max_requests: DEFAULT_MAX_REQUESTS,
             max_client_requests: None,
             max_connections: crate::http::DEFAULT_MAX_CONNECTIONS,
@@ -309,6 +314,7 @@ struct State {
     storage: Arc<StorageRunner>,
     queries: QueryRunner,
     limiter: Mutex<RateLimiter>,
+    dedupe: Mutex<Dedupe>,
     batch_limit: u64,
     verifier: Mutex<TokenVerifier>,
     public_flight: InFlight,
@@ -457,41 +463,58 @@ impl State {
             request.header("user-agent"),
         );
         let now = now_ms();
+        let client = clients.first().map_or("", |client| client.key.as_str());
         let mut lines = String::new();
         let mut accepted = 0u64;
         let mut rejected = 0u64;
-        for input in inputs {
-            let outcome = match bot {
-                Some(problem) => Err(problem.to_string()),
-                None => validate_record(
-                    input,
-                    &rules.lists,
-                    &rules.segments,
-                    country.as_deref(),
-                    now,
-                ),
-            };
-            match outcome {
-                Err(problem) => {
-                    rejected += 1;
-                    self.apps.count_rejected(name, &problem);
-                    logger::debug(format!("Rejected a record of {name}: {problem}"));
-                }
-                Ok(record) => {
-                    let at = record
-                        .get("at")
-                        .and_then(Value::as_safe_integer)
-                        .unwrap_or(now);
-                    let line = Value::Array(vec![
-                        Value::from(name),
-                        Value::from(day_of(at)),
-                        Value::Object(record),
-                    ]);
-                    lines.push_str(&json::stringify(&line));
-                    lines.push('\n');
-                    accepted += 1;
+        let mut deduplicated = 0u64;
+        {
+            let mut dedupe = self
+                .dedupe
+                .lock()
+                .unwrap_or_else(|poison| poison.into_inner());
+            for input in inputs {
+                let outcome = match bot {
+                    Some(problem) => Err(problem.to_string()),
+                    None => validate_record(
+                        input,
+                        &rules.lists,
+                        &rules.segments,
+                        country.as_deref(),
+                        now,
+                    ),
+                };
+                match outcome {
+                    Err(problem) => {
+                        rejected += 1;
+                        self.apps.count_rejected(name, &problem);
+                        logger::debug(format!("Rejected a record of {name}: {problem}"));
+                    }
+                    Ok(record) => {
+                        let page = record.get("page").and_then(Value::as_str).unwrap_or("");
+                        let visit = record.get("visit").and_then(Value::as_str).unwrap_or("");
+                        if !dedupe.admit(name, client, page, visit, now as u64) {
+                            deduplicated += 1;
+                            continue;
+                        }
+                        let at = record
+                            .get("at")
+                            .and_then(Value::as_safe_integer)
+                            .unwrap_or(now);
+                        let line = Value::Array(vec![
+                            Value::from(name),
+                            Value::from(day_of(at)),
+                            Value::Object(record),
+                        ]);
+                        lines.push_str(&json::stringify(&line));
+                        lines.push('\n');
+                        accepted += 1;
+                    }
                 }
             }
+        }
+        if deduplicated > 0 {
+            self.apps.count_deduplicated(name, deduplicated);
         }
         if accepted > 0 {
             if let Err(error) = self.wal.append(lines).await {
@@ -506,6 +529,7 @@ impl State {
                 Object::new()
                     .with("accepted", accepted)
                     .with("rejected", rejected)
+                    .with("deduplicated", deduplicated)
                     .into(),
             ),
             headers,
@@ -625,6 +649,13 @@ impl State {
                 .with(
                     "rateLimitedClients",
                     self.limiter
+                        .lock()
+                        .unwrap_or_else(|poison| poison.into_inner())
+                        .size(),
+                )
+                .with(
+                    "dedupedViews",
+                    self.dedupe
                         .lock()
                         .unwrap_or_else(|poison| poison.into_inner())
                         .size(),
@@ -1105,6 +1136,7 @@ pub async fn start_server(options: ServerOptions) -> Result<RunningServer> {
             options.limits.clone(),
             options.max_clients,
         )),
+        dedupe: Mutex::new(Dedupe::new(options.dedupe_ms, options.max_views)),
         batch_limit: max_batch(&options.limits),
         verifier: Mutex::new(TokenVerifier::new(&options.key)),
         public_flight: InFlight::new(options.max_requests, options.max_client_requests),

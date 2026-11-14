@@ -204,6 +204,7 @@ pub fn options(data_dir: &str) -> ServerOptions {
     options.admin_port = 0;
     options.hostname = Some("127.0.0.1".to_string());
     options.min_free = None;
+    options.dedupe_ms = None;
     options.segment_ms = 30;
     options
 }

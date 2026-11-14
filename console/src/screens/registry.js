@@ -148,6 +148,7 @@ const appDetails = (entries) =>
             { term: 'Registered at', details: formatDateTime(entry.createdAt) },
             { term: 'Accepted records', details: formatCount(entry.accepted) },
             { term: 'Rejected records', details: formatCount(entry.rejected) },
+            { term: 'Deduplicated records', details: formatCount(entry.deduplicated) },
           ],
         }),
         Object.keys(entry.rejections ?? {}).length
@@ -303,6 +304,13 @@ export const registryScreen = component('aly-registry', {
             align: 'end',
             sortable: true,
             render: (row) => formatCount(row.rejected),
+          },
+          {
+            key: 'deduplicated',
+            label: 'Deduplicated',
+            align: 'end',
+            sortable: true,
+            render: (row) => formatCount(row.deduplicated),
           },
           { key: 'buildErrors', label: 'Files', render: filesTag },
           {

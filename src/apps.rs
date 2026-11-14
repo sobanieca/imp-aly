@@ -100,6 +100,7 @@ pub struct App {
     build_error: Option<String>,
     accepted: u64,
     rejected: u64,
+    deduplicated: u64,
     rejections: Vec<(String, u64)>,
 }
 
@@ -152,6 +153,7 @@ impl App {
             .with("accepted", self.accepted)
             .with("rejected", self.rejected)
             .with("rejections", rejections)
+            .with("deduplicated", self.deduplicated)
             .into()
     }
 
@@ -234,6 +236,7 @@ impl Apps {
                     build_error: optional_text(value.get("buildError")),
                     accepted: 0,
                     rejected: 0,
+                    deduplicated: 0,
                     rejections: Vec::new(),
                 });
             }
@@ -355,6 +358,7 @@ impl Apps {
                 build_error: None,
                 accepted: 0,
                 rejected: 0,
+                deduplicated: 0,
                 rejections: Vec::new(),
             };
             match previous {
@@ -363,6 +367,7 @@ impl Apps {
                     app.created_at = old.created_at.clone().or(app.created_at);
                     app.accepted = old.accepted;
                     app.rejected = old.rejected;
+                    app.deduplicated = old.deduplicated;
                     app.rejections = old.rejections.clone();
                     let described = app.describe();
                     state[at] = app;
@@ -443,6 +448,12 @@ impl Apps {
     pub fn count_accepted(&self, name: &str, count: u64) {
         if let Some(app) = self.lock().iter_mut().find(|app| app.name == name) {
             app.accepted += count;
+        }
+    }
+
+    pub fn count_deduplicated(&self, name: &str, count: u64) {
+        if let Some(app) = self.lock().iter_mut().find(|app| app.name == name) {
+            app.deduplicated += count;
         }
     }
 

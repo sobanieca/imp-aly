@@ -48,6 +48,7 @@ sudo imp-aly server --port 4411
 | `--limit-1m <n>`           | records per address in 1 minute                                                              | `1500`                        |
 | `--limit-1h <n>`           | records per address in 1 hour                                                                | `30000`                       |
 | `--limit-24h <n>`          | records per address in 24 hours                                                              | `200000`                      |
+| `--dedupe <time>`          | count one visit per page and address in this window, like `30m`, `8h` or `1d`, or `off`     | `8h`                          |
 | `--foreground`             | do not touch systemd, run in the foreground                                                  |                               |
 | `--no-auto-update`         | do not install the update timer                                                              | the timer updates daily       |
 | `--uninstall`              | stop and remove the service and the update timer                                             |                               |

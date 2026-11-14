@@ -5,6 +5,7 @@ use crate::args::{Parsed, parse_port, parse_positive_integer, require_only_flags
 use crate::auth::{
     NEW_KEY_FILE, default_key_path, find_key, find_or_create_key, read_key_file, take_new_key,
 };
+use crate::dedupe::{DEFAULT_DEDUPE, parse_dedupe};
 use crate::error::{Error, Result};
 use crate::http::DEFAULT_MAX_CONNECTIONS;
 use crate::logger;
@@ -25,7 +26,7 @@ use std::sync::Arc;
 use tokio::signal::unix::{SignalKind, signal};
 use tokio::sync::mpsc;
 
-const SERVE_FLAGS: [&str; 21] = [
+const SERVE_FLAGS: [&str; 22] = [
     "port",
     "admin-port",
     "data",
@@ -44,6 +45,7 @@ const SERVE_FLAGS: [&str; 21] = [
     "limit-1m",
     "limit-1h",
     "limit-24h",
+    "dedupe",
     "foreground",
     "no-auto-update",
     "uninstall",
@@ -65,6 +67,7 @@ pub struct ServeOptions {
     pub tls_cert: Option<String>,
     pub tls_key: Option<String>,
     pub limits: Vec<Window>,
+    pub dedupe: String,
 }
 
 fn read_header_name(value: Option<&str>, flag: &str) -> Result<Option<String>> {
@@ -149,6 +152,12 @@ pub fn read_serve_options(parsed: &Parsed) -> Result<ServeOptions> {
         };
         limits.push(Window { limit, ..window });
     }
+    let dedupe = parsed
+        .get("dedupe")
+        .unwrap_or(DEFAULT_DEDUPE)
+        .trim()
+        .to_ascii_lowercase();
+    parse_dedupe(&dedupe).map_err(Error::new)?;
     Ok(ServeOptions {
         port,
         admin_port,
@@ -172,6 +181,7 @@ pub fn read_serve_options(parsed: &Parsed) -> Result<ServeOptions> {
         tls_cert: parsed.get("tls-cert").map(absolute_path),
         tls_key: parsed.get("tls-key").map(absolute_path),
         limits,
+        dedupe,
     })
 }
 
@@ -227,6 +237,9 @@ pub fn service_args(options: &ServeOptions, data_dir: &str) -> Vec<String> {
                 window.limit.to_string(),
             );
         }
+    }
+    if options.dedupe != DEFAULT_DEDUPE {
+        push("--dedupe", options.dedupe.clone());
     }
     args
 }
@@ -370,6 +383,7 @@ fn run(run: Run) -> Result<()> {
         server_options.max_connections = options.max_connections as usize;
         server_options.country_header = options.country_header.clone();
         server_options.limits = options.limits.clone();
+        server_options.dedupe_ms = parse_dedupe(&options.dedupe).map_err(Error::new)?;
         server_options.min_free = Some(options.min_free.clone());
         let (restart, mut restart_requested) = mpsc::unbounded_channel::<()>();
         if run.service && options.tls_cert.is_some() {
@@ -538,6 +552,8 @@ mod tests {
             "5GB",
             "--limit-5s",
             "50",
+            "--dedupe",
+            "30M",
         ]))
         .unwrap();
         assert_eq!(
@@ -562,6 +578,8 @@ mod tests {
                 "5GB",
                 "--limit-5s",
                 "50",
+                "--dedupe",
+                "30m",
             ]
         );
         for bad in [
@@ -573,6 +591,8 @@ mod tests {
             vec!["server", "--ip-header", "bad header"],
             vec!["server", "--max-connections", "0"],
             vec!["server", "--limit-1m", "x"],
+            vec!["server", "--dedupe", "8"],
+            vec!["server", "--dedupe", "30d"],
         ] {
             assert!(read_serve_options(&parse(&bad)).is_err(), "{bad:?}");
         }

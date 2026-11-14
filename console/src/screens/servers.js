@@ -90,6 +90,7 @@ const serverStatus = component('aly-server-status', {
             details: `${status.activeRequests.public} public, ${status.activeRequests.admin} admin`,
           },
           { term: 'Addresses in the rate limit', details: formatCount(status.rateLimitedClients) },
+          { term: 'Pages in the dedupe window', details: formatCount(status.dedupedViews) },
         ],
       }),
     )

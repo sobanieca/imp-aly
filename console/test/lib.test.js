@@ -329,6 +329,7 @@ test('the registry has one row per app, with its servers and the sum of its reco
     segments: [],
     accepted: 1,
     rejected: 0,
+    deduplicated: 1,
     appUrl: null,
     buildError: null,
     ...more,
@@ -336,7 +337,7 @@ test('the registry has one row per app, with its servers and the sum of its reco
   const [crm, shop] = registryRows({
     apps: [
       entry('eu', { appUrl: 'https://shop.example/', pages: ['/', '/cart'], accepted: 5 }),
-      entry('us', { segments: ['plan'], rejected: 2, buildError: 'no file' }),
+      entry('us', { segments: ['plan'], rejected: 2, deduplicated: 3, buildError: 'no file' }),
       entry('us', { name: 'crm' }),
     ],
   })
@@ -347,6 +348,7 @@ test('the registry has one row per app, with its servers and the sum of its reco
     segments: shop.segments,
     accepted: shop.accepted,
     rejected: shop.rejected,
+    deduplicated: shop.deduplicated,
     buildErrors: shop.buildErrors,
   }).toEqual({
     servers: ['eu', 'us'],
@@ -354,6 +356,7 @@ test('the registry has one row per app, with its servers and the sum of its reco
     segments: ['plan'],
     accepted: 6,
     rejected: 2,
+    deduplicated: 4,
     buildErrors: 1,
   })
 })

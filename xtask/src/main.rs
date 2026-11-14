@@ -270,6 +270,7 @@ fn start(args: &[String]) -> Result<(), String> {
         options.admin_port = DEFAULT_ADMIN_PORT;
         options.hostname = Some("127.0.0.1".to_string());
         options.min_free = None;
+        options.dedupe_ms = None;
         options.country_header = Some(COUNTRY_HEADER.to_string());
         options.fetch_file = Some(demo_builds());
         let server = start_server(options).await.map_err(|error| error.message)?;

@@ -10,6 +10,7 @@ pub mod commands;
 pub mod console;
 pub mod data_format;
 pub mod days;
+pub mod dedupe;
 pub mod error;
 pub mod fast_hash;
 pub mod file_watch;

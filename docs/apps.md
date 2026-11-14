@@ -102,7 +102,7 @@ imp-aly app rm myapp       # stop accepting records of the app
 removes them when the disk needs space. When you register the name again, its old records are part
 of its data again.
 
-The counts of accepted and rejected records live in memory. A restart sets them to zero.
+The counts of accepted, rejected and deduplicated records live in memory. A restart sets them to zero.
 
 ## Segments
 
@@ -168,4 +168,6 @@ An app in an answer has these fields:
 - `buildUpdatedAt`: the time of the last successful read of the file
 - `buildError`: the error of the last read, or null
 - `accepted` and `rejected`: the counts of records
+- `deduplicated`: the count of records that the server dropped because the address already had a
+  visit of the page, see [Collecting records](collect.md#one-visit-per-page-and-address)
 - `rejections`: the rejected records by reason, for up to 50 reasons

@@ -33,7 +33,10 @@ fn collects_valid_records_and_answers_queries() {
     );
     let posted = server.call("POST", "/collect/myapp", Some(&batch), &[]);
     assert_eq!(posted.status, 202);
-    assert_eq!(posted.text, r#"{"accepted":3,"rejected":1}"#);
+    assert_eq!(
+        posted.text,
+        r#"{"accepted":3,"rejected":1,"deduplicated":0}"#
+    );
     assert_eq!(posted.header("access-control-allow-origin"), None);
     assert_eq!(added.text_of("origins"), r#"["https://myapp.example"]"#);
     let single = server.call(
@@ -42,7 +45,10 @@ fn collects_valid_records_and_answers_queries() {
         Some(&record(r#""type":"error""#)),
         &[("content-type", "text/plain;charset=UTF-8")],
     );
-    assert_eq!(single.text, r#"{"accepted":1,"rejected":0}"#);
+    assert_eq!(
+        single.text,
+        r#"{"accepted":1,"rejected":0,"deduplicated":0}"#
+    );
     let query = r#"{"app":"myapp","groupBy":["type"],"measures":["records","visits"]}"#;
     server.wait_for(|| server.matched(query) == 4);
     let answer = server.admin("POST", "/query", Some(query));
@@ -180,7 +186,7 @@ fn rejects_malformed_and_oversized_requests() {
                 &[]
             )
             .text,
-        r#"{"accepted":150,"rejected":0}"#
+        r#"{"accepted":150,"rejected":0,"deduplicated":0}"#
     );
     assert_eq!(server.call("GET", "/collect/myapp", None, &[]).status, 405);
     assert_eq!(server.call("GET", "/nothing", None, &[]).status, 404);
@@ -379,7 +385,10 @@ fn a_failed_refresh_keeps_the_last_build_file_and_records_the_error() {
         )),
         &[],
     );
-    assert_eq!(posted.text, r#"{"accepted":1,"rejected":1}"#);
+    assert_eq!(
+        posted.text,
+        r#"{"accepted":1,"rejected":1,"deduplicated":0}"#
+    );
     server.files.lock().unwrap().insert(
         BUILD_URL.to_string(),
         build_text(None, Some(r#"["myapp.new"]"#), Some("[]")),
@@ -408,7 +417,10 @@ fn rejects_the_zones_and_outcomes_that_are_not_in_the_build_file() {
         Some(&format!("[{}]", batch.join(","))),
         &[],
     );
-    assert_eq!(posted.text, r#"{"accepted":4,"rejected":3}"#);
+    assert_eq!(
+        posted.text,
+        r#"{"accepted":4,"rejected":3,"deduplicated":0}"#
+    );
     assert_eq!(
         rejections(&server.admin("GET", "/apps/myapp", None)),
         r#"{"zone is not in the zones of app-analytics.json":2,"name is not in the outcomes of app-analytics.json":1}"#
@@ -468,19 +480,22 @@ fn rejects_the_records_of_a_bot_and_of_a_prerendered_page() {
         )],
     );
     assert_eq!(bot.status, 202);
-    assert_eq!(bot.text, r#"{"accepted":0,"rejected":2}"#);
+    assert_eq!(bot.text, r#"{"accepted":0,"rejected":2,"deduplicated":0}"#);
     let prerender = server.call(
         "POST",
         "/collect/myapp",
         Some(&batch),
         &[("sec-purpose", "prefetch;prerender")],
     );
-    assert_eq!(prerender.text, r#"{"accepted":0,"rejected":2}"#);
+    assert_eq!(
+        prerender.text,
+        r#"{"accepted":0,"rejected":2,"deduplicated":0}"#
+    );
     assert_eq!(
         server
             .call("POST", "/collect/myapp", Some(&batch), &[])
             .text,
-        r#"{"accepted":2,"rejected":0}"#
+        r#"{"accepted":2,"rejected":0,"deduplicated":0}"#
     );
     assert_eq!(
         rejections(&server.admin("GET", "/apps/myapp", None)),
@@ -885,7 +900,10 @@ fn a_record_goes_to_the_utc_day_of_its_at() {
         )),
         &[],
     );
-    assert_eq!(posted.text, r#"{"accepted":2,"rejected":1}"#);
+    assert_eq!(
+        posted.text,
+        r#"{"accepted":2,"rejected":1,"deduplicated":0}"#
+    );
     let (from, to) = (imp_aly::days::day_of(earlier), imp_aly::days::day_of(later));
     let query = format!(r#"{{"app":"myapp","from":"{from}","to":"{to}","groupBy":["day"]}}"#);
     server.wait_for(|| server.matched(&query) == 2);
@@ -1089,7 +1107,7 @@ fn a_chunked_body_and_an_expect_continue_are_read() {
     let (bytes, _) = read_with_deadline(&mut stream, Duration::from_secs(10));
     assert_eq!(
         parse_response(&bytes).text,
-        r#"{"accepted":1,"rejected":0}"#
+        r#"{"accepted":1,"rejected":0,"deduplicated":0}"#
     );
     let mut stream = TcpStream::connect(("127.0.0.1", server.port)).unwrap();
     write!(
@@ -1133,4 +1151,62 @@ fn a_smuggled_or_oversized_head_is_refused() {
     );
     assert_eq!(refuse("GET / HTTP/3\r\n\r\n"), 505);
     assert_eq!(server.call("GET", "/", None, &[]).status, 200);
+}
+
+#[test]
+fn an_address_counts_one_visit_per_page_in_the_dedupe_window() {
+    let server = Server::start(|options| options.dedupe_ms = Some(3_600_000));
+    server.register();
+    let first = record(r#""type":"page""#);
+    let used = record(r#""type":"used","zone":null"#);
+    let reload = first.replace("k3v9a1c2", "r7l0a2d9");
+    let other_page = reload.replace("/invoices/:id", "/invoices");
+    let posted = server.call(
+        "POST",
+        "/collect/myapp",
+        Some(&format!("[{first},{used}]")),
+        &[],
+    );
+    assert_eq!(
+        posted.text,
+        r#"{"accepted":2,"rejected":0,"deduplicated":0}"#
+    );
+    let posted = server.call(
+        "POST",
+        "/collect/myapp",
+        Some(&format!("[{reload},{other_page},{first}]")),
+        &[],
+    );
+    assert_eq!(
+        posted.text,
+        r#"{"accepted":2,"rejected":0,"deduplicated":1}"#
+    );
+    let query = r#"{"app":"myapp","groupBy":["page"],"measures":["records","visits"]}"#;
+    server.wait_for(|| server.matched(query) == 4);
+    let answer = server.admin("POST", "/query", Some(query));
+    let mut groups: Vec<String> = answer
+        .get("groups")
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|group| {
+            format!(
+                "{}:{}:{}",
+                group.get("by").unwrap().as_array().unwrap()[0]
+                    .as_str()
+                    .unwrap(),
+                json::stringify(group.get("records").unwrap()),
+                json::stringify(group.get("visits").unwrap())
+            )
+        })
+        .collect();
+    groups.sort();
+    assert_eq!(groups, ["/invoices/:id:3:1", "/invoices:1:1"]);
+    let app = server.admin("GET", "/apps/myapp", None);
+    assert_eq!(app.text_of("deduplicated"), "1");
+    assert_eq!(app.text_of("rejected"), "0");
+    assert_eq!(
+        server.admin("GET", "/status", None).text_of("dedupedViews"),
+        "2"
+    );
 }

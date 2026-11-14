@@ -40,6 +40,7 @@ export const registryRows = (catalog) =>
       segments: unique(entries.flatMap(({ segments }) => segments ?? [])),
       accepted: sum(entries, 'accepted'),
       rejected: sum(entries, 'rejected'),
+      deduplicated: sum(entries, 'deduplicated'),
       buildErrors: entries.filter(({ buildError }) => buildError).length,
     }
   })

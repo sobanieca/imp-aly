@@ -13,7 +13,7 @@ any value, so a `fetch` or a `navigator.sendBeacon` with a string body works.
 The server answers `202` with the counts:
 
 ```json
-{ "accepted": 19, "rejected": 1 }
+{ "accepted": 19, "rejected": 1, "deduplicated": 0 }
 ```
 
 The server stores the accepted records before it answers. A rejected record does not stop the other
@@ -148,6 +148,37 @@ The server keeps the counts of the 400,000 most recent addresses in memory, abou
 nothing on disk. A restart clears the counts. The server keeps the addresses in two groups of
 200,000. When the newer group is full, the server forgets the older group and starts a new group. An
 address that sends again stays in the newer group.
+
+## One visit per page and address
+
+A reload, a new tab or a return from another site starts a new visit in imp. So one person can
+count as several visits of the same page. The server counts one visit per page and client address
+in a window of 8 hours:
+
+- The first visit that opens a page from an address owns that page for the window.
+- The other records of that visit on that page pass, such as its `used` records.
+- The server drops the records of that page from the other visits of the address in the window.
+- After the window, the next visit of the page from the address owns the page again.
+
+The server counts the dropped records as `deduplicated` in the answer and in `imp-aly app show`.
+They are not rejected records, so `alySink` logs no warning for them. The address is the same
+address as for the rate limit, and an IPv6 address counts per `/64` network.
+
+`--dedupe <time>` changes the window, such as `30m`, `1d` or `7d` at most. `--dedupe off` stops the
+check, and the server then counts each visit:
+
+```sh
+sudo imp-aly server --port 4411 --dedupe 1d
+```
+
+The server keeps a hash of the app, the address and the page, and a hash of the visit, for the
+1,000,000 most recent pages and addresses. They are in memory only, about 50 MB at most. The server
+never writes them to the disk. A restart clears them, so the first visit after a restart counts
+again.
+
+**People behind one address count as one visit per page.** This includes an office network and a
+mobile network that puts many phones behind one address. Use `--dedupe off` when most of your users
+share addresses.
 
 ## Requests in progress
 

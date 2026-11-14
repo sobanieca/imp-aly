@@ -25,6 +25,7 @@ status field. When a decision changes, replace its ADR. When a decision is dropp
 | --------------------------------------------------------------------- | ----------------------------------------------------------- |
 | [build-file-record-validation](build-file-record-validation.md)       | Records are checked against the build file and strict rules |
 | [per-address-sliding-rate-limit](per-address-sliding-rate-limit.md)   | A rate limit per address, in four sliding windows           |
+| [visit-dedupe-per-address](visit-dedupe-per-address.md)               | One visit per page and address in an 8 hour window          |
 | [in-flight-request-cap](in-flight-request-cap.md)                     | A cap on the requests in progress per port, then `503`      |
 | [connection-limits-and-deadlines](connection-limits-and-deadlines.md) | Each connection has limits and deadlines                    |
 | [collect-origins-per-app](collect-origins-per-app.md)                 | Each app accepts records only from its origins              |
