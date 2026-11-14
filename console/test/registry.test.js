@@ -3,6 +3,7 @@ import { appOnServers } from '../src/lib/client.js'
 import {
   refreshApp,
   registerApp,
+  originProblem,
   registerBody,
   removeApp,
   removeQuestion,
@@ -58,13 +59,36 @@ test('the register form lists the segments that the servers know', () => {
   expect(segmentsNote([])).toMatch(/^No app on the servers has a segment yet\./)
 })
 
-test('the register form sends the URL of the app and the segments', () => {
-  expect(registerBody({ appUrl: 'https://shop.example/', segments: ['plan'] })).toEqual({
+test('the register form sends the URL of the app, and the other origins with its origin', () => {
+  const values = {
+    appUrl: 'https://shop.example/app/',
     segments: ['plan'],
-    appUrl: 'https://shop.example/',
+    origins: ['https://www.shop.example', 'https://shop.example'],
+  }
+  expect(registerBody(values)).toEqual({
+    segments: ['plan'],
+    origins: ['https://shop.example', 'https://www.shop.example'],
+    appUrl: 'https://shop.example/app/',
   })
-  expect(registerBody({ appUrl: 'https://shop.example/' })).toEqual({
+  expect(registerBody({ ...values, origins: [], segments: undefined })).toEqual({
     segments: [],
-    appUrl: 'https://shop.example/',
+    appUrl: 'https://shop.example/app/',
   })
+})
+
+test('the register form takes only origins with no path', () => {
+  expect(originProblem(undefined)).toEqual(null)
+  expect(originProblem(['https://shop.example', 'http://localhost:5173'])).toEqual(null)
+  for (const origin of [
+    'https://shop.example/',
+    'shop.example',
+    'https://Shop.example',
+    'https://shop.example:443',
+    'ftp://shop.example',
+  ]) {
+    expect(originProblem([origin])).toMatch(/is not an origin like/)
+  }
+  expect(
+    originProblem(Array.from({ length: 32 }, (_, index) => `https://a${index}.example`)),
+  ).toEqual('An app has at most 31 other origins.')
 })

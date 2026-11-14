@@ -317,7 +317,7 @@ the previous period show in red.
 
 | Page            | What you can do                                                                                                                                                                                                                             |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Registered apps | see the apps of all servers, one row per app with its servers. Register an app from its URL, with segments. See the reasons of the rejected records per server. Read the build file again. Remove an app. |
+| Registered apps | see the apps of all servers, one row per app with its servers. Register an app from its URL, with segments and other origins. See the reasons of the rejected records per server. Read the build file again. Remove an app. |
 | Servers         | see the servers of the console, and the state of each one: the version, the source id, the free disk space and the problems of the storage. Add, change and remove a server.                                                                |
 
 "Register" registers the app on the servers that you choose, like `imp-aly app add -s a,b`. With one
@@ -329,8 +329,11 @@ Choose a segment from the list, or type a new name. The form checks each name li
 
 "URL of the app" is the address where people open the app, such as `https://myapp.example/`. The
 server reads `app-analytics.json` at this address, and again every 10 minutes. The app accepts
-records only from the pages of the origin of this URL. To give more origins, use
-`imp-aly app add --origins`. See [Apps](apps.md#register-an-app).
+records only from the pages of the origin of this URL.
+
+Fill "Other origins" only when the app has other URLs, such as `https://www.myapp.example` or
+`http://localhost:5173`. Type an origin and press Enter. The console adds the origin of the URL of
+the app to the list. See [Apps](apps.md#register-an-app).
 
 "Read the files again" and "Remove" go only to the servers of the row.
 
