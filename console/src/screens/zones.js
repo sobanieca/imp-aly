@@ -5,10 +5,10 @@ import { tag } from 'imp/std/display'
 import { stack } from 'imp/std/layout'
 import { ZONE_TERMS } from '../lib/terms.js'
 import { problemsOf, runPrevious, runQuery } from '../lib/api.js'
-import { barOf, bucketsOf } from '../lib/ranges.js'
+import { bucketsOf, detailBarOf } from '../lib/ranges.js'
 import { formatCount, formatPercent } from '../lib/format.js'
 import { MAX_ROWS, NEVER_USED, RARELY, RARELY_USED, usesTitle, zoneRows } from '../lib/reports.js'
-import { stackedSeries, TOP, topKeys, totalsBy, usedSeries } from '../lib/series.js'
+import { everyKey, stackedSeries, TOP, totalsBy, usedSeries } from '../lib/series.js'
 import {
   changeHint,
   dataNote,
@@ -61,7 +61,7 @@ const zonesReport = component('aly-zones-report', {
   loading: () => reportLoading(),
   setup: async (self, { scope, filters }) => {
     const api = useHttpClient(self, 'aly.api')
-    const bar = barOf(scope.from, scope.to)
+    const bar = detailBarOf(scope.from, scope.to)
     const buckets = bucketsOf(scope.from, scope.to, bar)
     const one = filters.zone !== undefined
     const [current, before, trend] = await Promise.all([
@@ -103,7 +103,7 @@ const zonesReport = component('aly-zones-report', {
     const zoneTrend = trend.rows.filter((row) => row.zone !== null)
     const series = one
       ? usedSeries(trend.rows, { bar, buckets, shownType: 'seen', shownLabel: 'Seen, not used' })
-      : stackedSeries(zoneTrend, { bar, field: 'zone', buckets, keys: topKeys(zoneTrend, 'zone') })
+      : stackedSeries(zoneTrend, { bar, field: 'zone', buckets, keys: everyKey(zoneTrend, 'zone') })
     return stack(
       { gap: 5 },
       ...problemNotices(problemsOf([current, before, trend])),
@@ -132,10 +132,10 @@ const zonesReport = component('aly-zones-report', {
       ),
       reportCard(
         {
-          title: one ? usesTitle(filters.zone) : 'Uses of the top zones',
+          title: one ? usesTitle(filters.zone) : 'Uses of the zones',
           description: one
             ? 'The page views where the zone was used, and where it was seen but not used.'
-            : 'The 10 most used zones, and the uses of all other zones as "Other". One visit can use several zones.',
+            : 'The uses of every zone, one on top of the other. One bar per day up to 31 days, else one bar per month. One visit can use several zones.',
         },
         trendChart({ label: 'Zone uses', bar, buckets, series }),
       ),

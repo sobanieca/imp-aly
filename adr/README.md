@@ -55,6 +55,7 @@ status field. When a decision changes, replace its ADR. When a decision is dropp
 | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
 | [one-time-token-admin-api](one-time-token-admin-api.md)                         | The private API takes one-time tokens signed with a key                 |
 | [key-rotation](key-rotation.md)                                                 | The key changes with a command on the VPS, and the server does not stop |
+| [agent-keys](agent-keys.md)                                                     | Named agent keys stop after 1 to 24 hours and cannot manage keys        |
 | [separate-admin-port](separate-admin-port.md)                                   | The private API has its own port                                        |
 | [security-headers](security-headers.md)                                         | Every answer carries headers that stop a browser from running it        |
 | [json-query-api-in-a-thread](json-query-api-in-a-thread.md)                     | Queries are JSON objects, run one at a time in a query thread           |

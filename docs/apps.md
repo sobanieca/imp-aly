@@ -44,8 +44,9 @@ imp-aly app add myapp https://myapp.example/ --segments plan,role
   The app sends its records to `/collect/<name>`.
 - **The URL** is the address of the folder where the build output is served, such as
   `https://myapp.example/` or `https://myapp.example/app/`. The server reads `app-analytics.json` in
-  that folder at once, and again every 10 minutes. When a read fails, the server keeps the last
-  lists and shows the error in `app ls`.
+  that folder at once, and again every 10 minutes. It also reads it at once for a record with a
+  page, a zone or an outcome that is not in the lists, at most once a minute. When a read fails,
+  the server keeps the last lists and shows the error in `app ls`.
   - The server must be able to read the file. Serve it on a public URL, or on a URL that the VPS
     can reach.
   - A folder on your machine, such as `dist`, is not a URL. The command fails with it.
@@ -80,15 +81,25 @@ keeps the previous state. The error names the list and the index of the entry, s
 
 ## Update the build file after a deploy
 
-A new screen, a new zone or a new outcome in your app is a new entry in the build file. Until the
-server knows the new entry, it rejects the records of it. So update the file in the same pipeline
-that deploys the app:
+A new screen, a new zone or a new outcome in your app is a new entry in the build file. The first
+record of a new entry makes the server read `app-analytics.json` again before it checks the
+records of the request. So a deploy loses no record, also when it moves the pages to new paths.
+
+The server reads the file for this at most once a minute for each app, so forged names cannot make
+it read the file often. When the host of your app caches `app-analytics.json`, the server can get
+the old file for a while, and it rejects the records of the new entries until it gets the new one.
+To read the file at once, run `refresh` in the same pipeline that deploys the app:
 
 ```sh
 imp-aly app refresh myapp
 ```
 
 `refresh` reads `app-analytics.json` at the URL again.
+
+A page, a zone or an outcome that a deploy removes stays in the stored records. A query still finds
+it by its old name. A browser tab that still runs the old build sends the records of it, and the
+server rejects them, because the name is not in the new lists. A moved page is two pages in the
+reports: the old path before the deploy, and the new path after it.
 
 ## Other commands
 

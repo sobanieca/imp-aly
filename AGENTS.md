@@ -73,6 +73,7 @@ See `adr/rust-server-with-few-dependencies.md` and `adr/console-web-app.md`.
 | `src/query_cache.rs`, `src/fast_hash.rs`      | the folders, sealed metas, parsed summaries and counts that the query engine keeps in memory, and the fast map of `u32` ids                  |
 | `src/retention.rs`                            | the free space with `statvfs`, the free space rule, old days to summaries, then removal of days, weeks and months                            |
 | `src/auth.rs`                                 | the key, the key file, and the new key that root hands over in `/run/imp-aly` and the service takes on SIGHUP                                |
+| `src/agent_keys.rs`                           | the temporary agent keys in `agent-keys.json`: add, list, remove, the time limits, and the agent signers of the token verifier               |
 | `src/token.rs`                                | the one-time tokens signed per request, and the SHA-256                                                                                      |
 | `src/days.rs`, `src/names.rs`                 | the UTC days, weeks and months, and the rules of the names                                                                                   |
 | `src/json.rs`, `src/url.rs`, `src/table.rs`   | JSON with the key order kept, the URL parser like the WHATWG one, and the text tables of the CLI                                             |
@@ -88,7 +89,7 @@ See `adr/rust-server-with-few-dependencies.md` and `adr/console-web-app.md`.
 | `xtask/src/main.rs`, `xtask/src/demo_data.rs` | the dev tasks, the demo in `.dev-data/`, the sample records of the apps `shop`, `crm` and `docs`, and `versions.json`                        |
 | `xtask/src/bench.rs`                          | the query benchmark and its data in `.bench-data/`                                                                                           |
 | `xtask/src/site.rs`, `xtask/src/highlight.rs` | the site build: the docs pages from `docs/*.md`, the checks of their links, the layout, and the highlight of code blocks                     |
-| `console/`                                    | the imp project of the PWA: `src/app.js`, `src/screens/`, `src/parts/`, `src/lib/` (`vault.js`, `client.js`), `src/shared/`, `test/`         |
+| `console/`                                    | the imp project of the PWA: `src/app.js`, `src/screens/`, `src/parts/`, `src/lib/` (`vault.js`, `client.js`, `agent-keys.js`), `src/shared/`, `test/` |
 | `site/`                                       | the sources of the site: `overview.html` (the landing page content), `site.css`, `site.js`, `mark.svg`; the build writes `site/dist/`        |
 
 Rules that keep the server safe:
@@ -125,7 +126,11 @@ Rules that keep the data correct:
 - **The page never keeps a key as text.** `console/src/lib/vault.js` imports the key as a
   non-extractable `CryptoKey` and stores that in IndexedDB. Never write a key to `localStorage`, a
   state, a log or the DOM. A form field for a key takes `secret: true`, as in
-  `console/src/parts/key-field.js`, so the key stays out of the form state.
+  `console/src/parts/key-field.js`, so the key stays out of the form state. The one exception is a
+  new agent key: `console/src/screens/agent-keys.js` shows it once in a dialog, keeps it in a
+  variable, not in a state, and forgets it when the dialog closes.
+- **An agent key never manages keys.** `/keys` answers `403` to a token of an agent key. A new key
+  of the server removes all agent keys.
 - **The admin port allows CORS from every origin.** The token protects each call. Never add a cookie
   or an address check that a browser could use without the key.
 

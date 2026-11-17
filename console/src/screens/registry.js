@@ -97,7 +97,7 @@ const registerForm = component('aly-register-form', {
         type: 'url',
         required: true,
         placeholder: 'https://myapp.example/',
-        help: `The address where people open the app. The server reads ${BUILD_FILE} at this address, and again every 10 minutes.`,
+        help: `The address where people open the app. The server reads ${BUILD_FILE} at this address, and again every 10 minutes or when a record names a page, a zone or an outcome that the file does not have.`,
       }),
       comboBox({
         field: 'segments',

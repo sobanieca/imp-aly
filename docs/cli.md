@@ -5,6 +5,8 @@ imp-aly server [options]              start the server
 imp-aly server --uninstall            remove the systemd service
 imp-aly update [--check] [--auto]     install a newer version
 imp-aly key rotate [-a <file>]        change the key, and the server does not stop
+imp-aly key add <name> --for <1h|4h|8h|24h>
+imp-aly key ls | rm <name>
 imp-aly app add <name> <app url> [--segments plan,role] [--origins <list>]
 imp-aly app ls | show <name> | refresh <name> | rm <name>
 imp-aly query '<json>' | query <file.json> [--json]
@@ -110,8 +112,38 @@ imp-aly key rotate         # the key file of a server in the foreground
 
 The command makes a new key, writes it to the key file and prints it. The service loads it at once,
 and refuses the old key from then on. A server in the foreground loads it on `SIGHUP` or when it
-starts again. `-a <file>` names another key file for a server in the foreground. See
-[Security](security.md#change-the-key).
+starts again. `-a <file>` names another key file for a server in the foreground. The server also
+removes all agent keys. See [Security](security.md#change-the-key).
+
+## Agent keys
+
+An agent key is a temporary key for an AI agent that uses the imp-aly CLI. Give an agent its own key
+that stops by itself, and keep the key of the server to yourself.
+
+```sh
+imp-aly key add claude --for 4h    # works for 4 hours
+imp-aly key ls                     # the agent keys that work now
+imp-aly key rm claude              # the server refuses the key at once
+```
+
+- `--for` takes one of `1h`, `4h`, `8h` and `24h`. An agent key works for no other time.
+- The name has 1 to 63 lowercase letters, digits and `-`, like an app name. Each key that works has
+  its own name. A server keeps up to 20 agent keys.
+- `key add` prints the key once, with the command that the agent runs to save the server under the
+  name of the key:
+
+  ```sh
+  imp-aly add claude https://analytics.myapp.example:4410 -a <agent key>
+  ```
+
+  The agent then uses `-s claude`. The server does not show the key again.
+- An agent key can do all that the key of the server can do, such as queries, `app add`, `app rm`,
+  `backup` and `restore`. It cannot add, list or remove agent keys.
+- Add, list and remove agent keys with the key of the server. These commands take `-s`, `--url`, `-a`
+  and `--timeout` like the [client commands](#client-commands). `key ls` also takes `--json`.
+
+You can also add and remove agent keys in the console, on the "Agent keys" page. See
+[Security](security.md#agent-keys).
 
 ## Client commands
 
@@ -256,7 +288,9 @@ The command writes the same `SKILL.md` to two folders: `.agents/skills/imp-aly/`
 
 The command does not replace a skill that exists. To write it again, remove the `SKILL.md` files.
 
-The skill tells the agent to use saved servers. The agent never gets a key.
+The skill tells the agent to use saved servers. It never asks for the key of a server. To give an
+agent access for a short time, give it an [agent key](#agent-keys) with the command that saves it.
+When the agent key expires, the agent asks you for a new one.
 
 ## Exit codes
 

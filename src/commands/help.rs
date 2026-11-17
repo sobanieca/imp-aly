@@ -36,6 +36,8 @@ Usage:
   imp-aly server --uninstall            remove the systemd service
   imp-aly update [--check] [--auto]     install a newer version
   imp-aly key rotate [-a <file>]        change the key, and the server does not stop
+  imp-aly key add <name> --for <1h|4h|8h|24h>   a temporary key for an AI agent
+  imp-aly key ls | rm <name>            list or remove the agent keys of a server
   imp-aly app add <name> <app url> [--segments plan,role] [--origins <list>]
   imp-aly app ls | show <name> | refresh <name> | rm <name>
   imp-aly query '<json>' | query <file.json> [--json]
@@ -137,9 +139,23 @@ Change the key (on the VPS):
   The command makes a new key, writes it to the key file and prints it. From
   then on, the server refuses each token that the old key signed. Give the new
   key to each machine that calls the server, and change it in the console.
-  The API has no endpoint that changes the key.
+  The server also removes all agent keys. The API has no endpoint that changes
+  the key.
 
-Client commands (app, query, backup, restore, status, token):
+Agent keys (temporary keys for AI agents that use the imp-aly CLI):
+
+  imp-aly key add claude --for 4h           a key that works for 4 hours
+  imp-aly key ls                            the agent keys that work now
+  imp-aly key rm claude                     the server refuses the key at once
+
+  An agent key works for 1, 4, 8 or 24 hours. It has the rights of the key of
+  the server, but it cannot add, list or remove agent keys. The command prints
+  the key once, with the command that saves it for the agent:
+  imp-aly add <name> <url> -a <agent key>. A server keeps up to 20 agent keys,
+  each with its own name. Add, list and remove them with the key of the server,
+  here or in the console.
+
+Client commands (app, query, backup, restore, status, token, key add | ls | rm):
 
   -s, --server <name>       a saved server (default: the default saved server);
                             app and query take a list, like -s eu-1,eu-2, or a
@@ -189,8 +205,9 @@ Apps:
   imp build writes app-analytics.json at the root of the build output. The
   server stores a record only when its page, zone and outcome name are in the
   lists of this file. The URL is the folder where the build is served. The
-  server reads the file there at once and again every 10 minutes. Run
-  "app refresh" after each deploy.
+  server reads the file there at once and again every 10 minutes, and at once
+  for a record with a page, zone or outcome that is not in the file (at most
+  once a minute). "app refresh" reads it at once.
 
   An app accepts records only from the browser pages of its origins. The
   default is the origin of the URL. Give others with --origins, like
@@ -272,6 +289,12 @@ API:
   POST /query               key: a query, answers the counts per group (docs/query.md)
   GET  /backup              key: the summaries as .tar.gz, ?last=<period>&by=<granularity>
   POST /restore             key: a backup file, see docs/backup.md
+  GET  /keys                key: the agent keys, without the keys
+  POST /keys                key: {{"name": "...", "hours": 4}}, with 1, 4, 8 or 24 hours,
+                            answers the new key once
+  DELETE /keys/<name>       key: remove an agent key
+
+  An agent key signs tokens for every "key" endpoint, except /keys.
 
   "key" endpoints take "Authorization: Bearer <token>", where the token comes
   from "imp-aly token <method> <path> [<body file>]". A token works once, for

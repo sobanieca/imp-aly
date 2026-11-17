@@ -324,7 +324,7 @@ Register an app (on this machine, or anywhere with --url <admin address> and -a)
     ));
 }
 
-const KEY_CHANGED: &str = "The key changed. The server refuses tokens signed with the old key.";
+const KEY_CHANGED: &str = "The key changed. The server refuses tokens signed with the old key and removed all agent keys.";
 
 fn reload_key(server: &RunningServer, data_dir: &str, key_path: Option<&str>) {
     let result = match key_path {

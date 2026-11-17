@@ -6,11 +6,11 @@ import { stack } from 'imp/std/layout'
 import { luCircleCheck } from 'imp/icons'
 import { ERROR_TERMS } from '../lib/terms.js'
 import { problemsOf, runPrevious, runQuery } from '../lib/api.js'
-import { barOf, bucketsOf } from '../lib/ranges.js'
+import { bucketsOf, detailBarOf } from '../lib/ranges.js'
 import { formatCount } from '../lib/format.js'
 import { changeOf, errorRows, errorTableNote, MAX_ROWS } from '../lib/reports.js'
 import { labelOf } from '../lib/rows.js'
-import { stackedSeries, TOP, topKeys } from '../lib/series.js'
+import { everyKey, stackedSeries, TOP } from '../lib/series.js'
 import {
   changeHint,
   compareColumns,
@@ -33,7 +33,7 @@ const errorsReport = component('aly-errors-report', {
   loading: () => reportLoading(),
   setup: async (self, { scope, filters, mapPages }) => {
     const api = useHttpClient(self, 'aly.api')
-    const bar = barOf(scope.from, scope.to)
+    const bar = detailBarOf(scope.from, scope.to)
     const buckets = bucketsOf(scope.from, scope.to, bar)
     const chosen = filters.page ?? []
     const one = chosen.length === 1
@@ -80,14 +80,8 @@ const errorsReport = component('aly-errors-report', {
     })
     const known = chosen.length ? chosen : mapPages.length ? mapPages : pages.map((row) => row.page)
     const failing = known.filter((name) => pages.some((row) => row.page === name && row.errors))
-    const keys = chosen.length ? chosen : topKeys(trend.rows, 'page')
-    const series = stackedSeries(trend.rows, {
-      bar,
-      field: 'page',
-      buckets,
-      keys,
-      other: !chosen.length,
-    })
+    const keys = chosen.length ? chosen : everyKey(trend.rows, 'page')
+    const series = stackedSeries(trend.rows, { bar, field: 'page', buckets, keys })
     return stack(
       { gap: 5 },
       ...problemNotices(problemsOf([current, before, trend])),
@@ -114,12 +108,12 @@ const errorsReport = component('aly-errors-report', {
             ? `Errors of ${labelOf(chosen[0])}`
             : chosen.length
               ? 'Errors of the chosen pages'
-              : 'Errors of the top pages',
+              : 'Errors of the pages',
           description: `${
             chosen.length
               ? 'The errors of each chosen page.'
-              : 'The 10 pages with the most errors, and the errors of all other pages as "Other".'
-          } One error record stands for up to 5 seconds of failures on one page view.`,
+              : 'The errors of every page, one on top of the other.'
+          } One bar per day up to 31 days, else one bar per month. One error record stands for up to 5 seconds of failures on one page view.`,
         },
         trendChart({ label: 'Errors', bar, buckets, series }),
       ),

@@ -126,6 +126,8 @@ with the same name. Its old records are part of its data again.
   When the save fails, the field keeps the key, so you can try again.
 - The console signs a one-time token for each call to a server, like the CLI. The key never goes
   over the network.
+- The console shows a new agent key once, in the command for the agent. It does not keep it. See
+  [Manage](#manage).
 - The console asks the browser to keep its storage. A browser that clears the data of the site also
   removes the servers. Add them again with their keys.
 - The console and the CLI keep separate lists. A server that you saved with `imp-aly add` is not in
@@ -160,13 +162,17 @@ The period control has two tabs:
 - **Custom**: any range of days. Choose the first and the last day, then press "Apply". A day is a
   UTC day, as in the queries.
 
-The length of the range sets the size of one bar in the charts:
+The length of the range sets the size of one bar in the charts. The chart of Overview uses all three
+sizes:
 
 | Range              | One bar is                                 |
 | ------------------ | ------------------------------------------ |
 | up to 45 days      | one day                                    |
 | 46 to 200 days     | one week. A week starts on Monday, in UTC. |
 | more than 200 days | one month                                  |
+
+The charts of Pages, Zones, Outcomes and Errors show one bar per day up to 31 days, and one bar per
+month for a longer range.
 
 The first and the last bar can hold a part of a week or a month only.
 
@@ -204,8 +210,10 @@ Each screen has a help button with a question mark next to its title. The help t
 shows, and what each measure, column and flag of the report counts. So you can read a report without
 this page.
 
-A chart of a report shows one column per bar. The column stacks the 10 items with the highest total,
-and puts all other items into "Other". Move the pointer over a column to see the counts.
+A chart of Pages, Zones, Outcomes or Errors shows one column per bar. The column stacks every item
+with a count in that bar: every page, zone or outcome. Above 50 items, the items with the lowest
+totals go into "Other". Move the pointer over a column to see the count of each item in it. The
+readout leaves out the items with no count in that bar.
 
 Pages, Zones, Outcomes and Errors have filters under the bar. "Pages" is a tree of the pages of the
 app map. A page is under the nearest page whose path starts its path, so `/users/:id/orders` is
@@ -247,12 +255,12 @@ zones for this. imp sends the record for every page.
 was viewed 100 times or more and used in less than 5% of them. The first table shows the 10 most
 used pages. The second table shows the 10 least used pages, and every page with no use.
 
-With no page chosen, the chart shows the uses of the top 10 pages. With pages chosen in "Pages", the
+With no page chosen, the chart shows the views of every page. With pages chosen in "Pages", the
 whole report shows only those pages:
 
 - With one page, the chart shows the views that used the page, and the views that did not use it.
   The report shows no table.
-- With two or more pages, the chart shows the uses of each chosen page. One table shows the chosen
+- With two or more pages, the chart shows the views of each chosen page. One table shows the chosen
   pages. The tile of the pages that were never reached or used does not show.
 
 The other filters are the segments of the app and the country. They apply to the tables and to the
@@ -275,7 +283,7 @@ The tables show each zone on each page:
 "Seen, rarely used" marks a zone that was seen 100 times or more and used in less than 5% of them.
 The first table shows the 10 most used zones. The second table shows the 10 least used zones.
 
-The chart shows the uses of the top 10 zones. One visit can use several zones, so a visit can count
+The chart shows the uses of every zone. One visit can use several zones, so a visit can count
 in more than one part of a column. Choose a zone to see that zone only. The chart then shows the
 views that used the zone, and the views that saw the zone but did not use it.
 
@@ -319,6 +327,7 @@ the previous period show in red.
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Registered apps | see the apps of all servers, one row per app with its servers. Register an app from its URL, with segments and other origins. See the reasons of the rejected records per server. Read the build file again. Remove an app. |
 | Servers         | see the servers of the console, and the state of each one: the version, the source id, the free disk space and the problems of the storage. Add, change and remove a server.                                                                |
+| Agent keys      | see the agent keys of each server and when they stop. Add an agent key for an AI agent that uses the imp-aly CLI. Remove an agent key.                                                                                                     |
 
 "Register" registers the app on the servers that you choose, like `imp-aly app add -s a,b`. With one
 server, the console registers the app there. See [Apps](apps.md).
@@ -328,7 +337,8 @@ Choose a segment from the list, or type a new name. The form checks each name li
 `country` and the other fields of a record are not segments. The server adds the country itself.
 
 "URL of the app" is the address where people open the app, such as `https://myapp.example/`. The
-server reads `app-analytics.json` at this address, and again every 10 minutes. The app accepts
+server reads `app-analytics.json` at this address, and again every 10 minutes or when a record names
+a page, a zone or an outcome that the file does not have. The app accepts
 records only from the pages of the origin of this URL.
 
 Fill "Other origins" only when the app has other URLs, such as `https://www.myapp.example` or
@@ -336,6 +346,13 @@ Fill "Other origins" only when the app has other URLs, such as `https://www.myap
 the app to the list. See [Apps](apps.md#register-an-app).
 
 "Read the files again" and "Remove" go only to the servers of the row.
+
+"Add an agent key" on the Agent keys page makes a temporary key for an AI agent that uses the imp-aly
+CLI. Give it a name, and choose how long it works: 1 hour, 4 hours, 8 hours or 24 hours. The console
+then shows the command for the agent
+once, such as `imp-aly add claude https://analytics.myapp.example:4410 -a <agent key>`. Copy it
+before you close the window. The console does not keep the agent key, and the server does not show
+it again. "Remove" stops the key at once. See [CLI](cli.md#agent-keys).
 
 The console does not make backups. Make them with `imp-aly backup` on the VPS or on another machine.
 See [Backup](backup.md).

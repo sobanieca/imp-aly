@@ -136,3 +136,30 @@ export const statusOf = async (api, name) => {
   const status = await callServer(api, target, { method: 'GET', path: '/status' })
   return { server: target.name, url: target.url, ...status }
 }
+
+const oneServer = async (name) => {
+  const [target] = await targetsOf([name])
+  return target
+}
+
+export const agentKeysOf = async (api, name) => {
+  const result = await callServer(api, await oneServer(name), { method: 'GET', path: '/keys' })
+  if (!Array.isArray(result.keys)) throw new Error(`server "${name}" sent no list of agent keys`)
+  return result.keys
+}
+
+export const addAgentKey = async (api, name, body) => {
+  const target = await oneServer(name)
+  const added = await callServer(api, target, {
+    method: 'POST',
+    path: '/keys',
+    body,
+  })
+  return { ...added, url: target.url }
+}
+
+export const removeAgentKey = async (api, name, keyName) =>
+  callServer(api, await oneServer(name), {
+    method: 'DELETE',
+    path: `/keys/${encodeURIComponent(keyName)}`,
+  })

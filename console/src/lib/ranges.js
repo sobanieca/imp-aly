@@ -4,6 +4,8 @@ const DAY_BARS_UP_TO = 45
 
 const WEEK_BARS_UP_TO = 200
 
+const DETAIL_DAY_BARS_UP_TO = 31
+
 export const todayUtc = (now = Date.now()) => dayOf(now)
 
 export const PRESETS = [
@@ -43,6 +45,11 @@ export const barOf = (from, to) => {
   if (count <= DAY_BARS_UP_TO) return 'day'
   return count <= WEEK_BARS_UP_TO ? 'week' : 'month'
 }
+
+// The bars of a chart of every page, zone or outcome: one bar per day up to 31 days, else one bar
+// per month
+export const detailBarOf = (from, to) =>
+  dayCount(from, to) <= DETAIL_DAY_BARS_UP_TO ? 'day' : 'month'
 
 const bucketOf = (day, bar) => {
   if (bar === 'month') return day.slice(0, 7)

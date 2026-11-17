@@ -5,7 +5,7 @@ import { tag } from 'imp/std/display'
 import { stack } from 'imp/std/layout'
 import { PAGE_TERMS } from '../lib/terms.js'
 import { problemsOf, runPrevious, runQuery } from '../lib/api.js'
-import { barOf, bucketsOf } from '../lib/ranges.js'
+import { bucketsOf, detailBarOf } from '../lib/ranges.js'
 import { formatCount, formatPercent } from '../lib/format.js'
 import {
   leastUsed,
@@ -16,9 +16,8 @@ import {
   RARELY_USED,
   RARELY_VIEWED,
   shareOf,
-  usesTitle,
 } from '../lib/reports.js'
-import { stackedSeries, TOP, topKeys, usedSeries } from '../lib/series.js'
+import { everyKey, stackedSeries, TOP, usedSeries } from '../lib/series.js'
 import {
   changeHint,
   dataNote,
@@ -69,7 +68,7 @@ const pagesReport = component('aly-pages-report', {
   loading: () => reportLoading(),
   setup: async (self, { scope, filters, mapPages }) => {
     const api = useHttpClient(self, 'aly.api')
-    const bar = barOf(scope.from, scope.to)
+    const bar = detailBarOf(scope.from, scope.to)
     const buckets = bucketsOf(scope.from, scope.to, bar)
     const chosen = filters.page ?? []
     const one = chosen.length === 1
@@ -88,7 +87,7 @@ const pagesReport = component('aly-pages-report', {
         limit: MAX_ROWS,
       }),
       runQuery(api, scope, {
-        where: { ...where, type: one ? ['page', 'used'] : 'used' },
+        where: { ...where, type: one ? ['page', 'used'] : 'page' },
         groupBy: [bar, one ? 'type' : 'page'],
         measures: ['records'],
         limit: MAX_ROWS,
@@ -109,8 +108,7 @@ const pagesReport = component('aly-pages-report', {
           bar,
           field: 'page',
           buckets,
-          keys: chosen.length ? chosen : topKeys(trend.rows, 'page'),
-          other: !chosen.length,
+          keys: chosen.length ? chosen : everyKey(trend.rows, 'page'),
         })
     const tiles = tileGrid(
       statTile({
@@ -139,14 +137,14 @@ const pagesReport = component('aly-pages-report', {
           }),
     )
     const chartCard = (title, description) =>
-      reportCard({ title, description }, trendChart({ label: 'Page uses', bar, buckets, series }))
+      reportCard({ title, description }, trendChart({ label: 'Page views', bar, buckets, series }))
     if (one) {
       return stack(
         { gap: 5 },
         ...problemNotices(problemsOf([current, before, trend])),
         tiles,
         chartCard(
-          usesTitle(chosen[0]),
+          `Views of ${chosen[0]}`,
           'The page views where the page was used, and where it was viewed but not used.',
         ),
         dataNote(current),
@@ -158,8 +156,8 @@ const pagesReport = component('aly-pages-report', {
         ...problemNotices(problemsOf([current, before, trend])),
         tiles,
         chartCard(
-          `Uses of the ${formatCount(chosen.length)} chosen pages`,
-          'The uses of each chosen page, one on top of the other.',
+          `Views of the ${formatCount(chosen.length)} chosen pages`,
+          'The views of each chosen page, one on top of the other.',
         ),
         reportCard(
           {
@@ -185,8 +183,8 @@ const pagesReport = component('aly-pages-report', {
       ...problemNotices(problemsOf([current, before, trend])),
       tiles,
       chartCard(
-        'Uses of the top pages',
-        'The 10 most used pages, and the uses of all other pages as "Other".',
+        'Views of the pages',
+        'The views of every page, one on top of the other. One bar per day up to 31 days, else one bar per month.',
       ),
       reportCard(
         {

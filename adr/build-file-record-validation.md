@@ -30,6 +30,11 @@ checks, with `page`, `zone` and the outcome `name` in the lists of the build fil
 - One file means one read per refresh. A read is all or nothing: the three lists always come from
   the same build. The server reads the file of a URL at registration and every 10 minutes. When the
   read fails, the server keeps the last lists and records the error in `buildError`.
+- A request with a record whose page, zone or outcome name is not in the lists makes the server read
+  the file again before it checks the request, when the last read of the app is at least 1 minute
+  old. The records that failed for that reason are checked again with the new lists. A deploy
+  usually adds or moves names, and the next record after it is the first sign. A forged name
+  costs at most one read a minute per app, and the request waits for that one read.
 - The file is at most 3 MiB, with at most 10,000 entries in each list. The server keeps an entry
   that occurs two times once. `pages` has at least one route pattern. `zones` and `outcomes` can be
   empty. A file that is not JSON, a missing list, or an entry that is not a route pattern or a
@@ -60,8 +65,12 @@ checks, with `page`, `zone` and the outcome `name` in the lists of the build fil
   Unicode text. A tool that prints or shows the data needs no escape step for these fields.
 - A segment value cannot be a free text such as a city name with accents. A segment is a group from
   the code of the app, so a short ASCII key is enough.
-- A deploy that adds a screen, a zone or an outcome must update the build file on the server, or the
-  records of it are rejected. The rejection counts show it.
+- A deploy that adds or moves a screen, a zone or an outcome needs no step on the server: the first
+  record of the new name reads the build file again. When the host caches the file, the records of
+  the new name are rejected until the server gets the new file, and `refresh` in the deploy
+  pipeline avoids it. The rejection counts show it.
+- A name that a deploy removes stays in the stored records and in the answers of queries. A browser
+  tab with the old build sends records of it, and the server rejects them.
 - An app needs a build with a map. The server cannot take a build file with a list missing.
 - The server cannot store a record of an app that sends extra fields. This is on purpose: a field
   that nobody declared is a bug or an attack.

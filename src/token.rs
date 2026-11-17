@@ -113,8 +113,26 @@ pub fn safe_equal(a: &str, b: &str) -> bool {
     std::hint::black_box(difference) == 0
 }
 
+#[derive(Clone)]
+pub struct AgentSigner {
+    pub name: String,
+    pub key: hmac::Key,
+    pub expires_at: i64,
+}
+
+impl AgentSigner {
+    pub fn new(name: &str, key: &str, expires_at: i64) -> Self {
+        AgentSigner {
+            name: name.to_string(),
+            key: signing_key(key),
+            expires_at,
+        }
+    }
+}
+
 pub struct TokenVerifier {
     key: hmac::Key,
+    agents: Vec<AgentSigner>,
     ttl_ms: i64,
     used: HashMap<String, i64>,
     next_prune: i64,
@@ -123,6 +141,7 @@ pub struct TokenVerifier {
 #[derive(Debug)]
 pub struct Verified {
     pub body_hash: String,
+    pub agent: Option<String>,
 }
 
 fn parse_timestamp(text: &str) -> Option<i64> {
@@ -142,10 +161,34 @@ impl TokenVerifier {
     pub fn with_ttl(key: &str, ttl_ms: i64) -> Self {
         TokenVerifier {
             key: signing_key(key),
+            agents: Vec::new(),
             ttl_ms,
             used: HashMap::new(),
             next_prune: 0,
         }
+    }
+
+    pub fn set_key(&mut self, key: &str) {
+        self.key = signing_key(key);
+    }
+
+    pub fn set_agents(&mut self, agents: Vec<AgentSigner>) {
+        self.agents = agents;
+    }
+
+    fn signer_of(&self, text: &str, mac: &str, now: i64) -> Result<Option<String>, String> {
+        if safe_equal(mac, &sign(&self.key, text)) {
+            return Ok(None);
+        }
+        for agent in &self.agents {
+            if safe_equal(mac, &sign(&agent.key, text)) {
+                if agent.expires_at <= now {
+                    return Err(format!("the agent key \"{}\" expired", agent.name));
+                }
+                return Ok(Some(agent.name.clone()));
+            }
+        }
+        Err("wrong key, or a token for another request".to_string())
     }
 
     pub fn verify(&mut self, token: &str, method: &str, target: &str) -> Result<Verified, String> {
@@ -176,19 +219,15 @@ impl TokenVerifier {
         if (now - time).abs() > self.ttl_ms {
             return Err("token expired (check the clock on both machines)".to_string());
         }
-        let expected = sign(
-            &self.key,
-            &signed_text(timestamp, nonce, method, target, body_hash),
-        );
-        if !safe_equal(mac, &expected) {
-            return Err("wrong key, or a token for another request".to_string());
-        }
+        let text = signed_text(timestamp, nonce, method, target, body_hash);
+        let agent = self.signer_of(&text, mac, now)?;
         if self.used.get(nonce).is_some_and(|expires| *expires > now) {
             return Err("token already used".to_string());
         }
         self.used.insert(nonce.to_string(), now + 2 * self.ttl_ms);
         Ok(Verified {
             body_hash: body_hash.to_string(),
+            agent,
         })
     }
 }
@@ -254,6 +293,39 @@ mod tests {
         assert_eq!(
             verifier.verify("a.b.c", "GET", "/").unwrap_err(),
             "malformed token"
+        );
+    }
+
+    #[test]
+    fn a_token_of_an_agent_key_passes_until_the_key_expires() {
+        let now = now_ms();
+        let mut verifier = TokenVerifier::new("key-0123456789");
+        verifier.set_agents(vec![
+            AgentSigner::new("claude", "agent-0123456789", now + 60_000),
+            AgentSigner::new("old", "old-agent-0123456789", now - 1),
+        ]);
+        let token = create_token("agent-0123456789", "GET", "/status", EMPTY_BODY_HASH);
+        let verified = verifier.verify_at(&token, "GET", "/status", now).unwrap();
+        assert_eq!(verified.agent.as_deref(), Some("claude"));
+        let main = create_token("key-0123456789", "GET", "/status", EMPTY_BODY_HASH);
+        assert_eq!(
+            verifier
+                .verify_at(&main, "GET", "/status", now)
+                .unwrap()
+                .agent,
+            None
+        );
+        let late = create_token("agent-0123456789", "GET", "/status", EMPTY_BODY_HASH);
+        assert!(
+            verifier
+                .verify_at(&late, "GET", "/status", now + 60_000)
+                .unwrap_err()
+                .contains("expired")
+        );
+        let old = create_token("old-agent-0123456789", "GET", "/status", EMPTY_BODY_HASH);
+        assert_eq!(
+            verifier.verify_at(&old, "GET", "/status", now).unwrap_err(),
+            "the agent key \"old\" expired"
         );
     }
 

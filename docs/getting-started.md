@@ -111,8 +111,9 @@ build is served:
 imp-aly app add myapp https://myapp.example/
 ```
 
-The server reads the file at once and again every 10 minutes. The server must be able to read the
-file at that URL.
+The server reads the file at once and again every 10 minutes, and at once for a record with a page,
+a zone or an outcome that is not in the file. The server must be able to read the file at that
+URL.
 
 The app accepts records only from the browser pages of its origins. By default, the origin is the
 origin of the URL. See [Apps](apps.md) for the origins, the segments and the other app commands.

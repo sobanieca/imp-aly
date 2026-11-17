@@ -82,9 +82,29 @@ For a server in the foreground, run `imp-aly key rotate`, or `imp-aly key rotate
 server uses another key file. Then send `SIGHUP` to the server (`kill -HUP <pid>`), or start it
 again. Until then, the server uses the old key.
 
+The new key also removes all [agent keys](#agent-keys). Somebody who had the old key could have
+added agent keys, and they stop with the old key.
+
 After the change, give the new key to each machine that calls the server. Write it to the key file
 of that machine, or save the server again: `imp-aly add <name> <url> -a <file>`. In the console, use
 "Change the URL or the key" on the server.
+
+### Agent keys
+
+An agent key is a temporary key for an AI agent that uses the imp-aly CLI. Add it with
+`imp-aly key add <name> --for 4h`, or on the "Agent keys" page of the console. See
+[CLI](cli.md#agent-keys).
+
+- **An agent key stops by itself.** It works for 1, 4, 8 or 24 hours. `imp-aly key rm <name>`
+  stops it at once.
+- **An agent key has the rights of the key of the server, except the agent keys.** It can query,
+  register and remove apps, and make and restore backups. It cannot add, list or remove agent keys,
+  so an agent cannot give itself more time. Give an agent key only to an agent that you trust with
+  these actions.
+- **The server shows the key once.** Copy the command for the agent at once.
+- **The server keeps the agent keys in `agent-keys.json` in the data folder**, with access for the
+  owner only. A restart keeps them. A backup does not hold them.
+- An agent key signs one-time tokens like the key of the server. It never goes over the network.
 
 ## Use HTTPS
 

@@ -4,6 +4,10 @@ export const TOP = 10
 
 export const OTHER = 'Other'
 
+// The most series of a chart of every key. Above it, the keys with the fewest records are "Other",
+// so a chart stays readable and fast for an app with hundreds of pages.
+export const MAX_SERIES = 50
+
 const COLORS = [
   'blue',
   'orange',
@@ -32,6 +36,9 @@ export const topKeys = (rows, field, { value = 'records', count = TOP } = {}) =>
     .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
     .slice(0, count)
     .map(([key]) => key)
+
+// Every key with records, the most records first, up to MAX_SERIES
+export const everyKey = (rows, field) => topKeys(rows, field, { count: MAX_SERIES })
 
 export const stackedSeries = (
   rows,

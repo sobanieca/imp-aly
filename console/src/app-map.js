@@ -11,5 +11,6 @@ export const app = appMap({
   manage: {
     registry: 'Register, check, refresh and remove apps',
     servers: 'The saved servers and their state',
+    agentKeys: 'Temporary keys for AI agents that use the imp-aly CLI',
   },
 })

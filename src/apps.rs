@@ -98,6 +98,9 @@ pub struct App {
     created_at: Option<String>,
     build_updated_at: Option<String>,
     build_error: Option<String>,
+    /// The time of the last read of the build file in milliseconds, 0 before the first read of
+    /// this process. It is in memory only.
+    read_at: u64,
     accepted: u64,
     rejected: u64,
     deduplicated: u64,
@@ -234,6 +237,7 @@ impl Apps {
                     created_at: optional_text(value.get("createdAt")),
                     build_updated_at: optional_text(value.get("buildUpdatedAt")),
                     build_error: optional_text(value.get("buildError")),
+                    read_at: 0,
                     accepted: 0,
                     rejected: 0,
                     deduplicated: 0,
@@ -356,6 +360,7 @@ impl Apps {
                 created_at: Some(now.clone()),
                 build_updated_at: Some(now),
                 build_error: None,
+                read_at: now_ms() as u64,
                 accepted: 0,
                 rejected: 0,
                 deduplicated: 0,
@@ -402,6 +407,7 @@ impl Apps {
         let Some(app) = state.iter_mut().find(|app| app.id == id) else {
             return false;
         };
+        app.read_at = app.read_at.max(now_ms() as u64);
         match result {
             Ok(lists) => {
                 app.lists = Arc::new(lists);
@@ -431,6 +437,30 @@ impl Apps {
             .find(|app| app.id == id)
             .map(App::describe)
             .ok_or_else(|| Self::missing(name))
+    }
+
+    /// Reads the build file of the app again for a record that names a page, a zone or an outcome
+    /// that the lists do not have, as after a deploy of the app. It reads only when the last read
+    /// is at least `min_gap_ms` old, so forged names cannot make the server read the file often.
+    /// It answers the new rules, or None when it did not read.
+    pub fn recheck(&self, name: &str, min_gap_ms: u64) -> Option<Rules> {
+        let (id, app_url) = {
+            let mut state = self.lock();
+            let app = state.iter_mut().find(|app| app.name == name)?;
+            let now = now_ms() as u64;
+            if now.saturating_sub(app.read_at) < min_gap_ms {
+                return None;
+            }
+            // Claim the read, so the requests that come during it do not read too
+            app.read_at = now;
+            (app.id, app.app_url.clone())
+        };
+        if self.reread(id, &app_url)
+            && let Err(error) = self.save()
+        {
+            crate::logger::error(format!("The app registry could not be saved: {error}"));
+        }
+        self.rules(name)
     }
 
     pub fn refresh_all(&self) -> Result<()> {

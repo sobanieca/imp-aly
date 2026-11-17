@@ -4,11 +4,11 @@ import { table } from 'imp/std/data'
 import { stack } from 'imp/std/layout'
 import { OUTCOME_TERMS } from '../lib/terms.js'
 import { problemsOf, runPrevious, runQuery } from '../lib/api.js'
-import { barOf, bucketsOf } from '../lib/ranges.js'
+import { bucketsOf, detailBarOf } from '../lib/ranges.js'
 import { formatCount, formatPercent } from '../lib/format.js'
 import { changeOf, MAX_ROWS, outcomeTableRows, shareOf, withoutFields } from '../lib/reports.js'
 import { indexBy, labelOf } from '../lib/rows.js'
-import { stackedSeries, TOP, topKeys } from '../lib/series.js'
+import { everyKey, stackedSeries, TOP } from '../lib/series.js'
 import {
   changeHint,
   compareColumns,
@@ -31,7 +31,7 @@ const outcomesReport = component('aly-outcomes-report', {
   loading: () => reportLoading(),
   setup: async (self, { scope, filters }) => {
     const api = useHttpClient(self, 'aly.api')
-    const bar = barOf(scope.from, scope.to)
+    const bar = detailBarOf(scope.from, scope.to)
     const buckets = bucketsOf(scope.from, scope.to, bar)
     const base = withoutFields(filters, ['name'])
     const chosen = filters.name ?? []
@@ -80,14 +80,8 @@ const outcomesReport = component('aly-outcomes-report', {
     const visits = indexBy(reach.rows, 'type')
     const withOutcome = visits.get('outcome')?.visits ?? 0
     const allVisits = visits.get('page')?.visits ?? 0
-    const keys = chosen.length ? chosen.map(labelOf) : topKeys(trend.rows, 'name')
-    const series = stackedSeries(trend.rows, {
-      bar,
-      field: 'name',
-      buckets,
-      keys,
-      other: !chosen.length,
-    })
+    const keys = chosen.length ? chosen.map(labelOf) : everyKey(trend.rows, 'name')
+    const series = stackedSeries(trend.rows, { bar, field: 'name', buckets, keys })
     return stack(
       { gap: 5 },
       ...problemNotices(problemsOf([current, before, trend, reach])),
@@ -111,10 +105,10 @@ const outcomesReport = component('aly-outcomes-report', {
       ),
       reportCard(
         {
-          title: chosen.length ? 'The chosen outcomes' : 'The top outcomes',
+          title: chosen.length ? 'The chosen outcomes' : 'The outcomes',
           description: chosen.length
-            ? 'The count of each chosen outcome.'
-            : 'The 10 most reached outcomes, and all other outcomes as "Other".',
+            ? 'The count of each chosen outcome. One bar per day up to 31 days, else one bar per month.'
+            : 'The count of every outcome, one on top of the other. One bar per day up to 31 days, else one bar per month.',
         },
         trendChart({ label: 'Outcomes', bar, buckets, series }),
       ),

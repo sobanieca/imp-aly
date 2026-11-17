@@ -3,6 +3,7 @@ use crate::json::{self, Value};
 use crate::paths::dirname;
 use std::fs::{self, File, OpenOptions};
 use std::io::{ErrorKind, Write};
+use std::os::unix::fs::OpenOptionsExt;
 
 #[derive(Clone, Debug)]
 pub struct Entry {
@@ -19,12 +20,25 @@ pub fn sync_directory(path: &str) -> Result<()> {
 }
 
 pub fn write_file_atomic(path: &str, bytes: &[u8]) -> Result<()> {
+    write_file_atomic_with_mode(path, bytes, 0o666)
+}
+
+pub fn write_private_json_atomic(path: &str, value: &Value) -> Result<()> {
+    write_file_atomic_with_mode(path, format!("{}\n", json::pretty(value)).as_bytes(), 0o600)
+}
+
+fn write_file_atomic_with_mode(path: &str, bytes: &[u8], mode: u32) -> Result<()> {
     let temporary = format!("{path}.tmp");
+    match fs::remove_file(&temporary) {
+        Ok(()) => {}
+        Err(error) if error.kind() == ErrorKind::NotFound => {}
+        Err(error) => return Err(Error::io(&error, &temporary)),
+    }
     {
         let mut file = OpenOptions::new()
             .write(true)
-            .create(true)
-            .truncate(true)
+            .create_new(true)
+            .mode(mode)
             .open(&temporary)
             .map_err(|error| Error::io(&error, &temporary))?;
         file.write_all(bytes)

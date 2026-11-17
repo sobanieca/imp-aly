@@ -8,6 +8,7 @@ import { appLogo, orgSelect, shell, themeSelect } from 'imp/std/shell'
 import {
   luChartColumn,
   luChartNoAxesCombined,
+  luBot,
   luFiles,
   luGauge,
   luMousePointerClick,
@@ -32,6 +33,7 @@ import { outcomesScreen } from './screens/outcomes.js'
 import { overviewScreen } from './screens/overview.js'
 import { pagesScreen } from './screens/pages.js'
 import { registryScreen } from './screens/registry.js'
+import { agentKeysScreen } from './screens/agent-keys.js'
 import { serversScreen } from './screens/servers.js'
 import { zonesScreen } from './screens/zones.js'
 
@@ -109,6 +111,7 @@ export const root = component('aly-root', {
           [app.manage]: { icon: luSettings2, tag: 'aly.manageTag' },
           [app.manage.registry]: { icon: luPackage },
           [app.manage.servers]: { icon: luServer, tag: 'aly.serversTag' },
+          [app.manage.agentKeys]: { icon: luBot },
         },
         extras: [
           orgs.view((list) =>
@@ -137,6 +140,7 @@ export const root = component('aly-root', {
           [app.reports.errors]: () => errorsScreen(),
           [app.manage.registry]: () => registryScreen(),
           [app.manage.servers]: () => serversScreen(),
+          [app.manage.agentKeys]: () => agentKeysScreen(),
         },
         title: ({ crumbs }) => `${crumbs.at(-1)} - imp-aly console`,
       }),

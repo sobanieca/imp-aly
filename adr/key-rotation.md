@@ -38,6 +38,7 @@ Only root on the VPS can change the key.**
   with the new key.
 - A server in the foreground reads its key file again on `SIGHUP`. `imp-aly key rotate [-a <file>]`
   writes that file. The command cannot find the process, so the owner sends the signal.
+- The new key removes all agent keys of the server, see `agent-keys.md`.
 - The API has no endpoint that changes the key.
 
 ## Consequences

@@ -1,3 +1,4 @@
+use crate::agent_keys::AgentKeys;
 use crate::app_build::{FetchFile, fetch_text};
 use crate::apps::Apps;
 use crate::backup::{parse_backup_options, write_backup};
@@ -24,7 +25,7 @@ use crate::rate_limit::{
     ClientKey, DEFAULT_MAX_CLIENTS, DEFAULT_TRUSTED_PROXIES, RateLimiter, Window, client_address,
     client_keys, default_limits, is_trusted, max_batch, parse_trusted_proxies,
 };
-use crate::records::{DEFAULT_SEAL_DELAY_MS, normalize_country, validate_record};
+use crate::records::{DEFAULT_SEAL_DELAY_MS, is_not_in_build, normalize_country, validate_record};
 use crate::retention::{DEFAULT_MIN_FREE, parse_min_free};
 use crate::source::open_source;
 use crate::storage::{DEFAULT_MAINTENANCE_MS, StorageOptions, StorageRunner};
@@ -68,6 +69,10 @@ const MAX_QUEUED_QUERIES: usize = 16;
 
 const BUILD_REFRESH_MS: u64 = 600_000;
 
+/// The shortest time between two reads of the build file of an app for a record that names a page,
+/// a zone or an outcome that the build file does not have
+const BUILD_RECHECK_MS: u64 = 60_000;
+
 pub const TLS_CHECK_MS: u64 = 3_600_000;
 
 const SECURITY_HEADERS: [(&str, &str); 2] = [
@@ -98,7 +103,7 @@ const ADMIN_PREFLIGHT_HEADERS: [(&str, &str); 3] = [
     ("access-control-max-age", "86400"),
 ];
 
-const ADMIN_PATHS: [&str; 5] = ["/status", "/query", "/apps", "/backup", "/restore"];
+const ADMIN_PATHS: [&str; 6] = ["/status", "/query", "/apps", "/backup", "/restore", "/keys"];
 
 pub type OnTlsChange = Arc<dyn Fn() -> bool + Send + Sync>;
 
@@ -134,6 +139,7 @@ pub struct ServerOptions {
     pub seal_delay_ms: i64,
     pub maintenance_ms: i64,
     pub build_refresh_ms: u64,
+    pub build_recheck_ms: u64,
     pub query_timeout_ms: u64,
     pub fetch_file: Option<FetchFile>,
     pub http: Option<Limits>,
@@ -173,6 +179,7 @@ impl ServerOptions {
             seal_delay_ms: DEFAULT_SEAL_DELAY_MS,
             maintenance_ms: DEFAULT_MAINTENANCE_MS,
             build_refresh_ms: BUILD_REFRESH_MS,
+            build_recheck_ms: BUILD_RECHECK_MS,
             query_timeout_ms: QUERY_TIMEOUT_MS,
             fetch_file: None,
             http: None,
@@ -316,7 +323,8 @@ struct State {
     limiter: Mutex<RateLimiter>,
     dedupe: Mutex<Dedupe>,
     batch_limit: u64,
-    verifier: Mutex<TokenVerifier>,
+    verifier: Arc<Mutex<TokenVerifier>>,
+    agent_keys: Arc<AgentKeys>,
     public_flight: InFlight,
     admin_flight: InFlight,
     ip_header: Option<String>,
@@ -325,6 +333,7 @@ struct State {
     collect_timeout: Duration,
     restore_idle_ms: u64,
     seal_delay_ms: i64,
+    build_recheck_ms: u64,
     upload_dir: String,
 }
 
@@ -463,6 +472,37 @@ impl State {
             request.header("user-agent"),
         );
         let now = now_ms();
+        let validate = |input: &Value, rules: &crate::apps::Rules| match bot {
+            Some(problem) => Err(problem.to_string()),
+            None => validate_record(
+                input,
+                &rules.lists,
+                &rules.segments,
+                country.as_deref(),
+                now,
+            ),
+        };
+        let mut outcomes: Vec<_> = inputs.iter().map(|input| validate(input, &rules)).collect();
+        // A page, a zone or an outcome that the build file does not have is often new: the app
+        // was deployed after the last read of its build file. Read it again, and check these
+        // records with the new lists, so a deploy loses no record.
+        let unknown = |outcome: &std::result::Result<Object, String>| matches!(outcome, Err(problem) if is_not_in_build(problem));
+        if outcomes.iter().any(unknown) {
+            let apps = self.apps.clone();
+            let app = name.to_string();
+            let gap = self.build_recheck_ms;
+            let fresh = tokio::task::spawn_blocking(move || apps.recheck(&app, gap))
+                .await
+                .ok()
+                .flatten();
+            if let Some(fresh) = fresh {
+                for (input, outcome) in inputs.iter().zip(outcomes.iter_mut()) {
+                    if unknown(outcome) {
+                        *outcome = validate(input, &fresh);
+                    }
+                }
+            }
+        }
         let client = clients.first().map_or("", |client| client.key.as_str());
         let mut lines = String::new();
         let mut accepted = 0u64;
@@ -473,17 +513,7 @@ impl State {
                 .dedupe
                 .lock()
                 .unwrap_or_else(|poison| poison.into_inner());
-            for input in inputs {
-                let outcome = match bot {
-                    Some(problem) => Err(problem.to_string()),
-                    None => validate_record(
-                        input,
-                        &rules.lists,
-                        &rules.segments,
-                        country.as_deref(),
-                        now,
-                    ),
-                };
+            for outcome in outcomes {
                 match outcome {
                     Err(problem) => {
                         rejected += 1;
@@ -627,8 +657,8 @@ impl State {
             .lock()
             .unwrap_or_else(|poison| poison.into_inner())
             .verify(&token, &method, &request.target);
-        let body_hash = match verified {
-            Ok(verified) => verified.body_hash,
+        let (body_hash, agent) = match verified {
+            Ok(verified) => (verified.body_hash, verified.agent),
             Err(problem) => return Err(Error::status(401, format!("unauthorized: {problem}"))),
         };
         let no_body = || {
@@ -637,6 +667,17 @@ impl State {
             }
             Ok(())
         };
+        if path == "/keys" || path.starts_with("/keys/") {
+            if let Some(agent) = agent {
+                return Err(Error::status(
+                    403,
+                    format!(
+                        "the agent key \"{agent}\" cannot manage keys - use the key of the server"
+                    ),
+                ));
+            }
+            return self.keys_route(request, &method, &path, &body_hash).await;
+        }
         if path == "/status" && method == "GET" {
             no_body()?;
             let status = Object::new()
@@ -778,6 +819,51 @@ impl State {
         ))
     }
 
+    async fn keys_route(
+        &self,
+        request: &mut Request,
+        method: &str,
+        path: &str,
+        body_hash: &str,
+    ) -> Result<Response> {
+        let agent_keys = self.agent_keys.clone();
+        if path == "/keys" && method == "GET" {
+            if body_hash != EMPTY_BODY_HASH {
+                return Err(body_mismatch());
+            }
+            return Ok(json_response(200, agent_keys.list(now_ms())));
+        }
+        if path == "/keys" && method == "POST" {
+            let body = self.read_admin_body(request, body_hash).await?;
+            let added = tokio::task::spawn_blocking(move || agent_keys.add(&body, now_ms()))
+                .await
+                .map_err(|_| Error::new("the agent keys failed"))??;
+            return Ok(json_response(200, added));
+        }
+        if let Some(name) = path.strip_prefix("/keys/")
+            && method == "DELETE"
+            && !name.is_empty()
+            && !name.contains('/')
+        {
+            if body_hash != EMPTY_BODY_HASH {
+                return Err(body_mismatch());
+            }
+            let name = name.to_string();
+            let removed = name.clone();
+            tokio::task::spawn_blocking(move || agent_keys.remove(&removed, now_ms()))
+                .await
+                .map_err(|_| Error::new("the agent keys failed"))??;
+            return Ok(json_response(
+                200,
+                Object::new().with("removed", name).into(),
+            ));
+        }
+        Err(Error::status(
+            404,
+            format!("{method} {path} is not an endpoint"),
+        ))
+    }
+
     async fn public_route(
         &self,
         request: &mut Request,
@@ -835,7 +921,10 @@ impl State {
         if request.path == "/" && request.method == "GET" {
             return Ok(version_response());
         }
-        if ADMIN_PATHS.contains(&request.path.as_str()) || request.path.starts_with("/apps/") {
+        if ADMIN_PATHS.contains(&request.path.as_str())
+            || request.path.starts_with("/apps/")
+            || request.path.starts_with("/keys/")
+        {
             return self.admin(request).await;
         }
         Err(Error::status(
@@ -1036,12 +1125,12 @@ impl RunningServer {
         if key.is_empty() {
             return Err(Error::new("the server needs a key"));
         }
-        *self
-            .state
+        self.state
             .verifier
             .lock()
-            .unwrap_or_else(|poison| poison.into_inner()) = TokenVerifier::new(key);
-        Ok(())
+            .unwrap_or_else(|poison| poison.into_inner())
+            .set_key(key);
+        self.state.agent_keys.clear()
     }
 
     pub fn stopper(&self) -> watch::Sender<bool> {
@@ -1124,6 +1213,8 @@ pub async fn start_server(options: ServerOptions) -> Result<RunningServer> {
     let storage = Arc::new(StorageRunner::start(storage_options)?);
     *waker.lock().unwrap_or_else(|poison| poison.into_inner()) = Some(Box::new(storage.waker()));
     let queries = QueryRunner::start(data_dir.clone(), options.query_timeout_ms, live)?;
+    let verifier = Arc::new(Mutex::new(TokenVerifier::new(&options.key)));
+    let agent_keys = Arc::new(AgentKeys::open(&data_dir, verifier.clone(), now_ms())?);
     let state = Arc::new(State {
         data_dir: data_dir.clone(),
         source,
@@ -1138,7 +1229,8 @@ pub async fn start_server(options: ServerOptions) -> Result<RunningServer> {
         )),
         dedupe: Mutex::new(Dedupe::new(options.dedupe_ms, options.max_views)),
         batch_limit: max_batch(&options.limits),
-        verifier: Mutex::new(TokenVerifier::new(&options.key)),
+        verifier,
+        agent_keys,
         public_flight: InFlight::new(options.max_requests, options.max_client_requests),
         admin_flight: InFlight::new(options.max_requests, options.max_client_requests),
         ip_header: options.ip_header.clone(),
@@ -1147,6 +1239,7 @@ pub async fn start_server(options: ServerOptions) -> Result<RunningServer> {
         collect_timeout: Duration::from_millis(options.collect_timeout_ms),
         restore_idle_ms: options.restore_idle_ms,
         seal_delay_ms: options.seal_delay_ms,
+        build_recheck_ms: options.build_recheck_ms,
         upload_dir,
     });
     let cleanup = |state: Arc<State>| {

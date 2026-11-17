@@ -113,6 +113,15 @@ fn check_segment(text: String) -> Segment {
     }
 }
 
+/// The end of the problem of a record whose page, zone or outcome name is not in the build file
+const NOT_IN_BUILD: &str = "of app-analytics.json";
+
+/// The record names a page, a zone or an outcome that the build file does not have. A newer build
+/// file of the app can have it.
+pub fn is_not_in_build(problem: &str) -> bool {
+    problem.ends_with(NOT_IN_BUILD)
+}
+
 pub fn validate_record(
     input: &Value,
     lists: &Lists,

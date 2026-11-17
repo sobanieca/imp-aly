@@ -22,6 +22,10 @@ description: Query the analytics of imp apps and check imp-aly servers with the 
 `imp-aly` collects the analytics records of imp apps on a VPS and answers
 queries. The client commands call saved servers by name. The keys stay in the
 files of the user. Never ask for a key and never put a key in a command.
+The one exception: the user can give you an agent key, a temporary key, with
+the command `imp-aly add <name> <url> -a <agent key>`. Run that command once,
+then use `-s <name>`. When a server answers that the agent key expired, ask
+the user for a new agent key.
 
 ## Workflow
 
@@ -76,6 +80,8 @@ imp-aly - instructions for AI agents
 
   The keys of the servers stay in the files of the user. Never ask for a
   key and never put a key in a command. Use a saved server: -s <name>.
+  The one exception: the user can give you an agent key with the command
+  'imp-aly add <name> <url> -a <agent key>'. Run it once, then use -s <name>.
 
   The full reference follows.";
 

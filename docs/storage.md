@@ -9,6 +9,7 @@ changes it. The records are plain text files, so you can read them with `cat`, `
   format.json                  <- the data format, see Updates
   source.json                  <- the source id of this server, see Sources
   apps.json                    <- the registered apps
+  agent-keys.json              <- the agent keys that work now, for the owner only
   wal/
     0001759363202417.open      <- the write-ahead log that takes new records
     0001759363200412.log       <- a closed part that waits for the storage worker

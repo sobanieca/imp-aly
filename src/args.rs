@@ -7,7 +7,7 @@ enum Kind {
     Switch,
 }
 
-const FLAGS: [(&str, Kind); 36] = [
+const FLAGS: [(&str, Kind); 37] = [
     ("port", Kind::Text),
     ("admin-port", Kind::Text),
     ("admin-bind", Kind::Text),
@@ -34,6 +34,7 @@ const FLAGS: [(&str, Kind); 36] = [
     ("limit-1h", Kind::Text),
     ("limit-24h", Kind::Text),
     ("dedupe", Kind::Text),
+    ("for", Kind::Text),
     ("foreground", Kind::Switch),
     ("no-auto-update", Kind::Switch),
     ("check", Kind::Switch),

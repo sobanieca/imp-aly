@@ -92,6 +92,9 @@ one-time token for each call. GitHub Pages serves it at `https://aly.imp-ui.com/
   the form state, gives it to `onSubmit`, and clears the field after a successful save. `onSubmit`
   hands the key to `vault.js`. A debug log of the states of imp prints every value of a form, so a
   key in the form state would show in that log.
+- The Agent keys screen shows a new agent key once, inside the command for the agent, in a dialog.
+  The key is in a variable of the screen, never in a state, so a debug log does not show it. The
+  screen forgets the key when the dialog closes. See `agent-keys.md`.
 - The register form lists the segments that the apps on the servers declare, and checks the names
   with the rules of `names.js`, like the server.
 - The register form checks that the build file or its text is a JSON object before it sends it. The

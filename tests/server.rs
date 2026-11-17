@@ -304,6 +304,60 @@ fn a_new_key_works_at_once_and_the_old_key_stops() {
 }
 
 #[test]
+fn an_agent_key_calls_the_api_but_cannot_manage_keys() {
+    let server = Server::start(|_| {});
+    let with_key = |key: &str, method: &str, path: &str, body: Option<&str>| {
+        let auth = format!(
+            "Bearer {}",
+            token(key, method, path, body.map(str::as_bytes))
+        );
+        send(
+            server.admin_port,
+            method,
+            path,
+            body,
+            &[("authorization", &auth)],
+        )
+    };
+    let added = server.admin("POST", "/keys", Some(r#"{"name":"claude","hours":1}"#));
+    assert_eq!(added.status, 200, "{}", added.text);
+    let agent = added.get("key").as_str().unwrap().to_string();
+    assert_eq!(with_key(&agent, "GET", "/status", None).status, 200);
+    assert_eq!(with_key(&agent, "GET", "/apps", None).status, 200);
+    let refused = with_key(&agent, "POST", "/keys", Some(r#"{"name":"x","hours":1}"#));
+    assert_eq!(refused.status, 403);
+    assert_eq!(with_key(&agent, "GET", "/keys", None).status, 403);
+    assert_eq!(with_key(&agent, "DELETE", "/keys/claude", None).status, 403);
+    let listed = server.admin("GET", "/keys", None);
+    assert_eq!(listed.get("keys.0.name").as_str(), Some("claude"));
+    assert!(listed.get("keys.0.key").is_null());
+    assert_eq!(
+        server
+            .admin("POST", "/keys", Some(r#"{"name":"claude","hours":1}"#))
+            .status,
+        409
+    );
+    assert_eq!(
+        server
+            .admin("POST", "/keys", Some(r#"{"name":"long","hours":3}"#))
+            .status,
+        400
+    );
+    assert_eq!(server.admin("DELETE", "/keys/claude", None).status, 200);
+    assert_eq!(with_key(&agent, "GET", "/status", None).status, 401);
+    assert_eq!(server.admin("DELETE", "/keys/claude", None).status, 404);
+    let again = server.admin("POST", "/keys", Some(r#"{"name":"next","hours":1}"#));
+    let next = again.get("key").as_str().unwrap().to_string();
+    server
+        .server
+        .as_ref()
+        .unwrap()
+        .set_key("next-key-0123456789")
+        .unwrap();
+    assert_eq!(with_key(&next, "GET", "/status", None).status, 401);
+}
+
+#[test]
 fn answers_a_cors_preflight_and_registers_an_app_from_a_url() {
     let server = Server::start(|_| {});
     let preflight = |origin: &str| {
@@ -396,6 +450,80 @@ fn a_failed_refresh_keeps_the_last_build_file_and_records_the_error() {
     let fixed = server.admin("POST", "/apps/myapp/refresh", None);
     assert_eq!(fixed.get("buildError"), Value::Null);
     assert_eq!(fixed.text_of("zones"), r#"["myapp.new"]"#);
+}
+
+#[test]
+fn a_new_page_zone_or_outcome_reads_the_build_file_again_at_once() {
+    let server = Server::start(|options| options.build_recheck_ms = 0);
+    server.register();
+    // The app is deployed with a new page, zone and outcome, and with no "/invoices" page
+    server.files.lock().unwrap().insert(
+        BUILD_URL.to_string(),
+        build_text(
+            Some(r#"["/","/invoices/:id","/reports"]"#),
+            Some(r#"["myapp.list","myapp.send","myapp.chart"]"#),
+            Some(r#"["myapp.sent","myapp.exported"]"#),
+        ),
+    );
+    let fetched = server.fetched.lock().unwrap().len();
+    let batch = [
+        record(r#""type":"page""#),
+        record(r#""type":"page""#).replace("/invoices/:id", "/reports"),
+        record(r#""type":"seen","zone":"myapp.chart""#),
+        record(r#""type":"outcome","name":"myapp.exported""#),
+        record(r#""type":"seen","zone":"myapp.forged""#),
+    ];
+    let posted = server.call(
+        "POST",
+        "/collect/myapp",
+        Some(&format!("[{}]", batch.join(","))),
+        &[],
+    );
+    assert_eq!(
+        posted.text,
+        r#"{"accepted":4,"rejected":1,"deduplicated":0}"#
+    );
+    assert_eq!(server.fetched.lock().unwrap().len(), fetched + 1);
+    let app = server.admin("GET", "/apps/myapp", None);
+    assert_eq!(app.text_of("pages"), r#"["/","/invoices/:id","/reports"]"#);
+    // A page that the new build file left out is not in the lists any more
+    let old = server.call(
+        "POST",
+        "/collect/myapp",
+        Some(&record(r#""type":"page""#).replace("/invoices/:id", "/invoices")),
+        &[],
+    );
+    assert_eq!(old.text, r#"{"accepted":0,"rejected":1,"deduplicated":0}"#);
+    // A record that passes reads nothing
+    let fetched = server.fetched.lock().unwrap().len();
+    server.call(
+        "POST",
+        "/collect/myapp",
+        Some(&record(r#""type":"page""#)),
+        &[],
+    );
+    assert_eq!(server.fetched.lock().unwrap().len(), fetched);
+}
+
+#[test]
+fn unknown_names_read_the_build_file_at_most_once_in_the_recheck_time() {
+    let server = Server::start(|options| options.build_recheck_ms = 3_600_000);
+    server.register();
+    let fetched = server.fetched.lock().unwrap().len();
+    for _ in 0..3 {
+        let posted = server.call(
+            "POST",
+            "/collect/myapp",
+            Some(&record(r#""type":"seen","zone":"myapp.forged""#)),
+            &[],
+        );
+        assert_eq!(
+            posted.text,
+            r#"{"accepted":0,"rejected":1,"deduplicated":0}"#
+        );
+    }
+    // The registration read the file a moment ago, so no record reads it again
+    assert_eq!(server.fetched.lock().unwrap().len(), fetched);
 }
 
 #[test]

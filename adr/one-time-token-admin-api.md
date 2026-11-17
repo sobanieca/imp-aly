@@ -31,6 +31,8 @@ once, for 60 seconds.**
   The server and the CLI use the SHA-256 of `ring`.
 - The server compares the signature in constant time, rejects a time more than 60 seconds away from
   its clock, and keeps each used nonce until the token cannot be valid again.
+- An agent key also signs tokens of this form, until it expires. It cannot call `/keys`. See
+  `agent-keys.md`.
 - The CLI makes a new token for each call. `imp-aly token <method> <path> [<body file>]` prints one
   for other tools.
 - The token is not accepted in the URL, so it does not end up in an access log.

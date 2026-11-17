@@ -10,6 +10,7 @@ import {
 import {
   barOf,
   bucketsOf,
+  detailBarOf,
   presetPrevious,
   presetRange,
   previousLabel,
@@ -38,7 +39,14 @@ import {
   zoneFlag,
   zoneRows,
 } from '../src/lib/reports.js'
-import { OTHER, stackedSeries, topKeys, usedSeries } from '../src/lib/series.js'
+import {
+  everyKey,
+  MAX_SERIES,
+  OTHER,
+  stackedSeries,
+  topKeys,
+  usedSeries,
+} from '../src/lib/series.js'
 
 const NOW = Date.parse('2026-10-03T12:00:00Z')
 
@@ -419,4 +427,28 @@ test('a filter list that the servers cut says so', () => {
 test('the chart of the (none) zone names it as the filter does', () => {
   expect(usesTitle(null)).toEqual('Uses of (none)')
   expect(usesTitle('shop.cart')).toEqual('Uses of shop.cart')
+})
+
+test('detailBarOf shows days up to 31 days and months above', () => {
+  expect(detailBarOf('2026-10-01', '2026-10-31')).toEqual('day')
+  expect(detailBarOf('2026-09-30', '2026-10-31')).toEqual('month')
+  expect(detailBarOf('2026-10-16', '2026-10-16')).toEqual('day')
+})
+
+test('everyKey keeps every key with records, the most records first, up to MAX_SERIES', () => {
+  const rows = [
+    { page: '/a', records: 1 },
+    { page: '/b', records: 5 },
+    { page: '/c', records: 0 },
+    ...Array.from({ length: 12 }, (_, index) => ({ page: `/p${index}`, records: 2 })),
+  ]
+  const keys = everyKey(rows, 'page')
+  expect(keys.length).toEqual(14)
+  expect(keys[0]).toEqual('/b')
+  expect(keys.at(-1)).toEqual('/a')
+  const many = Array.from({ length: MAX_SERIES + 5 }, (_, index) => ({
+    page: `/${index}`,
+    records: 1,
+  }))
+  expect(everyKey(many, 'page').length).toEqual(MAX_SERIES)
 })
