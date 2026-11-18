@@ -14,6 +14,28 @@ use support::*;
 
 const ANSWER: &str = r#"{"days":["2026-10-01"],"summaryDays":1,"scanned":4,"matched":4,"skippedDays":[],"groups":[{"by":[],"records":4,"visits":2}],"appConfig":"a"}"#;
 
+fn read_request(stream: &mut TcpStream) {
+    let mut bytes = Vec::new();
+    let mut buffer = [0u8; 65_536];
+    loop {
+        if let Some(end) = bytes.windows(4).position(|window| window == b"\r\n\r\n") {
+            let head = String::from_utf8_lossy(&bytes[..end]).to_ascii_lowercase();
+            let length = head
+                .lines()
+                .find_map(|line| line.strip_prefix("content-length:"))
+                .and_then(|value| value.trim().parse::<usize>().ok())
+                .unwrap_or(0);
+            if bytes.len() >= end + 4 + length {
+                return;
+            }
+        }
+        match stream.read(&mut buffer) {
+            Ok(0) | Err(_) => return,
+            Ok(count) => bytes.extend_from_slice(&buffer[..count]),
+        }
+    }
+}
+
 fn fake_server(kind: &'static str) -> u16 {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port();
@@ -23,8 +45,7 @@ fn fake_server(kind: &'static str) -> u16 {
                 continue;
             };
             std::thread::spawn(move || {
-                let mut buffer = [0u8; 65_536];
-                let _ = stream.read(&mut buffer);
+                read_request(&mut stream);
                 let (content_type, body) = match kind {
                     "good" => ("application/json", ANSWER.to_string()),
                     "html" => ("text/html", "<html>proxy</html>".to_string()),
