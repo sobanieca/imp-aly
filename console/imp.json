@@ -1,4 +1,5 @@
 {
+  "version": "0.1.2",
   "map": "src/app-map.js",
   "pwa": {
     "name": "imp-aly console",
