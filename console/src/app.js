@@ -4,7 +4,7 @@ import { router } from 'imp/router'
 import { computed, initState } from 'imp/state'
 import { icon } from 'imp/std'
 import { toast } from 'imp/std/feedback'
-import { appLogo, orgSelect, shell, themeSelect } from 'imp/std/shell'
+import { appLogo, shell, tenantSelect, themeSelect } from 'imp/std/shell'
 import {
   luChartColumn,
   luChartNoAxesCombined,
@@ -51,7 +51,7 @@ const loadCatalog = async (api) => {
   }
 }
 
-const appOrgs = (catalog) => appNamesOf(catalog).map((name) => ({ id: name, name }))
+const appTenants = (catalog) => appNamesOf(catalog).map((name) => ({ id: name, name }))
 
 export const root = component('aly-root', {
   setup: (self) => {
@@ -61,7 +61,7 @@ export const root = component('aly-root', {
     const revision = initState(self, 'aly.revision', 0)
     const health = initState(self, 'aly.health', failuresOf())
     onHealthChange(() => health.set(failuresOf()), self.abortSignal)
-    const orgs = computed([catalog], appOrgs)
+    const tenants = computed([catalog], appTenants)
     const serversTagOf = (value, name, failures) =>
       serversTag({ catalog: value, app: name, failures })
     const serversNavTag = initState(
@@ -113,21 +113,17 @@ export const root = component('aly-root', {
           [app.manage.servers]: { icon: luServer, tag: 'aly.serversTag' },
           [app.manage.agentKeys]: { icon: luBot },
         },
-        extras: [
-          orgs.view((list) =>
-            list.length
-              ? orgSelect({
-                  orgs: list,
-                  selected: chosenApp,
-                  label: computed([chosenApp], (name) => `App: ${name ?? '-'}`),
-                  size: 'sm',
-                })
-              : null,
-          ),
-          installButton(),
-          themeSelect({ variant: 'ghost' }),
-          barsRoom(),
-        ],
+        tenant: tenants.view((list) =>
+          list.length
+            ? tenantSelect({
+                tenants: list,
+                selected: chosenApp,
+                label: computed([chosenApp], (name) => `App: ${name ?? '-'}`),
+                size: 'sm',
+              })
+            : null,
+        ),
+        navbarExtras: [installButton(), themeSelect({ variant: 'ghost' }), barsRoom()],
       },
       toast(),
       router({
