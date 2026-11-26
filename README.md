@@ -25,6 +25,11 @@ sudo imp-aly server --port 4411
 imp-aly app add myapp https://myapp.example/
 ```
 
+imp-aly deliberately does not install to a folder in your home folder: it installs
+to `/usr/local/bin` and keeps the data of the service in `/var/lib/imp-aly`, because the systemd
+service cannot reach home folders. See
+[system-folders-instead-of-a-home-folder](adr/system-folders-instead-of-a-home-folder.md).
+
 Then send the records from your app with the imp-aly sink of imp, `imp/analytics/aly`:
 
 ```js
