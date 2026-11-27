@@ -1,9 +1,11 @@
 use crate::VERSION;
 use crate::args::{Parsed, require_only_flags};
+use crate::commands::skill::{refresh, skill_home};
 use crate::data_format::DATA_FORMAT;
 use crate::days::day_of;
 use crate::error::{Error, Result};
 use crate::logger;
+use crate::paths::cwd;
 use crate::service::{SERVICE_NAME, executable, is_active, is_service_installed, restart_service};
 use crate::update::{
     Choice, DOWNLOAD_URL, Hold, MANIFEST_URL, MIN_RELEASE_AGE_DAYS, Pick, RELEASES_API_URL,
@@ -162,7 +164,28 @@ pub fn update(parsed: &Parsed) -> Result<()> {
         logger::info(format!(
             "imp-aly {VERSION} is the newest version that update can install"
         ));
+        if !auto {
+            for line in refresh(&cwd(), &skill_home()) {
+                logger::plain(line);
+            }
+        }
         return Ok(());
     };
-    install_target(&binary, &target, &dir)
+    install_target(&binary, &target, &dir)?;
+    // The timer runs as root with no user: it has no skills to rewrite.
+    if !auto {
+        refresh_skills(&binary);
+    }
+    Ok(())
+}
+
+/// The skill text is part of the binary, so the new binary rewrites the
+/// skills written by `imp-aly skill --init`.
+fn refresh_skills(binary: &str) {
+    let status = std::process::Command::new(binary)
+        .args(["skill", "--refresh"])
+        .status();
+    if !status.is_ok_and(|status| status.success()) {
+        logger::error("cannot update the skills - run imp-aly skill --init again");
+    }
 }
